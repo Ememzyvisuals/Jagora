@@ -287,16 +287,9 @@ h3,
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  padding: 1.2px;
-  background: conic-gradient(
-    from var(--ang),
-    rgba(255, 255, 255, 0.95),
-    rgba(255, 255, 255, 0.25) 22%,
-    rgba(255, 255, 255, 0.08) 45%,
-    rgba(255, 255, 255, 0.55) 62%,
-    rgba(255, 255, 255, 0.18) 80%,
-    rgba(255, 255, 255, 0.95)
-  );
+  padding: 1px;
+  /* a clean hairline: bright along the top, fading down the sides, faint at the bottom */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.45) 40%, rgba(255, 255, 255, 0.3) 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;

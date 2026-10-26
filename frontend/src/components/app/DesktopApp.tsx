@@ -99,7 +99,7 @@ export function DesktopApp() {
   return (
     <div className="relative h-dvh overflow-hidden p-6 xl:p-8">
       <Backdrop />
-      <div className="relative flex h-full flex-col overflow-hidden rounded-[30px] bg-white/10 shadow-[inset_0_0_0_1px_rgba(255,255,255,.45),0_30px_80px_-40px_rgba(10,30,70,.5)] dark:bg-black/10">
+      <Glass radius={30} bezel={26} refraction={70} blur={10} tint="rgba(255,255,255,.55)" interactive={false} className="flex h-full flex-col overflow-hidden">
         {/* Jagora's own tabs: one per task (not a copy of the real browser's tabs) */}
         <div className="no-scrollbar flex h-12 shrink-0 items-center gap-1.5 overflow-x-auto px-3">
           <button
@@ -238,7 +238,7 @@ export function DesktopApp() {
           <main className="relative min-w-0 flex-1 overflow-hidden rounded-[24px] shadow-[inset_0_1px_1px_rgba(255,255,255,.8)]">{showPage ? <PageView bar={false} /> : <StartPage />}</main>
 
           {/* Jagora */}
-          <Glass radius={24} bezel={20} tint="rgba(255,255,255,.45)" interactive={false} lens={{ blurAmount: 0.6, zRadius: 28 }} className="flex w-[372px] shrink-0 flex-col overflow-hidden">
+          <section className="flex w-[372px] shrink-0 flex-col overflow-hidden rounded-[24px] bg-white/45 shadow-[inset_0_1px_1px_rgba(255,255,255,1)]">
             <div className="flex justify-end gap-1 px-3 pt-3 text-ink-2">
               <button className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/60" aria-label="Read aloud">
                 <SpeakerHigh size={17} />
@@ -251,9 +251,9 @@ export function DesktopApp() {
             <div className="p-3">
               <Composer />
             </div>
-          </Glass>
+          </section>
         </div>
-      </div>
+      </Glass>
       <LiveMode />
     </div>
   );

@@ -69,6 +69,12 @@ function displacementMap(w: number, h: number, r: number, bezel: number) {
   return url;
 }
 
+/** the frosted house style needs at least this much white to read like the desktop surfaces */
+function whiter(tint: string) {
+  const m = tint.match(/^rgba\(\s*255\s*,\s*255\s*,\s*255\s*,\s*([\d.]+)\s*\)$/);
+  return m ? `rgba(255,255,255,${Math.max(0.72, parseFloat(m[1]))})` : tint;
+}
+
 export type GlassProps = HTMLAttributes<HTMLDivElement> & {
   radius?: number;
   /** width of the bending rim, px */
@@ -157,7 +163,10 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
     };
   }, [interactive]);
 
-  const map = !stage && !nested && refract && size && size.w > 4 && size.h > 4 ? displacementMap(size.w, size.h, radius, Math.min(bezel, size.h / 2, size.w / 2)) : null;
+  // The white frosted look (the same on every phone and computer, Safari included) is the house style; the SVG
+  // refraction is kept for later but off.
+  const REFRACT = false;
+  const map = REFRACT && !stage && !nested && refract && size && size.w > 4 && size.h > 4 ? displacementMap(size.w, size.h, radius, Math.min(bezel, size.h / 2, size.w / 2)) : null;
   const backdrop = map ? `url(#lg${id}) blur(${blur}px) saturate(150%) brightness(1.07)` : `blur(${Math.max(blur, 4) * 2.4}px) saturate(150%) brightness(1.06)`;
 
   return (
@@ -168,9 +177,9 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
       style={
         {
           borderRadius: radius,
-          background: nested ? (dark ? "rgba(44,48,57,0.6)" : "rgba(255,255,255,0.55)") : stage ? (dark ? "rgba(20,22,28,0.38)" : "rgba(255,255,255,0.06)") : themedTint(tint, dark ? "dark" : "light"),
-          backdropFilter: nested ? "blur(14px) saturate(160%)" : stage ? "none" : dark ? backdrop.replace("brightness(1.07)", "brightness(.9)").replace("brightness(1.06)", "brightness(.9)") : backdrop,
-          WebkitBackdropFilter: nested ? "blur(14px) saturate(160%)" : stage ? "none" : `blur(${Math.max(blur, 4) * 2.4}px) saturate(150%)`,
+          background: nested ? (dark ? "rgba(44,48,57,0.6)" : "rgba(255,255,255,0.55)") : stage ? (dark ? "rgba(20,22,28,0.38)" : "rgba(255,255,255,0.06)") : themedTint(whiter(tint), dark ? "dark" : "light"),
+          backdropFilter: stage && !nested ? "none" : map ? backdrop : "blur(16px) saturate(120%)",
+          WebkitBackdropFilter: stage && !nested ? "none" : "blur(16px) saturate(120%)",
           ...style,
         } as CSSProperties
       }

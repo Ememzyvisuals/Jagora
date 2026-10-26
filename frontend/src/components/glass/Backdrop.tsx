@@ -8,6 +8,9 @@ import { useLite } from "@/lib/lite";
 import { useTheme } from "@/lib/theme";
 
 const LensStage = dynamic(() => import("./LensStage"), { ssr: false });
+// The WebGL lens layer is kept but switched off: the white frosted glass reads better and looks the same on every
+// phone and computer. Set to true to bring the lens back.
+const USE_LENS = false;
 
 /** The same sky the CSS layer shows, for the 3D layer. */
 export function useSkySrc() {
@@ -36,7 +39,7 @@ export function Backdrop(_: { level?: MutableRefObject<number> }) {
   return (
     <>
       <div className="sky-bg fixed inset-0" aria-hidden="true" />
-      {lite === false && idle && <LensStage src={src} />}
+      {USE_LENS && lite === false && idle && <LensStage src={src} />}
     </>
   );
 }
