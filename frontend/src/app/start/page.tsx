@@ -102,16 +102,16 @@ export default function Start() {
   return (
     <div className="relative min-h-dvh overflow-x-hidden">
       <Backdrop />
-      <div className="relative mx-auto grid min-h-dvh max-w-[1080px] items-center gap-6 px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-[max(16px,env(safe-area-inset-top))] md:grid-cols-[1.1fr_1fr] md:gap-12 md:px-10">
+      <div className="relative mx-auto grid min-h-dvh max-w-[1360px] items-center gap-6 px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-[max(16px,env(safe-area-inset-top))] md:grid-cols-[1.15fr_1fr] md:gap-16 md:px-14">
         {/* Jagora and her languages */}
         <section className="flex flex-col items-center">
-          <div className="flex origin-center flex-col items-center md:scale-[1.3]">
+          <div className="flex origin-center flex-col items-center md:scale-[1.3] lg:scale-[1.65]">
             <Orb size={120} state="idle" />
             <CloudWordmark width={280} className="-mt-6" />
             <p className="-mt-2 text-center text-[15.5px] font-medium text-ink-2 dark:text-ink dark:[text-shadow:0_1px_10px_rgba(0,0,0,.55)]">{TAGLINE[lang]}</p>
           </div>
-          <p className="mt-5 text-[12.5px] font-semibold uppercase md:mt-14 tracking-[0.14em] text-ink-2 dark:text-ink">{T.pick[lang]}</p>
-          <div className="relative mt-3 h-[86px] w-full max-w-[340px]">
+          <p className="mt-5 text-[12.5px] font-semibold uppercase tracking-[0.14em] text-ink-2 md:mt-14 md:text-[14px] lg:mt-24 dark:text-ink">{T.pick[lang]}</p>
+          <div className="relative mt-3 h-[86px] w-full max-w-[340px] lg:mt-6 lg:scale-[1.3]">
             {TAGS.map((t, i) => {
               const on = t.id === lang;
               return (
@@ -136,45 +136,45 @@ export default function Start() {
         </section>
 
         {/* the card */}
-        <section className="w-full md:max-w-[440px] md:justify-self-end">
-          <Glass radius={32} bezel={18} tint="rgba(255,255,255,.72)" className="p-5 shadow-[0_30px_70px_-34px_rgba(10,30,70,.55)] md:p-7">
+        <section className="w-full md:max-w-[520px] md:justify-self-end">
+          <Glass radius={32} bezel={18} tint="rgba(255,255,255,.72)" className="p-5 shadow-[0_30px_70px_-34px_rgba(10,30,70,.55)] md:p-10">
             <div className="hidden items-center gap-2.5 md:flex">
-              <Mark size={34} />
-              <span className="font-pixel text-[28px] leading-none text-ink">Jagora</span>
+              <Mark size={44} />
+              <span className="font-pixel text-[36px] leading-none text-ink">Jagora</span>
             </div>
 
             {/* create / sign in */}
             <div className="relative flex rounded-full bg-black/5 p-1 md:mt-5 dark:bg-white/10" role="tablist">
               {(["create", "signin"] as const).map((m) => (
-                <button key={m} role="tab" aria-selected={mode === m} onClick={() => (setMode(m), setErr(null))} className="relative z-10 h-10 flex-1 text-[14.5px] font-semibold">
+                <button key={m} role="tab" aria-selected={mode === m} onClick={() => (setMode(m), setErr(null))} className="relative z-10 h-10 flex-1 text-[14.5px] font-semibold md:h-12 md:text-[16px]">
                   {mode === m && <motion.span layoutId="authTab" className="absolute inset-0 -z-10 rounded-full bg-white shadow-[0_2px_8px_-2px_rgba(10,30,70,.25)] dark:bg-white/20" transition={{ type: "spring", stiffness: 420, damping: 34 }} />}
                   <span className={mode === m ? "text-ink" : "text-ink-2"}>{T[m][lang]}</span>
                 </button>
               ))}
             </div>
 
-            <form onSubmit={(e) => (e.preventDefault(), void submit())} className="mt-5 flex flex-col gap-3" noValidate>
+            <form onSubmit={(e) => (e.preventDefault(), void submit())} className="mt-5 flex flex-col gap-3 md:mt-7 md:gap-4" noValidate>
               <label className="block">
-                <span className="mb-1.5 block px-1 text-[13.5px] font-medium text-ink-2">{T.email[lang]}</span>
+                <span className="mb-1.5 block px-1 text-[13.5px] font-medium text-ink-2 md:text-[15px]">{T.email[lang]}</span>
                 <input
                   type="email"
                   inputMode="email"
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-[52px] w-full rounded-[18px] bg-white px-4 text-[16.5px] text-ink shadow-[inset_0_0_0_1px_rgba(10,30,70,.08)] outline-none transition focus:shadow-[inset_0_0_0_2px_var(--color-accent)]"
+                  className="h-[52px] w-full rounded-[18px] bg-white px-4 text-[16.5px] md:h-[60px] md:text-[17.5px] text-ink shadow-[inset_0_0_0_1px_rgba(10,30,70,.08)] outline-none transition focus:shadow-[inset_0_0_0_2px_var(--color-accent)]"
                   placeholder="you@example.com"
                 />
               </label>
               <label className="block">
-                <span className="mb-1.5 block px-1 text-[13.5px] font-medium text-ink-2">{T.password[lang]}</span>
-                <span className="flex h-[52px] items-center rounded-[18px] bg-white pr-1.5 shadow-[inset_0_0_0_1px_rgba(10,30,70,.08)] transition focus-within:shadow-[inset_0_0_0_2px_var(--color-accent)]">
+                <span className="mb-1.5 block px-1 text-[13.5px] font-medium text-ink-2 md:text-[15px]">{T.password[lang]}</span>
+                <span className="flex h-[52px] items-center rounded-[18px] bg-white pr-1.5 md:h-[60px] shadow-[inset_0_0_0_1px_rgba(10,30,70,.08)] transition focus-within:shadow-[inset_0_0_0_2px_var(--color-accent)]">
                   <input
                     type={see ? "text" : "password"}
                     autoComplete={mode === "create" ? "new-password" : "current-password"}
                     value={pw}
                     onChange={(e) => setPw(e.target.value)}
-                    className="h-full min-w-0 flex-1 bg-transparent px-4 text-[16.5px] text-ink outline-none focus-visible:outline-none"
+                    className="h-full min-w-0 flex-1 bg-transparent px-4 text-[16.5px] md:text-[17.5px] text-ink outline-none focus-visible:outline-none"
                     placeholder={mode === "create" ? T.pwHint[lang] : ""}
                   />
                   <button type="button" onClick={() => setSee((v) => !v)} className="grid h-10 w-10 place-items-center rounded-full text-ink-2 hover:bg-black/5" aria-label={see ? "Hide password" : "Show password"}>
@@ -186,7 +186,7 @@ export default function Start() {
               <AnimatePresence initial={false}>
                 {codeOpen ? (
                   <motion.label key="code" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="block overflow-hidden">
-                    <span className="mb-1.5 block px-1 text-[13.5px] font-medium text-ink-2">{T.code[lang]}</span>
+                    <span className="mb-1.5 block px-1 text-[13.5px] font-medium text-ink-2 md:text-[15px]">{T.code[lang]}</span>
                     <input
                       value={code}
                       onChange={(e) => setCode(e.target.value.toUpperCase())}
@@ -198,7 +198,7 @@ export default function Start() {
                     />
                   </motion.label>
                 ) : (
-                  <motion.button key="codeLink" type="button" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setCodeOpen(true)} className="flex items-center gap-1.5 self-start px-1 text-[13.5px] font-semibold text-accent">
+                  <motion.button key="codeLink" type="button" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setCodeOpen(true)} className="flex items-center gap-1.5 self-start px-1 text-[13.5px] font-semibold text-accent md:text-[15px]">
                     <Key size={15} weight="bold" /> {T.haveCode[lang]}
                   </motion.button>
                 )}
@@ -210,13 +210,13 @@ export default function Start() {
                 </p>
               )}
 
-              <button type="submit" disabled={busy} className="btn btn-ink mt-1 h-[56px] w-full text-[16.5px] font-semibold disabled:opacity-60">
+              <button type="submit" disabled={busy} className="btn btn-ink mt-1 h-[56px] w-full text-[16.5px] md:mt-3 md:h-[64px] md:text-[18px] font-semibold disabled:opacity-60">
                 {busy ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-paper/30 border-t-paper" /> : mode === "create" ? T.go[lang] : T.goIn[lang]}
                 {!busy && <ArrowRight size={18} weight="bold" />}
               </button>
 
               {mode === "create" && (
-                <p className="flex items-center justify-center gap-1.5 text-center text-[13px] text-ink-2">
+                <p className="flex items-center justify-center gap-1.5 text-center text-[13px] text-ink-2 md:text-[14.5px]">
                   <Sparkle size={14} weight="fill" className="text-accent" /> {T.free[lang]}
                 </p>
               )}
