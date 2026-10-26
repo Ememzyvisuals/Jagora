@@ -230,11 +230,11 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
     <AnimatePresence>
       {open && (
         <>
-          <motion.div className="absolute inset-0 z-40 bg-ink/15" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+          <motion.div className="absolute inset-0 z-40 bg-[#0b1426]/10 backdrop-blur-[3px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
           <motion.div
             role="dialog"
             aria-label="Jagora"
-            className="glass-3 absolute inset-x-0 bottom-0 z-50 flex h-[90dvh] flex-col rounded-t-[34px] pb-[env(safe-area-inset-bottom)]"
+            className="glass-2 absolute inset-x-2 bottom-2 z-50 flex h-[88dvh] flex-col rounded-[36px] pb-[env(safe-area-inset-bottom)]"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -247,9 +247,9 @@ function Sheet({ open, onClose }: { open: boolean; onClose: () => void }) {
             onDragEnd={(_, i) => (i.offset.y > 120 || i.velocity.y > 600) && onClose()}
           >
             <div className="flex cursor-grab justify-center pb-1 pt-3 touch-none" onPointerDown={(e) => drag.start(e)}>
-              <span className="h-1.5 w-11 rounded-full bg-ink/15" />
+              <span className="h-1.5 w-11 rounded-full bg-ink/20" />
             </div>
-            <AgentPanel orbSize={104} />
+            <AgentPanel orbSize={132} />
           </motion.div>
         </>
       )}

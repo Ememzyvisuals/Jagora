@@ -77,9 +77,9 @@ function Confirm({ m, task }: { m: Extract<Msg, { kind: "confirm" }>; task: Task
   const lang = useApp((s) => s.lang);
   const waiting = m.status === "waiting";
   return (
-    <div className={`rounded-[22px] p-4 ${waiting ? "glass-3 ring-1 ring-stop/25" : "bg-white/40"}`}>
+    <div className={`rounded-[24px] p-4 ${waiting ? "glass-3 ring-1 ring-accent/30" : "glass"}`}>
       {waiting && (
-        <div className="mb-2 flex items-center gap-1.5 text-[12.5px] font-medium text-stop">
+        <div className="mb-2 flex items-center gap-1.5 text-[12.5px] font-semibold text-accent">
           <Hand size={14} weight="fill" /> {lang === "yo" ? "Mo ń dúró de yín" : lang === "pcm" ? "I dey wait for you" : lang === "ha" ? "Ina jiran ka" : lang === "ig" ? "Ana m eche gị" : "Waiting for you"}
         </div>
       )}
@@ -114,7 +114,7 @@ function Choice({ m, task }: { m: Extract<Msg, { kind: "choice" }>; task: Task }
       </div>
     );
   return (
-    <div className="rounded-[22px] bg-white/40 p-4">
+    <div className="glass-2 rounded-[24px] p-4">
       <p className="text-[16.5px] font-medium text-ink">{m.question}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {m.choices.map((c) => (

@@ -16,14 +16,14 @@ export function ModeSwitch() {
   const setMode = useApp((s) => s.setMode);
   const lang = useApp((s) => s.lang);
   return (
-    <div className="glass-2 inline-flex rounded-full p-1 text-[13.5px]" role="radiogroup" aria-label="How Jagora helps">
+    <div className="glass-2 inline-flex rounded-full p-1 text-[14px]" role="radiogroup" aria-label="How Jagora helps">
       {(["guide", "do"] as const).map((m) => (
         <button
           key={m}
           role="radio"
           aria-checked={mode === m}
           onClick={() => setMode(m)}
-          className={`rounded-full px-3.5 py-1.5 font-medium transition ${mode === m ? "bg-ink text-white" : "text-ink-2 hover:text-ink"}`}
+          className={`rounded-full px-4 py-2 font-semibold transition ${mode === m ? "bg-ink text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.2)]" : "text-ink-2 hover:text-ink"}`}
         >
           {t(m === "guide" ? "guide" : "doIt", lang)}
         </button>
@@ -100,7 +100,7 @@ export function Suggestions() {
   return (
     <div className="flex flex-col gap-2 px-4">
       {items.map((it) => (
-        <button key={it.title} onClick={it.go} className="flex items-center gap-3 rounded-[20px] bg-white/45 p-3 text-left transition hover:bg-white/75">
+        <button key={it.title} onClick={it.go} className="glass-2 flex items-center gap-3 rounded-[22px] p-3 text-left transition active:scale-[.98]">
           {it.icon}
           <span className="text-[15.5px] font-medium text-ink">{it.title}</span>
         </button>
