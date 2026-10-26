@@ -3,7 +3,7 @@
 /* What the screens call. Uses the real backend when NEXT_PUBLIC_BACKEND_WS is set, otherwise the demo engine. */
 import { useApp, uid, type Attachment, type Task } from "../store";
 import * as demo from "./demo";
-import { BACKEND, remoteAnswer, remoteStart, remoteStop } from "./remote";
+import { BACKEND, remoteAnswer, remoteSecret, remoteStart, remoteStop } from "./remote";
 
 export const live = Boolean(BACKEND);
 
@@ -75,6 +75,23 @@ export function quick(kind: "scam" | "paper") {
 }
 
 const pending = new Map<string, "scam" | "paper">();
+
+/** What she typed for a private field: show only a masked hint here, send the value on to the website. */
+export function giveSecret(taskId: string, msgId: string, value: string | null) {
+  const s = useApp.getState();
+  if (value === null) {
+    s.update(taskId, msgId, { status: "skipped" } as never);
+    if (live) void remoteSecret(taskId, msgId, "");
+    else demo.answer(msgId, "");
+    return;
+  }
+  const v = value.trim();
+  const shown = v.length > 6 ? `••••${v.slice(-4)}` : "••••";
+  s.update(taskId, msgId, { status: "done", shown } as never);
+  s.setStatus(taskId, "working");
+  if (live) void remoteSecret(taskId, msgId, v);
+  else demo.answer(msgId, v);
+}
 
 export function answer(taskId: string, msgId: string, value: string) {
   const s = useApp.getState();

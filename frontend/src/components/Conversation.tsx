@@ -1,9 +1,10 @@
 "use client";
 
-import { CheckCircle, CircleNotch, Hand, Image as ImageIcon, LinkSimple, Paperclip, ShieldCheck, WarningOctagon, XCircle } from "@phosphor-icons/react";
+import { CheckCircle, CircleNotch, Eye, EyeSlash, Hand, Image as ImageIcon, LinkSimple, Paperclip, ShieldCheck, WarningOctagon, XCircle } from "@phosphor-icons/react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { answer } from "@/lib/engine";
+import { answer, giveSecret } from "@/lib/engine";
+import type { Lang } from "@/lib/i18n";
 import { t } from "@/lib/i18n";
 import { useApp, type Msg, type Task } from "@/lib/store";
 import { IconLock, IconScam, IconShield } from "./icons";
@@ -64,6 +65,8 @@ function Item({ m, task }: { m: Msg; task: Task }) {
       return <Choice m={m} task={task} />;
     case "handoff":
       return <Handoff m={m} task={task} />;
+    case "secret":
+      return <SecretAsk m={m} task={task} />;
     case "verdict":
       return <Verdict m={m} />;
     case "explain":
@@ -150,6 +153,96 @@ function Handoff({ m, task }: { m: Extract<Msg, { kind: "handoff" }>; task: Task
         )}
       </div>
     </div>
+  );
+}
+
+const SECRET: Record<"why" | "fill" | "skip" | "filled" | "skipped", Record<Lang, string>> = {
+  why: {
+    en: "Only you see this. Jagora types it straight into the website and never says it aloud.",
+    pcm: "Na only you dey see am. Jagora go type am enter the website, e no go talk am out.",
+    yo: "Ẹ̀yin nìkan ló ń rí èyí. Jagora á tẹ̀ ẹ́ sínú ojú òpó náà tààrà, kò ní pè é jáde.",
+    ha: "Kai kaɗai kake ganin wannan. Jagora za ta rubuta shi kai tsaye a shafin, ba za ta faɗe shi ba.",
+    ig: "Naanị gị na-ahụ nke a. Jagora ga-apịnye ya ozugbo na weebụsaịtị ahụ, ọ gaghị ekwupụta ya.",
+  },
+  fill: { en: "Fill it in", pcm: "Fill am", yo: "Kọ ọ́ sí i", ha: "Cike shi", ig: "Jupụta ya" },
+  skip: { en: "Skip", pcm: "Skip", yo: "Fò ó", ha: "Tsallake", ig: "Gafere" },
+  filled: { en: "Filled in", pcm: "E don enter", yo: "Ó ti wọlé", ha: "An cike", ig: "Ejupụtala ya" },
+  skipped: { en: "Skipped", pcm: "Skipped", yo: "A fò ó", ha: "An tsallake", ig: "Agafere ya" },
+};
+const NUMERIC = new Set(["account", "nin", "bvn", "otp", "pin", "phone", "card"]);
+
+/** A private field: she types it here (never aloud), Jagora puts it into the website. */
+function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Task }) {
+  const lang = useApp((s) => s.lang);
+  const [v, setV] = useState("");
+  const [see, setSee] = useState(false);
+  const box = useRef<HTMLInputElement>(null);
+  const waiting = m.status === "waiting";
+  const isLast = task.messages.at(-1)?.id === m.id;
+  useEffect(() => {
+    if (waiting && isLast) {
+      const id = setTimeout(() => box.current?.focus({ preventScroll: true }), 350);
+      return () => clearTimeout(id);
+    }
+  }, [waiting, isLast]);
+  const numeric = NUMERIC.has(m.field);
+  const clean = numeric ? v.replace(/\D/g, "") : v;
+  const ok = m.digits ? clean.length === m.digits : clean.trim().length > 0;
+  const send = () => {
+    if (!ok) return;
+    giveSecret(task.id, m.id, clean);
+    setV("");
+  };
+
+  if (!waiting)
+    return (
+      <div className="glass-3 flex items-center gap-3 rounded-[20px] px-4 py-3">
+        <IconLock size={28} className="shrink-0" />
+        <span className="min-w-0 flex-1 truncate text-[14.5px] text-ink-2">{m.label}</span>
+        <span className={`inline-flex items-center gap-1.5 text-[13.5px] font-medium ${m.status === "done" ? "text-ok" : "text-ink-3"}`}>
+          {m.status === "done" && <CheckCircle size={14} weight="fill" />}
+          {m.status === "done" ? `${SECRET.filled[lang]} ${m.shown ?? ""}` : SECRET.skipped[lang]}
+        </span>
+      </div>
+    );
+
+  return (
+    <form onSubmit={(e) => (e.preventDefault(), send())} className="glass-3 rounded-[22px] p-4 ring-2 ring-accent/35">
+      <div className="flex gap-3">
+        <IconLock size={40} className="shrink-0" />
+        <div className="min-w-0">
+          <p className="text-[15.5px] font-semibold leading-snug text-ink">{m.label}</p>
+          <p className="mt-0.5 text-[13px] leading-snug text-ink-2">{SECRET.why[lang]}</p>
+        </div>
+      </div>
+      <div className="mt-3 flex h-12 items-center gap-2 rounded-[16px] bg-white px-4 shadow-[inset_0_0_0_1.5px_rgba(29,99,237,.35)]">
+        <input
+          ref={box}
+          value={v}
+          onChange={(e) => setV(m.digits ? e.target.value.replace(/\D/g, "").slice(0, m.digits) : e.target.value)}
+          type={see ? "text" : "password"}
+          inputMode={numeric ? "numeric" : "text"}
+          autoComplete={m.field === "otp" ? "one-time-code" : "off"}
+          autoCorrect="off"
+          spellCheck={false}
+          aria-label={m.label}
+          className="h-full min-w-0 flex-1 bg-transparent text-[18px] font-semibold tracking-[0.18em] focus-visible:outline-none text-ink outline-none placeholder:tracking-normal placeholder:font-normal placeholder:text-ink-3"
+          placeholder={m.digits ? "•".repeat(Math.min(m.digits, 11)) : ""}
+        />
+        {m.digits && <span className="shrink-0 text-[12.5px] font-medium tabular-nums text-ink-3">{clean.length}/{m.digits}</span>}
+        <button type="button" onClick={() => setSee((x) => !x)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-black/5" aria-label={see ? "Hide" : "Show"}>
+          {see ? <EyeSlash size={17} /> : <Eye size={17} />}
+        </button>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <button type="submit" disabled={!ok} className="btn btn-ink h-11 flex-1 text-[15px] disabled:opacity-40">
+          {SECRET.fill[lang]}
+        </button>
+        <button type="button" onClick={() => giveSecret(task.id, m.id, null)} className="btn btn-glass h-11 px-5 text-[14.5px]">
+          {SECRET.skip[lang]}
+        </button>
+      </div>
+    </form>
   );
 }
 

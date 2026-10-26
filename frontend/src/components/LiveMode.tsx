@@ -79,7 +79,7 @@ export function LiveMode() {
   const showPage = useApp((s) => s.showPage);
   const setShowPage = useApp((s) => s.setShowPage);
   const last = task?.messages.at(-1);
-  const mustType = last?.kind === "handoff" && last.status === "waiting";
+  const mustType = (last?.kind === "handoff" || last?.kind === "secret") && last.status === "waiting";
   const island = !!task && task.kind === "browse" && !!task.url && (showPage || mustType);
 
   const listen = useCallback(async () => {

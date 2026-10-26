@@ -8,6 +8,10 @@
                                                            jamb.gov.ng", "find cheap flights to Abuja", "check my result"
                                                            attachment: {kind, name, data(base64 dataURL)}
                    {type:"answer", task, id, value}        value: "yes" | "no" | text
+                   {type:"secret", task, id, value}        something she typed instead of saying (account number, OTP...).
+                                                           The backend types it into the field the agent asked about,
+                                                           and never puts it in the model's context, logs or speech;
+                                                           the model only learns "filled by her".
                    {type:"audio", task, data}              base64 audio of her voice (webm/opus)
                    {type:"stop", task}
    server -> app   {type:"task", task, title?, kind?}       the agent names the task once it understands it
@@ -94,6 +98,9 @@ export async function remoteStart(task: string, goal: string, attachment?: { kin
 }
 export async function remoteAnswer(task: string, id: string, value: string) {
   (await connect()).send(JSON.stringify({ type: "answer", task, id, value }));
+}
+export async function remoteSecret(task: string, id: string, value: string) {
+  (await connect()).send(JSON.stringify({ type: "secret", task, id, value }));
 }
 export async function remoteAudio(task: string, blob: Blob) {
   const data = await new Promise<string>((r) => {

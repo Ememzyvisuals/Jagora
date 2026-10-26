@@ -28,6 +28,15 @@ export function answer(msgId: string, value: string) {
   }
 }
 
+const NIN_SAY: Record<Lang, string> = {
+  en: "This form needs your NIN. Please type it in the box, I won't say it out loud.",
+  pcm: "This form need your NIN. Abeg type am for the box, I no go talk am out.",
+  yo: "Fọ́ọ̀mù yìí nílò NIN yín. Ẹ jọ̀ọ́ ẹ tẹ̀ ẹ́ sínú àpótí náà, mi ò ní pè é jáde.",
+  ha: "Wannan fom yana bukatar NIN ɗinka. Don Allah ka rubuta shi a akwatin, ba zan faɗe shi da ƙarfi ba.",
+  ig: "Fọm a chọrọ NIN gị. Biko pịnye ya n'igbe ahụ, agaghị m ekwupụta ya.",
+};
+const NIN_LABEL: Record<Lang, string> = { en: "Your NIN (11 digits)", pcm: "Your NIN (11 numbers)", yo: "NIN yín (nọ́mbà 11)", ha: "NIN ɗinka (lambobi 11)", ig: "NIN gị (ọnụọgụgụ 11)" };
+
 export function stopAll() {
   runId += 1;
   pending.forEach((r) => r("__stop"));
@@ -125,7 +134,9 @@ async function tap(el: HTMLElement, my: number) {
 }
 
 function setValue(el: HTMLInputElement | HTMLSelectElement, value: string) {
-  const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  // the page lives in an iframe, so use that window's element classes (instanceof across frames is always false)
+  const w = (el.ownerDocument.defaultView ?? window) as typeof window;
+  const proto = el.tagName === "SELECT" ? w.HTMLSelectElement.prototype : w.HTMLInputElement.prototype;
   Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, value);
   el.dispatchEvent(new Event("input", { bubbles: true }));
   el.dispatchEvent(new Event("change", { bubbles: true }));
@@ -284,6 +295,26 @@ async function register(taskId: string, text: string, my: number) {
   if (p.date_of_birth) {
     await typeInto($<HTMLInputElement>("#dob")!, p.date_of_birth, my);
     step(taskId, p.date_of_birth);
+  }
+  // NIN is private: she types it, Jagora never asks for it aloud or says it back
+  const nin = $<HTMLInputElement>("#nin");
+  if (nin) {
+    await point(nin, my);
+    await say(taskId, NIN_SAY[lang], my);
+    const nid = uid();
+    S().push(taskId, { id: nid, kind: "secret", label: NIN_LABEL[lang], field: "nin", digits: 11, status: "waiting" });
+    S().setStatus(taskId, "waiting");
+    S().setSheet(true);
+    const v = await new Promise<string>((resolve) => pending.set(nid, resolve));
+    guard(my);
+    if (!v || v === "__stop") {
+      await say(taskId, t("stoppedNo", lang), my);
+      S().setStatus(taskId, "stopped");
+      return;
+    }
+    S().setSheet(false);
+    await typeInto(nin, v, my);
+    step(taskId, `NIN ••••${v.slice(-4)}`);
   }
   if (p.gender) {
     const r = $<HTMLInputElement>(`input[name=gender][value=${p.gender}]`);

@@ -70,6 +70,11 @@
         <div class="err" id="err-dob">Enter your date of birth.</div>
       </div>
       <div class="row">
+        <label class="f" for="nin">NIN (National Identification Number) <span class="req">*</span></label>
+        <input type="text" id="nin" name="nin" inputmode="numeric" maxlength="11" autocomplete="off" placeholder="11 digits" required>
+        <div class="err" id="err-nin">Enter your 11-digit NIN.</div>
+      </div>
+      <div class="row">
         <span class="f" style="font-weight:bold;font-size:14px;display:block;margin-bottom:6px">Gender <span class="req">*</span></span>
         <div class="radios">
           <label><input type="radio" name="gender" value="female"> Female</label>
@@ -134,6 +139,7 @@
     bad = show("phone", !/^0[789][01]\d{8}$/.test(phone)) || bad;
     bad = show("email", !!v.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.email)) || bad;
     bad = show("dob", !v.dob) || bad;
+    bad = show("nin", !/^\d{11}$/.test((v.nin || "").replace(/\D/g, ""))) || bad;
     bad = show("gender", !v.gender) || bad;
     bad = show("state", !v.state) || bad;
     bad = show("track", !v.track) || bad;
@@ -141,7 +147,7 @@
     if (bad) return;
     const ref = "NSF-26-" + Math.floor(100000 + Math.random() * 900000);
     document.getElementById("ref").textContent = ref;
-    const rows = [["Name", v.fullname], ["Phone", phone], ["Email", v.email || "Not given"], ["Date of birth", v.dob],
+    const rows = [["Name", v.fullname], ["Phone", phone], ["Email", v.email || "Not given"], ["Date of birth", v.dob], ["NIN", "•••••••" + String(v.nin || "").slice(-4)],
       ["State", v.state], ["Skill", v.track]];
     document.getElementById("summary").innerHTML = rows.map(([k, x]) => `<dt>${k}</dt><dd>${String(x).replace(/</g, "&lt;")}</dd>`).join("");
     document.getElementById("form-section").style.display = "none";
