@@ -108,7 +108,7 @@ export default function Start() {
   if (!ready) return <div className="h-dvh bg-mist" />;
 
   return (
-    <div className="sky min-h-dvh" style={{ backgroundImage: "url(/sky/hero-mobile.webp)" }}>
+    <div className="sky-bg min-h-dvh">
       <div className="mx-auto flex min-h-dvh max-w-[560px] flex-col px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-[max(18px,env(safe-area-inset-top))]">
         <div className="flex h-10 items-center gap-3">
           {i > 0 ? (

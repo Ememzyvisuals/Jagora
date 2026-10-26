@@ -16,6 +16,7 @@ import {
   Plus,
   SpeakerHigh,
   SidebarSimple,
+  CaretUp,
   Moon,
   Sun,
   X,
@@ -39,6 +40,8 @@ import { Orb } from "../Orb";
 import { Mark } from "../Brand";
 import { toggleTheme, useTheme } from "@/lib/theme";
 import { PageView } from "../PageView";
+import { HeroFloat } from "./HeroFloat";
+import { CLOSE_L, DiscoverStack, deal } from "./DiscoverStack";
 import { AppIcon, CARDS, DISCOVER, SITES, THEME_L, VoiceBars, useNews } from "./MobileHome";
 
 type L = Record<Lang, string>;
@@ -96,7 +99,7 @@ export function DesktopApp() {
   return (
     <div className="relative h-dvh overflow-hidden p-6 xl:p-8">
       <Backdrop />
-      <Glass radius={30} bezel={26} refraction={70} blur={10} tint="rgba(255,255,255,.22)" interactive={false} className="flex h-full flex-col overflow-hidden">
+      <Glass radius={30} bezel={26} refraction={70} blur={10} tint="rgba(255,255,255,.55)" interactive={false} className="flex h-full flex-col overflow-hidden">
         {/* Jagora's own tabs: one per task (not a copy of the real browser's tabs) */}
         <div className="no-scrollbar flex h-12 shrink-0 items-center gap-1.5 overflow-x-auto px-3">
           <button
@@ -281,16 +284,19 @@ function StartPage() {
   const pulse = useSpeakingPulse(orb === "speaking");
   const [text, setText] = useState("");
   const news = useNews(lang);
+  const [open, setOpen] = useState(false);
   const send = () => text.trim() && (ask(text.trim()), setText(""));
   const run = (id: "register" | "scam" | "paper") => (id === "register" ? ask(lang === "yo" ? "Forúkọ mi sílẹ̀ fún Skills Fair" : "Register me for the Skills Fair") : quick(id));
   return (
     <div className="no-scrollbar relative h-full overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-[980px] flex-col items-center px-10 pb-12 pt-10">
-        <div className="flex items-center gap-1">
-          <Orb size={150} state={orb} levelRef={pulse} />
-          <CloudWordmark width={330} levelRef={pulse} className="-ml-4" />
-        </div>
-        <p className="-mt-3 text-[16px] font-medium text-ink-2">{TAGLINE[lang]}</p>
+      <div className="mx-auto flex w-full max-w-[980px] flex-col items-center px-6 pb-12 pt-6">
+        <HeroFloat>
+          <div className="flex items-center gap-1">
+            <Orb size={150} state={orb} levelRef={pulse} />
+            <CloudWordmark width={330} levelRef={pulse} className="-ml-4" />
+          </div>
+          <p className="-mt-3 text-[16px] font-medium text-ink-2 dark:text-ink dark:[text-shadow:0_1px_10px_rgba(0,0,0,.55)]">{TAGLINE[lang]}</p>
+        </HeroFloat>
 
         <form onSubmit={(e) => (e.preventDefault(), send())} className="mt-6 w-full max-w-[720px]">
           <Glass radius={30} bezel={20} refraction={50} blur={6} tint="rgba(255,255,255,.6)">
@@ -325,10 +331,22 @@ function StartPage() {
 
         {/* Discover: a wide feed in columns */}
         <section className="mt-10 w-full">
-          <h2 className="px-1 text-[30px] leading-none text-ink">{DISCOVER[lang]}</h2>
+          {!open ? (
+            <div className="flex justify-center">
+              <DiscoverStack wide lang={lang} onSeeAll={() => setOpen(true)} stories={[...CARDS.map((c) => ({ key: c.id, image: c.thumb, title: c.title[lang], source: c.source, open: () => run(c.id) })), ...news.slice(0, 6).map((n) => ({ key: n.link, image: n.image, title: n.title, source: n.source, listen: true, open: () => ask(`Read this news story to me: ${n.title} ${n.link}`) }))]} />
+            </div>
+          ) : (
+          <>
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-[30px] leading-none text-ink">{DISCOVER[lang]}</h2>
+            <button onClick={() => setOpen(false)} className="flex h-9 items-center gap-1 rounded-full px-3.5 text-[14px] font-semibold text-ink-2 hover:bg-white/40">
+              {CLOSE_L[lang]} <CaretUp size={13} weight="bold" />
+            </button>
+          </div>
           <div className="mt-4 grid grid-cols-3 gap-4">
-            {CARDS.map((c) => (
-              <Glass key={c.id} radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.6)" pressable className="cursor-pointer overflow-hidden" onClick={() => run(c.id)}>
+            {CARDS.map((c, i) => (
+              <motion.div key={c.id} {...deal(i)}>
+              <Glass radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.6)" pressable className="cursor-pointer overflow-hidden" onClick={() => run(c.id)}>
                 <span className="block">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={c.thumb} alt="" className="aspect-[16/9] w-full object-cover object-left-top" />
@@ -340,9 +358,11 @@ function StartPage() {
                   </span>
                 </span>
               </Glass>
+              </motion.div>
             ))}
-            {news.slice(0, 6).map((n) => (
-              <Glass key={n.link} radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.6)" pressable className="cursor-pointer overflow-hidden" onClick={() => ask(`Read this news story to me: ${n.title} ${n.link}`)}>
+            {news.slice(0, 6).map((n, i) => (
+              <motion.div key={n.link} {...deal(i + CARDS.length)}>
+              <Glass radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.6)" pressable className="cursor-pointer overflow-hidden" onClick={() => ask(`Read this news story to me: ${n.title} ${n.link}`)}>
                 <span className="block">
                   {n.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -362,8 +382,11 @@ function StartPage() {
                   </span>
                 </span>
               </Glass>
+              </motion.div>
             ))}
           </div>
+          </>
+          )}
         </section>
       </div>
     </div>

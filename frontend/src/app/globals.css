@@ -89,6 +89,42 @@ body {
 [data-theme="dark"] body {
   background: #16181d;
 }
+/* the sky behind everything: a sunny Lagos-blue beach by day, a golden sea of clouds in dark mode */
+:root {
+  --sky: url(/sky/beach-phone.webp);
+  --sky-fill: #2fa3ea;
+}
+@media (orientation: landscape) and (min-width: 700px) {
+  :root {
+    --sky: url(/sky/beach-desktop.webp);
+  }
+}
+[data-theme="dark"] {
+  --sky: url(/sky/dusk-phone.webp);
+  --sky-fill: #1d5f99;
+}
+@media (orientation: landscape) and (min-width: 700px) {
+  [data-theme="dark"] {
+    --sky: url(/sky/dusk-desktop.webp);
+  }
+}
+.sky-bg {
+  background: var(--sky) center / cover no-repeat, var(--sky-fill);
+}
+/* Discover's folder: frosted so the fanned stories behind it show through soft */
+.folder-glass {
+  background: linear-gradient(180deg, rgba(225, 236, 255, 0.5), rgba(255, 255, 255, 0.34));
+  -webkit-backdrop-filter: blur(12px) saturate(1.7);
+  backdrop-filter: blur(12px) saturate(1.7);
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.95),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    inset 0 -18px 30px -18px rgba(29, 99, 237, 0.18);
+}
+[data-theme="dark"] .folder-glass {
+  background: rgba(30, 33, 40, 0.58);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.14);
+}
 .theme-fade,
 .theme-fade * {
   transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, filter 0.4s ease !important;

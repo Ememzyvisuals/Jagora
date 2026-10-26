@@ -7,6 +7,7 @@ import {
   CaretDown,
   CaretLeft,
   CaretRight,
+  CaretUp,
   DotsThree,
   Moon,
   Sun,
@@ -37,6 +38,7 @@ import { CloudWordmark } from "../glass/CloudWordmark";
 import { siFacebook, siGmail, siGoogle, siInstagram, siTiktok, siWhatsapp, siX, siYoutube } from "simple-icons";
 import { canFullscreen, toggleFullscreen } from "../Pwa";
 import { LiveButton } from "../LiveMode";
+import { CLOSE_L, DiscoverStack, deal } from "./DiscoverStack";
 import { toggleTheme, useTheme } from "@/lib/theme";
 import { Glass } from "../glass/Glass";
 import { Orb } from "../Orb";
@@ -232,6 +234,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
   const orb = useApp((s) => s.orb);
   const pulse = useSpeakingPulse(orb === "speaking");
   const [page, setPage] = useState(0);
+  const [open, setOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [text, setText] = useState("");
   const [canFull, setCanFull] = useState(false);
@@ -324,7 +327,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
             <Orb size={168} state={orb} levelRef={pulse} />
           </button>
           <CloudWordmark width={270} levelRef={pulse} className="-mt-7" />
-          <p className="-mt-1 px-8 text-center text-[15px] font-medium text-ink-2">{TAGLINE[lang]}</p>
+          <p className="-mt-1 px-8 text-center text-[15px] font-medium text-ink-2 dark:text-ink dark:[text-shadow:0_1px_10px_rgba(0,0,0,.55)]">{TAGLINE[lang]}</p>
         </div>
 
         {/* ask bar */}
@@ -384,13 +387,20 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
 
         {/* discover */}
         <section className="mt-5 px-4">
+          {!open ? (
+            <DiscoverStack lang={lang} onSeeAll={() => setOpen(true)} stories={[...CARDS.map((c) => ({ key: c.id, image: c.thumb, title: c.title[lang], source: c.source, open: () => run(c.id) })), ...news.slice(0, 6).map((n) => ({ key: n.link, image: n.image, title: n.title, source: n.source, listen: true, open: () => ask(`Read this news story to me: ${n.title} ${n.link}`) }))]} />
+          ) : (
+          <>
           <div className="flex items-center justify-between px-1">
             <h2 className="text-[28px] leading-none text-ink">{DISCOVER[lang]}</h2>
-            <CaretRight size={18} weight="bold" className="text-ink-2" />
+            <button onClick={() => setOpen(false)} className="flex h-8 items-center gap-1 rounded-full px-3 text-[13.5px] font-semibold text-ink-2 hover:bg-white/40">
+              {CLOSE_L[lang]} <CaretUp size={13} weight="bold" />
+            </button>
           </div>
           <div className="mt-3 flex flex-col gap-2.5">
-            {CARDS.map((c) => (
-              <Glass key={c.id} radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.55)" pressable className="cursor-pointer" onClick={() => run(c.id)}>
+            {CARDS.map((c, i) => (
+              <motion.div key={c.id} {...deal(i)}>
+              <Glass radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.55)" pressable className="cursor-pointer" onClick={() => run(c.id)}>
                 <span className="flex gap-3 p-2.5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={c.thumb} alt="" className="h-[80px] w-[96px] shrink-0 rounded-[14px] object-cover shadow-[0_4px_10px_-6px_rgba(0,0,0,.35)]" />
@@ -405,9 +415,11 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
                   </span>
                 </span>
               </Glass>
+              </motion.div>
             ))}
-            {news.slice(0, 6).map((n) => (
-              <Glass key={n.link} radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.55)" pressable className="cursor-pointer" onClick={() => ask(`Read this news story to me: ${n.title} ${n.link}`)}>
+            {news.slice(0, 6).map((n, i) => (
+              <motion.div key={n.link} {...deal(i + CARDS.length)}>
+              <Glass radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.55)" pressable className="cursor-pointer" onClick={() => ask(`Read this news story to me: ${n.title} ${n.link}`)}>
                 <span className="flex gap-3 p-2.5">
                   {n.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -428,8 +440,11 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
                   </span>
                 </span>
               </Glass>
+              </motion.div>
             ))}
           </div>
+          </>
+          )}
         </section>
       </div>
     </div>

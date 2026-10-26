@@ -5,18 +5,27 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState, type MutableRefObject } from "react";
 import { useLite } from "@/lib/lite";
+import { useTheme } from "@/lib/theme";
 
 const GlassStage = dynamic(() => import("./GlassStage"), { ssr: false });
 
-export const SKY_CSS = {
-  backgroundImage: "url(/sky/hero-desktop.webp), linear-gradient(180deg,#5ea9ec 0%,#8cc4f2 40%,#cfe6f8 75%,#eef6fc 100%)",
-  backgroundSize: "cover",
-  backgroundPosition: "center top",
-  backgroundBlendMode: "multiply" as const,
-};
+/** The same sky the CSS layer shows, for the 3D layer. */
+export function useSkySrc() {
+  const theme = useTheme();
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const m = matchMedia("(orientation: landscape) and (min-width: 700px)");
+    const on = () => setWide(m.matches);
+    on();
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
+  return `/sky/${theme === "dark" ? "dusk" : "beach"}-${wide ? "desktop" : "phone"}.webp`;
+}
 
 export function Backdrop({ level }: { level?: MutableRefObject<number> }) {
   const lite = useLite();
+  const src = useSkySrc();
   // the 3D layer loads only after the page is usable
   const [idle, setIdle] = useState(false);
   useEffect(() => {
@@ -26,8 +35,8 @@ export function Backdrop({ level }: { level?: MutableRefObject<number> }) {
   }, []);
   return (
     <>
-      <div className="fixed inset-0 transition-[filter] duration-500 dark:brightness-[.42] dark:saturate-[.8]" style={SKY_CSS} aria-hidden="true" />
-      {lite === false && idle && <GlassStage level={level} />}
+      <div className="sky-bg fixed inset-0" aria-hidden="true" />
+      {lite === false && idle && <GlassStage src={src} level={level} />}
     </>
   );
 }

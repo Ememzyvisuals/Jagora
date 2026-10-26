@@ -87,7 +87,6 @@ function Slab({ e, buffer }: { e: GlassEntry; buffer: THREE.Texture }) {
 function Sky({ src }: { src: string }) {
   const tex = useTexture(src);
   const { size } = useThree();
-  const dark = useTheme() === "dark";
   tex.colorSpace = THREE.SRGBColorSpace;
   const img = tex.image as { width: number; height: number };
   const a = img.width / img.height;
@@ -95,7 +94,7 @@ function Sky({ src }: { src: string }) {
   return (
     <mesh position={[0, 0, -200]} scale={[w, w / a, 1]}>
       <planeGeometry />
-      <meshBasicMaterial map={tex} toneMapped={false} color={dark ? "#3c5272" : "#9fcdf6"} />
+      <meshBasicMaterial map={tex} toneMapped={false} color="#ffffff" />
     </mesh>
   );
 }
@@ -182,7 +181,7 @@ function Scene({ src, level }: { src: string; level?: MutableRefObject<number> }
   );
 }
 
-export default function GlassStage({ src = "/sky/hero-desktop.webp", level }: { src?: string; level?: MutableRefObject<number> }) {
+export default function GlassStage({ src = "/sky/beach-phone.webp", level }: { src?: string; level?: MutableRefObject<number> }) {
   useEffect(() => {
     glass.setStage(true);
     return () => glass.setStage(false);
