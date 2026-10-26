@@ -15,6 +15,7 @@ import { Backdrop } from "../glass/Backdrop";
 import { Glass } from "../glass/Glass";
 import { Tour } from "../Tour";
 import { LiveMode } from "../LiveMode";
+import { InstallPrompt } from "../InstallPrompt";
 
 type Screen = "home" | "page" | "tabs";
 
@@ -90,6 +91,7 @@ export function MobileApp() {
       <Sheet open={sheet} onClose={() => setSheet(false)} />
       {screen === "home" && !sheet && <Tour />}
       <LiveMode />
+      {screen === "home" && !sheet && <InstallPrompt />}
     </div>
   );
 }

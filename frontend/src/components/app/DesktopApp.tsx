@@ -85,7 +85,7 @@ export function DesktopApp() {
   const profile = useApp((s) => s.profile);
   const [langOpen, setLangOpen] = useState(false);
   const showPage = task?.kind === "browse" && !!task.url;
-  const url = showPage ? "skillsfair.ng/register" : "jagora.ng";
+  const url = showPage ? (task!.url.startsWith("/practice/") ? "practice.jagora.app/skills-fair" : task!.url.replace(/^https?:\/\//, "")) : "jagora.ng";
 
   return (
     <div className="relative h-dvh overflow-hidden p-6 xl:p-8">
@@ -190,7 +190,7 @@ export function DesktopApp() {
           </aside>
 
           {/* the page */}
-          <main className="relative min-w-0 flex-1 overflow-hidden rounded-[24px] shadow-[inset_0_1px_1px_rgba(255,255,255,.8)]">{showPage ? <PageView /> : <StartPage />}</main>
+          <main className="relative min-w-0 flex-1 overflow-hidden rounded-[24px] shadow-[inset_0_1px_1px_rgba(255,255,255,.8)]">{showPage ? <PageView bar={false} /> : <StartPage />}</main>
 
           {/* Jagora */}
           <section className="flex w-[372px] shrink-0 flex-col overflow-hidden rounded-[24px] bg-white/45 shadow-[inset_0_1px_1px_rgba(255,255,255,1)]">

@@ -117,6 +117,7 @@ export function Tour() {
       try {
         localStorage.setItem(KEY, "1");
       } catch {}
+      dispatchEvent(new Event("jagora:toured"));
     } else setI(i + 1);
   };
 

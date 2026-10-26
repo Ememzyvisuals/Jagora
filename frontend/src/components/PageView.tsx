@@ -52,7 +52,7 @@ export function Ring() {
   );
 }
 
-export function PageView({ compact = false, onClose }: { compact?: boolean; onClose?: () => void }) {
+export function PageView({ compact = false, bar = true, onClose }: { compact?: boolean; bar?: boolean; onClose?: () => void }) {
   const task = useApp(activeTask);
   const pointer = useApp((s) => s.pointer);
   const stage = useRef<HTMLDivElement>(null);
@@ -79,7 +79,7 @@ export function PageView({ compact = false, onClose }: { compact?: boolean; onCl
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className={`flex items-center gap-2 ${compact ? "px-3 pb-2 pt-1" : "px-4 py-3"}`}>
+      {bar && <div className={`flex items-center gap-2 ${compact ? "px-3 pb-2 pt-1" : "px-4 py-3"}`}>
         <div className="glass-2 flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full px-4 text-[13.5px] text-ink-2">
           <LockSimple size={14} weight="bold" className="shrink-0 text-ok" />
           <span className="truncate">{host || "Ready"}</span>
@@ -90,7 +90,7 @@ export function PageView({ compact = false, onClose }: { compact?: boolean; onCl
             <X size={16} weight="bold" />
           </button>
         )}
-      </div>
+      </div>}
       <div ref={stage} className="relative min-h-0 flex-1 overflow-hidden rounded-[22px] bg-white/80 shadow-[inset_0_0_0_1px_rgba(255,255,255,.8)]">
         {live ? (
           frameSrc ? (
