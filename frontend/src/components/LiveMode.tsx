@@ -203,7 +203,7 @@ export function LiveMode() {
             className="fixed inset-0 z-[80] flex flex-col items-center bg-[#dcecfb]/55 dark:bg-[#141a24]/70 px-6 pb-[max(24px,env(safe-area-inset-bottom))] pt-[max(24px,env(safe-area-inset-top))] backdrop-blur-[26px] backdrop-saturate-150"
           >
             <div className="flex w-full items-center justify-between">
-              <span className="font-pixel text-[26px] text-ink">Jagora</span>
+              <span className="font-display font-bold tracking-[-0.035em] text-[26px] text-ink">Jagora</span>
               <span className="rounded-full bg-white/70 px-3 py-1 text-[12.5px] font-semibold text-ink-2">{SAY.live[lang]}</span>
             </div>
             <div className="flex flex-1 flex-col items-center justify-center">

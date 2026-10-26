@@ -4,18 +4,12 @@
 /* dark: utilities for the few spots tokens cannot cover */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* "Jagora Sans" is Bricolage Grotesque and "Jagora Pixel" is Jagora Sans rebuilt from rounded pixels
-   (scripts/patch-sans-font.py, scripts/pixelate-font.py). Both carry the Yorùbá and Igbo letters Bricolage lacks.
+/* "Jagora Sans" is Bricolage Grotesque with the Yorùbá and Igbo letters it lacks (scripts/patch-sans-font.py).
    Inter fills the Hausa hooked letters ɓ ɗ ƙ. */
 @font-face {
   font-family: "Jagora Sans";
   src: url("/fonts/jagora-sans.woff2") format("woff2");
   font-weight: 200 800;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Jagora Pixel";
-  src: url("/fonts/jagora-pixel-sans-dot.woff2") format("woff2");
   font-display: swap;
 }
 /* body text: Piazzolla (SIL OFL), patched for Yorùbá and Igbo by scripts/patch-display-font.py */
@@ -45,7 +39,6 @@
 }
 @theme {
   --font-sans: "Jagora Body", "Jagora Sans", "Inter Variable", ui-serif, Georgia, serif;
-  --font-pixel: "Jagora Pixel", ui-monospace, monospace;
   --font-display: "Jagora Sans", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 
   --color-ink: #0e0f12;
@@ -135,6 +128,25 @@ body {
 }
 .sky-bg {
   background: var(--sky) center / cover no-repeat, var(--sky-fill);
+}
+/* the sky drifts very slowly, like real clouds: one image, moved by the GPU, no video to download */
+.sky-drift {
+  animation: sky-drift 70s ease-in-out infinite alternate;
+  transform-origin: 60% 40%;
+  will-change: transform;
+}
+@keyframes sky-drift {
+  from {
+    transform: scale(1.04) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.1) translate3d(-1.6%, -0.6%, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sky-drift {
+    animation: none;
+  }
 }
 /* Discover's folder: frosted so the fanned stories behind it show through soft */
 .folder-glass {
@@ -367,12 +379,12 @@ h3,
   }
 }
 
-/* big headings in Jagora Pixel (it needs ~24px+ for the dots to read), everything else in Jagora Sans */
+/* headings: Jagora Sans (Bricolage Grotesque), tight and confident; body text is Piazzolla */
 h1,
 h2,
 h3,
 .font-pixel {
-  font-family: var(--font-pixel);
-  font-weight: 400;
-  letter-spacing: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.035em;
 }

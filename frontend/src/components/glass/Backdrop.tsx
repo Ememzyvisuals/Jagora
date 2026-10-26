@@ -38,7 +38,9 @@ export function Backdrop(_: { level?: MutableRefObject<number> }) {
   }, []);
   return (
     <>
-      <div className="sky-bg fixed inset-0" aria-hidden="true" />
+      <div className="fixed inset-0 overflow-hidden" aria-hidden="true">
+        <div className={`sky-bg absolute inset-0 ${lite ? "" : "sky-drift"}`} />
+      </div>
       {USE_LENS && lite === false && idle && <LensStage src={src} />}
     </>
   );

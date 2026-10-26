@@ -1,7 +1,7 @@
 /* Jagora's service worker: the app's look (code, fonts, sky, icons) is kept on the phone, so Jagora opens fast and
    still shows itself on a bad network. Pages are fetched fresh when possible and fall back to the saved copy. */
-const CACHE = "jagora-v3";
-const SHELL = ["/app", "/start", "/fonts/jagora-sans.woff2", "/fonts/jagora-body-400.woff2", "/fonts/jagora-pixel-sans-dot.woff2", "/sky/beach-phone.webp", "/brand/mark-64.png"];
+const CACHE = "jagora-v4";
+const SHELL = ["/app", "/start", "/fonts/jagora-sans.woff2", "/fonts/jagora-body-400.woff2", "/sky/beach-phone.webp", "/brand/mark-64.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

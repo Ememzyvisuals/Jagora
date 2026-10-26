@@ -237,7 +237,7 @@ export default function LensStage({ src }: { src: string }) {
 
   useEffect(() => {
     const cv = ref.current!;
-    const gl = cv.getContext("webgl", { alpha: false, antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: true, powerPreference: "high-performance" });
+    const gl = cv.getContext("webgl", { alpha: true, antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: true, powerPreference: "high-performance" });
     if (!gl) return;
     let blit: Prog, blurP: Prog, lens: Prog;
     try {
@@ -277,6 +277,11 @@ export default function LensStage({ src }: { src: string }) {
       const x = c2.getContext("2d")!;
       const k = Math.max(c2.width / img.naturalWidth, c2.height / img.naturalHeight);
       const iw = img.naturalWidth * k, ih = img.naturalHeight * k;
+      // match the CSS sky's slow drift at its midpoint (scale 1.07 around 60% / 40%) so the lenses line up with it
+      const ox = c2.width * 0.6, oy = c2.height * 0.4;
+      x.translate(ox, oy);
+      x.scale(1.07, 1.07);
+      x.translate(-ox, -oy);
       x.drawImage(img, (c2.width - iw) / 2, (c2.height - ih) / 2, iw, ih);
       gl.bindTexture(gl.TEXTURE_2D, sky);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
@@ -326,11 +331,9 @@ export default function LensStage({ src }: { src: string }) {
       gl.viewport(0, 0, cv.width, cv.height);
       gl.disable(gl.BLEND);
       gl.disable(gl.SCISSOR_TEST);
-      gl.useProgram(blit.p);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, sky);
-      gl.uniform1i(blit.u("u_tex"), 0);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      // the sky itself is the CSS layer underneath (it drifts slowly); this canvas only draws the lenses
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
 
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);

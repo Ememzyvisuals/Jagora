@@ -1,7 +1,7 @@
 "use client";
 
 /* My details: what Jagora may use to fill forms. Everything stays on the device; each field is editable in place. */
-import { ArrowLeft, Check, PencilSimple, Trash } from "@phosphor-icons/react";
+import { CaretLeft, Check, PencilSimple, Trash } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -56,7 +56,7 @@ export default function Details() {
       <div className="mx-auto max-w-[620px] px-4 pb-16 pt-[max(16px,env(safe-area-inset-top))]">
         <div className="flex items-center gap-2">
           <Link href="/app" className="btn btn-glass h-10 w-10" aria-label="Back">
-            <ArrowLeft size={18} />
+            <CaretLeft size={18} weight="bold" />
           </Link>
           <div className="ml-auto">
             <LanguagePicker compact />

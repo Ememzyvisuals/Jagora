@@ -3,7 +3,7 @@
 /* Getting in, on one page: Jagora on the sky, her five languages to tap, and a glass card with email and password.
    No email check and no puzzle (the bot check runs on its own in the background). An access code gives a bigger
    allowance. Personal details are not asked here: Jagora asks for what a task needs, when it needs it. */
-import { ArrowRight, Eye, EyeSlash, Key, Sparkle } from "@phosphor-icons/react";
+import { Eye, EyeSlash, Key, Sparkle } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -140,7 +140,7 @@ export default function Start() {
           <Glass radius={32} bezel={18} tint="rgba(255,255,255,.72)" className="p-5 shadow-[0_30px_70px_-34px_rgba(10,30,70,.55)] md:p-10">
             <div className="hidden items-center gap-2.5 md:flex">
               <Mark size={44} />
-              <span className="font-pixel text-[36px] leading-none text-ink">Jagora</span>
+              <span className="font-display font-bold tracking-[-0.035em] text-[36px] leading-none text-ink">Jagora</span>
             </div>
 
             {/* create / sign in */}
@@ -212,7 +212,6 @@ export default function Start() {
 
               <button type="submit" disabled={busy} className="btn btn-ink mt-1 h-[56px] w-full text-[16.5px] md:mt-3 md:h-[64px] md:text-[18px] font-semibold disabled:opacity-60">
                 {busy ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-paper/30 border-t-paper" /> : mode === "create" ? T.go[lang] : T.goIn[lang]}
-                {!busy && <ArrowRight size={18} weight="bold" />}
               </button>
 
               {mode === "create" && (

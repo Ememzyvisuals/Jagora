@@ -4,7 +4,7 @@
    the page in the middle (Jagora's start page or the live site she is working on); Jagora on the right. */
 import {
   ArrowClockwise,
-  ArrowRight,
+  PaperPlaneRight,
   CaretDown,
   CaretLeft,
   CaretRight,
@@ -171,7 +171,7 @@ export function DesktopApp() {
             <div className="flex h-full w-[252px] flex-col p-3">
             <div className="flex items-center gap-2.5 px-1.5 pt-1">
               <Mark size={32} />
-              <span className="font-pixel text-[30px] leading-none text-ink">Jagora</span>
+              <span className="font-display font-bold tracking-[-0.035em] text-[30px] leading-none text-ink">Jagora</span>
             </div>
             <button
               onClick={() => setActive(null)}
@@ -311,7 +311,7 @@ function StartPage() {
               />
               {text.trim() ? (
                 <button type="submit" aria-label="Go" className="grid h-[44px] w-[44px] place-items-center rounded-full bg-ink text-paper shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-90">
-                  <ArrowRight size={18} weight="bold" />
+                  <PaperPlaneRight size={18} weight="fill" />
                 </button>
               ) : (
                 <LiveButton />

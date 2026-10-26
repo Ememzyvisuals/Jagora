@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ArrowUp } from "@phosphor-icons/react";
+import { PaperPlaneRight } from "@phosphor-icons/react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -98,7 +98,7 @@ export default function Landing() {
                 )}
               </label>
               <button type="submit" className="btn btn-ink h-[52px] w-[52px] shrink-0" aria-label="Ask Jagora">
-                <ArrowUp size={20} weight="bold" />
+                <PaperPlaneRight size={20} weight="fill" />
               </button>
             </div>
             <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -234,7 +234,7 @@ export default function Landing() {
               <h3 className="mt-6 text-[30px] font-semibold leading-tight">Try Jagora now.</h3>
               <p className="mt-2 text-[16.5px] text-ink-2">No download. Works in the browser on any phone.</p>
               <button onClick={() => go("")} className="btn btn-ink mt-6 h-13 px-6 py-3.5 text-[16px]">
-                Start <ArrowRight size={17} weight="bold" />
+                Start
               </button>
             </div>
           </motion.div>

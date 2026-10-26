@@ -3,7 +3,7 @@
 /* Phone home: sky behind everything, liquid glass on top. Orb, the living "Jagora" wordmark, the ask bar,
    site shortcuts, the Discover feed, and the glass bottom bar with the orb in the middle. */
 import {
-  ArrowRight,
+  PaperPlaneRight,
   CaretDown,
   CaretLeft,
   CaretRight,
@@ -345,7 +345,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
               />
               {text.trim() ? (
                 <button type="submit" aria-label="Go" className="grid h-[42px] w-[42px] place-items-center rounded-full bg-ink text-paper shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-90">
-                  <ArrowRight size={18} weight="bold" />
+                  <PaperPlaneRight size={18} weight="fill" />
                 </button>
               ) : (
                 <LiveButton compact />

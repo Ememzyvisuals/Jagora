@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, ClipboardText, Paperclip, Stop } from "@phosphor-icons/react";
+import { PaperPlaneRight, ClipboardText, Paperclip, Stop } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
 import { ask, live } from "@/lib/engine";
 import { remoteAudio } from "@/lib/engine/remote";
@@ -80,7 +80,7 @@ export function Composer() {
         <input ref={file} type="file" accept="image/*,application/pdf" capture="environment" hidden onChange={(e) => attach(e.target.files?.[0])} />
         {text.trim() ? (
           <button className="btn btn-ink h-10 w-10 shrink-0" onClick={send} aria-label="Send">
-            <ArrowUp size={18} weight="bold" />
+            <PaperPlaneRight size={18} weight="fill" />
           </button>
         ) : (
           <LiveButton compact />
