@@ -19,7 +19,7 @@ export function Cursor({ x, y, visible, clicking }: { x: number; y: number; visi
       transition={{ type: "spring", stiffness: 140, damping: 22, mass: 0.9 }}
     >
       <svg width="22" height="26" viewBox="0 0 26 30" className="drop-shadow-[0_6px_10px_rgba(60,38,16,.35)]">
-        <path d="M3 2l19 12-8.5 1.8L9 27z" fill="#1F1A15" stroke="#fff" strokeWidth="2.2" strokeLinejoin="round" />
+        <path d="M3 2l19 12-8.5 1.8L9 27z" fill="#0E0F12" stroke="#fff" strokeWidth="2.2" strokeLinejoin="round" />
       </svg>
       <span className="absolute left-5 top-5 rounded-full rounded-tl-[4px] bg-ink px-2.5 py-1 text-[11px] font-medium text-white shadow-lg">
         Jagora
@@ -44,7 +44,7 @@ export function Ring() {
             boxShadow:
               h.tone === "stop"
                 ? "0 0 0 2px #B2431C, 0 0 0 7px rgba(178,67,28,.16)"
-                : "0 0 0 2px #E07A1F, 0 0 0 7px rgba(224,122,31,.18)",
+                : "0 0 0 2px #1D63ED, 0 0 0 7px rgba(29,99,237,.18)",
           }}
         />
       )}

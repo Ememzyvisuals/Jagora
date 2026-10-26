@@ -16,16 +16,23 @@ import {
   ShoppingBag,
   Certificate,
   User,
-  EnvelopeSimple,
-  Briefcase,
+  CornersOut,
+  ArrowClockwise,
+  ChatCircleText,
+  Play,
+  SpeakerHigh,
+  LockSimple,
 } from "@phosphor-icons/react";
+import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
-import { useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import { ask, quick } from "@/lib/engine";
 import { LANGS, type Lang } from "@/lib/i18n";
 import { activeTask, useApp } from "@/lib/store";
+import { ago } from "@/lib/hooks";
 import { useSpeakingPulse } from "@/lib/voice";
 import { CloudWordmark } from "../glass/CloudWordmark";
+import { canFullscreen, toggleFullscreen } from "../Pwa";
 import { Glass } from "../glass/Glass";
 import { Orb } from "../Orb";
 
@@ -53,17 +60,17 @@ const NAV: Record<"back" | "fwd" | "tabs" | "home", L> = {
   home: { en: "Home", pcm: "Home", yo: "Ilé", ha: "Gida", ig: "Ụlọ" },
 };
 
-type Site = { name: L; goal: string; Icon: ComponentType<{ size?: number; weight?: "fill" }>; from: string; to: string };
+type Site = { name: L; domain?: string; goal: string; Icon: ComponentType<{ size?: number; weight?: "fill" }>; from: string; to: string };
 const l = (en: string, yo: string, ha: string, ig: string, pcm = en): L => ({ en, yo, ha, ig, pcm });
 export const SITES: Site[] = [
-  { name: l("Search", "Wá nǹkan", "Bincike", "Chọọ"), goal: "Open google.com", Icon: MagnifyingGlass, from: "#5aa2ff", to: "#2b6fe8" },
-  { name: l("Exams", "Ìdánwò", "Jarrabawa", "Ule"), goal: "Open jamb.gov.ng", Icon: GraduationCap, from: "#3fcf86", to: "#14965a" },
-  { name: l("ID card", "Ìdánimọ̀", "Shaida", "Njirimara"), goal: "Open nimc.gov.ng", Icon: IdentificationCard, from: "#9d8cff", to: "#6a4fe0" },
-  { name: l("News", "Ìròyìn", "Labarai", "Akụkọ"), goal: "Open bbc.com/yoruba", Icon: Newspaper, from: "#ff7a6b", to: "#e2412f" },
-  { name: l("Results", "Èsì", "Sakamako", "Nsonaazụ"), goal: "Open waecdirect.org", Icon: Certificate, from: "#ffb54d", to: "#ef8a12" },
-  { name: l("Shop", "Ọjà", "Kasuwa", "Ahịa"), goal: "Open jumia.com.ng", Icon: ShoppingBag, from: "#ff8fc0", to: "#e2508f" },
-  { name: l("Jobs", "Iṣẹ́", "Ayyuka", "Ọrụ"), goal: "Find jobs in Lagos", Icon: Briefcase, from: "#58c7d8", to: "#1f93a8" },
-  { name: l("Mail", "Lẹ́tà", "Wasiƙa", "Ozi"), goal: "Open gmail.com", Icon: EnvelopeSimple, from: "#7aa8ff", to: "#4a6fe0" },
+  { name: l("Google", "Google", "Google", "Google"), domain: "google.com", goal: "Open google.com", Icon: MagnifyingGlass, from: "#5aa2ff", to: "#2b6fe8" },
+  { name: l("Facebook", "Facebook", "Facebook", "Facebook"), domain: "facebook.com", goal: "Open facebook.com", Icon: ChatCircleText, from: "#4f8dff", to: "#1b5fe0" },
+  { name: l("YouTube", "YouTube", "YouTube", "YouTube"), domain: "youtube.com", goal: "Open youtube.com", Icon: Play, from: "#ff6b6b", to: "#e02424" },
+  { name: l("BBC News", "BBC Yorùbá", "BBC Hausa", "BBC Igbo", "BBC Pidgin"), domain: "bbc.com", goal: "Open BBC news in my language", Icon: Newspaper, from: "#5b5b66", to: "#1d1d22" },
+  { name: l("JAMB", "JAMB", "JAMB", "JAMB"), domain: "jamb.gov.ng", goal: "Open jamb.gov.ng", Icon: GraduationCap, from: "#3fcf86", to: "#14965a" },
+  { name: l("NIMC", "NIMC", "NIMC", "NIMC"), domain: "nimc.gov.ng", goal: "Open nimc.gov.ng", Icon: IdentificationCard, from: "#36b37e", to: "#0e7a4f" },
+  { name: l("WAEC", "WAEC", "WAEC", "WAEC"), domain: "waecdirect.org", goal: "Open waecdirect.org", Icon: Certificate, from: "#5a8dee", to: "#2a55b8" },
+  { name: l("Jumia", "Jumia", "Jumia", "Jumia"), domain: "jumia.com.ng", goal: "Open jumia.com.ng", Icon: ShoppingBag, from: "#ffae4d", to: "#f08a12" },
 ];
 
 const CARDS: { id: "register" | "scam" | "paper"; thumb: string; source: string; when: L; title: L }[] = [
@@ -124,7 +131,7 @@ function Flag({ size = 22 }: { size?: number }) {
 }
 
 /** Jagora's voice mark: five soft bars, not a microphone. */
-export function VoiceBars({ size = 22, color = "#E07A1F" }: { size?: number; color?: string }) {
+export function VoiceBars({ size = 22, color = "#1D63ED" }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
       {[4, 8, 12, 16, 20].map((x, i) => {
@@ -136,7 +143,23 @@ export function VoiceBars({ size = 22, color = "#E07A1F" }: { size?: number; col
 }
 
 export function AppIcon({ site, size = 46 }: { site: Site; size?: number }) {
-  const { Icon, from, to } = site;
+  const { Icon, from, to, domain } = site;
+  const [failed, setFailed] = useState(!domain);
+  if (!failed && domain)
+    return (
+      <span className="grid place-items-center overflow-hidden bg-white" style={{ width: size, height: size, borderRadius: size * 0.3, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.06), 0 6px 14px -8px rgba(10,30,70,.35)" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`https://www.google.com/s2/favicons?domain=${domain}&sz=128`}
+          alt=""
+          width={size * 0.62}
+          height={size * 0.62}
+          onError={() => setFailed(true)}
+          onLoad={(e) => e.currentTarget.naturalWidth <= 16 && setFailed(true)}
+          style={{ width: size * 0.62, height: size * 0.62 }}
+        />
+      </span>
+    );
   return (
     <span
       className="relative grid place-items-center overflow-hidden text-white"
@@ -165,6 +188,19 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
   const [page, setPage] = useState(0);
   const [langOpen, setLangOpen] = useState(false);
   const [text, setText] = useState("");
+  const [canFull, setCanFull] = useState(false);
+  const [news, setNews] = useState<{ title: string; link: string; image: string | null; date: string | null; source: string }[]>([]);
+  useEffect(() => {
+    let on = true;
+    fetch(`/api/news?lang=${lang}`)
+      .then((r) => r.json())
+      .then((d) => on && setNews(d.items ?? []))
+      .catch(() => undefined);
+    return () => {
+      on = false;
+    };
+  }, [lang]);
+  useEffect(() => setCanFull(canFullscreen()), []);
 
   const run = (id: "register" | "scam" | "paper") => {
     if (id === "register") ask(lang === "yo" ? "Forúkọ mi sílẹ̀ fún Skills Fair" : "Register me for the Skills Fair");
@@ -179,7 +215,17 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
 
   return (
     <div className="relative h-full">
-      <div className="no-scrollbar relative h-full overflow-y-auto pb-36">
+      <div
+        className="no-scrollbar relative h-full overflow-y-auto pb-36"
+        onScroll={(e) => {
+          const y = e.currentTarget.scrollTop;
+          const prev = Number(e.currentTarget.dataset.y || 0);
+          if (Math.abs(y - prev) > 8) {
+            dispatchEvent(new CustomEvent("jagora:scroll", { detail: { down: y > prev && y > 60 } }));
+            e.currentTarget.dataset.y = String(y);
+          }
+        }}
+      >
         {/* top row */}
         <div className="flex items-center justify-between px-4 pt-[max(14px,env(safe-area-inset-top))]">
           <div className="relative">
@@ -208,6 +254,14 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
               </Glass>
             )}
           </div>
+          <div className="flex items-center gap-2">
+          {canFull && (
+            <Glass radius={22} bezel={12} refraction={30} pressable className="cursor-pointer" onClick={() => void toggleFullscreen()}>
+              <span className="grid h-11 w-11 place-items-center text-ink" aria-label="Full screen">
+                <CornersOut size={20} />
+              </span>
+            </Glass>
+          )}
           <Link href="/app/details" aria-label="My details">
             <Glass radius={22} bezel={12} refraction={30} pressable>
               <span className="grid h-11 w-11 place-items-center text-ink">
@@ -215,6 +269,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
               </span>
             </Glass>
           </Link>
+          </div>
         </div>
 
         {/* the orb, big and alive, and the word */}
@@ -292,6 +347,29 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
                 </span>
               </Glass>
             ))}
+            {news.slice(0, 6).map((n) => (
+              <Glass key={n.link} radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.55)" pressable className="cursor-pointer" onClick={() => ask(`Read this news story to me: ${n.title} ${n.link}`)}>
+                <span className="flex gap-3 p-2.5">
+                  {n.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={n.image} alt="" loading="lazy" className="h-[80px] w-[96px] shrink-0 rounded-[14px] object-cover shadow-[0_4px_10px_-6px_rgba(0,0,0,.35)]" />
+                  ) : (
+                    <span className="grid h-[80px] w-[96px] shrink-0 place-items-center rounded-[14px] bg-ink text-white">
+                      <Newspaper size={28} weight="fill" />
+                    </span>
+                  )}
+                  <span className="flex min-w-0 flex-1 flex-col py-0.5">
+                    <span className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{n.title}</span>
+                    <span className="mt-auto flex items-center gap-1.5 text-[12.5px] text-ink-3">
+                      <span className="truncate">{n.source}</span>
+                      {n.date && <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-ink-3/60" />}
+                      {n.date && <span className="shrink-0">{ago(Date.parse(n.date))}</span>}
+                      <SpeakerHigh size={17} className="ml-auto shrink-0 text-accent" aria-label="Listen" />
+                    </span>
+                  </span>
+                </span>
+              </Glass>
+            ))}
           </div>
         </section>
       </div>
@@ -305,6 +383,8 @@ function TabsGlyph({ count }: { count: number }) {
   );
 }
 
+/** Safari-style bottom bar: separate floating glass pieces (back, the address capsule with the orb, tabs, more).
+    Scrolling down shrinks it to a small address capsule; scrolling up or tapping opens it again. */
 export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "tabs"; setScreen: (s: "home" | "page" | "tabs") => void }) {
   const lang = useApp((s) => s.lang);
   const sheet = useApp((s) => s.sheetOpen);
@@ -313,32 +393,125 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
   const count = useApp((s) => s.tasks.length);
   const task = useApp(activeTask);
   const pulse = useSpeakingPulse(orb === "speaking");
-  const item = "flex w-[58px] flex-col items-center gap-1 text-ink-2 transition active:scale-90 disabled:opacity-35";
+  const [small, setSmall] = useState(false);
+  const [menu, setMenu] = useState(false);
+  useEffect(() => {
+    const on = (e: Event) => setSmall((e as CustomEvent<{ down: boolean }>).detail.down);
+    addEventListener("jagora:scroll", on);
+    return () => removeEventListener("jagora:scroll", on);
+  }, []);
+  const onPage = screen === "page" && task?.kind === "browse" && !!task.url;
+  const label = onPage ? "skillsfair.ng" : sheet ? "Jagora" : PLACEHOLDER[lang];
+  const spring = { type: "spring", stiffness: 380, damping: 32 } as const;
+
   return (
-    <div className="absolute inset-x-3 bottom-[max(10px,env(safe-area-inset-bottom))] z-40">
-      <Glass radius={32} bezel={20} refraction={44} blur={14} tint="rgba(255,255,255,.74)">
-        <nav className="flex h-[70px] items-center justify-around px-1">
-          <button className={item} disabled={screen === "home"} onClick={() => setScreen("home")}>
-            <CaretLeft size={22} />
-            <span className="text-[11px] font-medium">{NAV.back[lang]}</span>
-          </button>
-          <button className={item} disabled={!task || task.kind !== "browse" || screen === "page"} onClick={() => setScreen("page")}>
-            <CaretRight size={22} />
-            <span className="text-[11px] font-medium">{NAV.fwd[lang]}</span>
-          </button>
-          <button onClick={() => setSheet(!sheet)} className={`-mt-1 transition active:scale-90 ${sheet ? "opacity-0" : ""}`} aria-label="Talk to Jagora">
-            <Orb size={62} state={orb} levelRef={pulse} />
-          </button>
-          <button className={item} onClick={() => setScreen("tabs")} aria-label={`Tabs, ${count} open`}>
-            <TabsGlyph count={count} />
-            <span className="text-[11px] font-medium">{NAV.tabs[lang]}</span>
-          </button>
-          <button className={item} onClick={() => setScreen("home")}>
-            <House size={22} />
-            <span className="text-[11px] font-medium">{NAV.home[lang]}</span>
-          </button>
-        </nav>
-      </Glass>
+    <div className="absolute inset-x-0 bottom-[max(10px,env(safe-area-inset-bottom))] z-40 flex justify-center px-3">
+      <motion.div layout transition={spring} className={`flex items-center ${small ? "gap-0" : "w-full gap-2"}`}>
+        <AnimatePresence initial={false}>
+          {!small && (
+            <motion.div key="back" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }} transition={spring}>
+              <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable>
+                <button className="grid h-[52px] w-[52px] place-items-center text-ink disabled:opacity-30" disabled={screen === "home"} onClick={() => setScreen("home")} aria-label={NAV.back[lang]}>
+                  <CaretLeft size={22} weight="bold" />
+                </button>
+              </Glass>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <motion.div layout transition={spring} className={small ? "" : "min-w-0 flex-1"}>
+          <Glass radius={30} bezel={16} refraction={36} blur={10} tint="rgba(255,255,255,.66)" pressable>
+            {small ? (
+              <button onClick={() => setSmall(false)} className="flex h-9 items-center gap-1.5 px-4 text-[13px] font-semibold text-ink">
+                <LockSimple size={12} weight="bold" className="text-ink-2" />
+                {onPage ? "skillsfair.ng" : "jagora.ng"}
+              </button>
+            ) : (
+              <div className="flex h-[52px] items-center gap-2 pl-1.5 pr-3">
+                <button onClick={() => setSheet(!sheet)} aria-label="Talk to Jagora" className="shrink-0 transition active:scale-90">
+                  <Orb size={42} state={orb} levelRef={pulse} />
+                </button>
+                <button onClick={() => setSheet(true)} className="min-w-0 flex-1 truncate text-left text-[15px] font-medium text-ink-2">
+                  {label}
+                </button>
+                {onPage && <ArrowClockwise size={17} className="shrink-0 text-ink-2" />}
+              </div>
+            )}
+          </Glass>
+        </motion.div>
+
+        <AnimatePresence initial={false}>
+          {!small && (
+            <motion.div key="right" className="flex gap-2" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }} transition={spring}>
+              <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable>
+                <button className="grid h-[52px] w-[52px] place-items-center text-ink" onClick={() => setScreen("tabs")} aria-label={`${NAV.tabs[lang]}, ${count}`}>
+                  <TabsGlyph count={count} />
+                </button>
+              </Glass>
+              <div className="relative">
+                <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable>
+                  <button className="grid h-[52px] w-[52px] place-items-center text-ink" onClick={() => setMenu((v) => !v)} aria-label="More" aria-expanded={menu}>
+                    <DotsThree size={24} weight="bold" />
+                  </button>
+                </Glass>
+                <AnimatePresence>
+                  {menu && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9, y: 8 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, y: 8 }}
+                      transition={spring}
+                      className="absolute bottom-[62px] right-0 w-56 origin-bottom-right"
+                    >
+                      <Glass radius={24} bezel={14} refraction={30} blur={14} tint="rgba(255,255,255,.86)">
+                        <div className="p-1.5">
+                          {[
+                            { k: "home", Icon: House, label: NAV.home[lang], on: () => setScreen("home") },
+                            { k: "fwd", Icon: CaretRight, label: NAV.fwd[lang], on: () => task?.kind === "browse" && setScreen("page") },
+                            { k: "full", Icon: CornersOut, label: "Full screen", on: () => void toggleFullscreen() },
+                          ].map(({ k, Icon, label: l, on }) => (
+                            <button key={k} onClick={() => (on(), setMenu(false))} className="flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-left text-[15px] font-medium text-ink hover:bg-black/5">
+                              <Icon size={19} /> {l}
+                            </button>
+                          ))}
+                          <Link href="/app/details" className="flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-[15px] font-medium text-ink hover:bg-black/5">
+                            <User size={19} /> My details
+                          </Link>
+                        </div>
+                      </Glass>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
     </div>
+  );
+}
+
+/** iOS-style soft blur where content slides under the top and bottom of the screen. */
+export function EdgeBlur() {
+  const layer = (side: "top" | "bottom", h: number, blur: number) => (
+    <div
+      aria-hidden="true"
+      className={`pointer-events-none fixed inset-x-0 z-30 ${side === "top" ? "top-0" : "bottom-0"}`}
+      style={{
+        height: h,
+        backdropFilter: `blur(${blur}px)`,
+        WebkitBackdropFilter: `blur(${blur}px)`,
+        maskImage: `linear-gradient(to ${side === "top" ? "bottom" : "top"}, #000 25%, transparent)`,
+        WebkitMaskImage: `linear-gradient(to ${side === "top" ? "bottom" : "top"}, #000 25%, transparent)`,
+      }}
+    />
+  );
+  return (
+    <>
+      {layer("top", 60, 6)}
+      {layer("top", 34, 14)}
+      {layer("bottom", 130, 5)}
+      {layer("bottom", 80, 12)}
+    </>
   );
 }

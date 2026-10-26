@@ -5,8 +5,8 @@ import type { SVGProps } from "react";
 type P = Omit<SVGProps<SVGSVGElement>, "children"> & { size?: number; tone?: "blue" | "mist" | "amber" | "rose" | "green" };
 
 const TONES = {
-  blue: { body: "#FDEBD8", detail: "#E07A1F" },
-  mist: { body: "#F3ECE3", detail: "#E07A1F" },
+  blue: { body: "#E4ECFF", detail: "#1D63ED" },
+  mist: { body: "#EEF1F6", detail: "#1D63ED" },
   amber: { body: "#FFF1D6", detail: "#C98612" },
   rose: { body: "#FFE3E8", detail: "#C93A50" },
   green: { body: "#DDF3E8", detail: "#2F9E6E" },
@@ -16,7 +16,7 @@ function Base({ size = 48, tone = "blue", children, ...rest }: Omit<P, "children
   const t = TONES[tone];
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true" {...rest}>
-      <g stroke="#1F1A15" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{children(t)}</g>
+      <g stroke="#0E0F12" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{children(t)}</g>
     </svg>
   );
 }
@@ -59,7 +59,7 @@ export const IconDoForMe = (p: P) => (
   <Base {...p}>{(t) => <>
     <rect x="6" y="8" width="36" height="30" rx="5" fill={t.body} />
     <path d="M6 15h36" />
-    <circle cx="11" cy="11.5" r=".6" fill="#1F1A15" /><circle cx="15" cy="11.5" r=".6" fill="#1F1A15" />
+    <circle cx="11" cy="11.5" r=".6" fill="#0E0F12" /><circle cx="15" cy="11.5" r=".6" fill="#0E0F12" />
     <rect x="12" y="20" width="24" height="5.5" rx="2.75" fill="#fff" />
     <path d="M12 31h12" />
     <path d="M27 29.5l2.8 2.8 5.2-5.6" stroke={t.detail} strokeWidth="2.6" />

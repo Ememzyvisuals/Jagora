@@ -159,7 +159,7 @@ export function DesktopApp() {
             </div>
             <div className="mt-2 flex flex-col gap-1 border-t border-white/60 pt-2">
               <Link href="/app/details" className="flex items-center gap-2.5 rounded-[14px] p-2 hover:bg-white/40">
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-[#ffd3a3] to-[#e07a1f] text-[13px] font-bold text-white">
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-[#7fb2ff] to-[#1d63ed] text-[13px] font-bold text-white">
                   {(profile.full_name || "Me").slice(0, 1)}
                 </span>
                 <span className="truncate text-[14px] font-medium text-ink">{profile.full_name || "My details"}</span>

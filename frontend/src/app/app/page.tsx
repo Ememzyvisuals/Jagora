@@ -17,6 +17,16 @@ export default function AppPage() {
   useEffect(() => {
     if (ready && !onboarded) router.replace("/start");
     if (!ready || !onboarded) return;
+    // shared from another app ("Share to Jagora"): check the message or open the link
+    try {
+      const q = new URLSearchParams(location.search);
+      const shared = [q.get("text"), q.get("url")].filter(Boolean).join(" ").trim();
+      if (shared) {
+        history.replaceState(null, "", "/app");
+        setTimeout(() => ask(shared), 400);
+        return;
+      }
+    } catch {}
     // a request typed on the landing page before she signed up
     try {
       const pending = sessionStorage.getItem("jagora:ask");
