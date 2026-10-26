@@ -143,11 +143,11 @@ export default function Start() {
                       <button
                         key={l.id}
                         onClick={() => setLang(l.id)}
-                        className={`flex h-[68px] items-center justify-between rounded-[22px] px-5 text-left transition ${l.id === lang ? "bg-ink text-white" : "glass-2 text-ink"}`}
+                        className={`flex h-[68px] items-center justify-between rounded-[22px] px-5 text-left transition ${l.id === lang ? "bg-ink text-paper" : "glass-2 text-ink"}`}
                       >
                         <span>
                           <span className="block text-[19px] font-semibold">{l.native}</span>
-                          <span className={`block text-[14px] ${l.id === lang ? "text-white/70" : "text-ink-3"}`}>{l.hello}</span>
+                          <span className={`block text-[14px] ${l.id === lang ? "text-paper/70" : "text-ink-3"}`}>{l.hello}</span>
                         </span>
                         {l.id === lang && <Check size={20} weight="bold" />}
                       </button>
@@ -168,7 +168,7 @@ export default function Start() {
                       <button
                         key={g}
                         onClick={() => (setProfile({ gender: g }), go(1))}
-                        className={`h-[84px] rounded-[24px] text-[20px] font-semibold transition ${profile.gender === g ? "bg-ink text-white" : "glass-2 text-ink"}`}
+                        className={`h-[84px] rounded-[24px] text-[20px] font-semibold transition ${profile.gender === g ? "bg-ink text-paper" : "glass-2 text-ink"}`}
                       >
                         {g === "female" ? W.woman[lang] : W.man[lang]}
                       </button>
@@ -336,7 +336,7 @@ function DobStep({ lang, value, onDone }: { lang: Lang; value: string; onDone: (
           <button
             key={name}
             onClick={() => setM(k + 1)}
-            className={`h-12 rounded-[16px] text-[16px] font-medium transition ${m === k + 1 ? "bg-ink text-white" : "glass-2 text-ink"}`}
+            className={`h-12 rounded-[16px] text-[16px] font-medium transition ${m === k + 1 ? "bg-ink text-paper" : "glass-2 text-ink"}`}
           >
             {name}
           </button>
@@ -366,7 +366,7 @@ function StateStep({ lang, value, onDone }: { lang: Lang; value: string; onDone:
           <button
             key={s}
             onClick={() => onDone(s)}
-            className={`h-12 truncate rounded-[16px] px-3 text-[16px] font-medium transition ${value === s ? "bg-ink text-white" : "glass-2 text-ink hover:bg-white"}`}
+            className={`h-12 truncate rounded-[16px] px-3 text-[16px] font-medium transition ${value === s ? "bg-ink text-paper" : "glass-2 text-ink hover:bg-white"}`}
           >
             {s}
           </button>

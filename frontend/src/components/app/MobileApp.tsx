@@ -107,7 +107,7 @@ function thumbFor(task: Task) {
 }
 
 function StatusChip({ s }: { s: Task["status"] }) {
-  const m = { working: ["Working", "bg-accent text-white"], waiting: ["Needs you", "bg-ink text-white"], done: ["Done", "bg-white/80 text-ink-2"], stopped: ["Stopped", "bg-white/80 text-ink-3"] }[s];
+  const m = { working: ["Working", "bg-accent text-snow"], waiting: ["Needs you", "bg-ink text-paper"], done: ["Done", "bg-white/80 text-ink-2"], stopped: ["Stopped", "bg-white/80 text-ink-3"] }[s];
   return <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-bold ${m[1]}`}>{m[0]}</span>;
 }
 
@@ -185,22 +185,22 @@ function Tabs({ full, setFull, onOpen, onNew, onDone }: { full: boolean; setFull
         className={`absolute inset-x-0 flex flex-col ${full ? "bottom-0 top-0" : "bottom-[calc(max(10px,env(safe-area-inset-bottom))+64px)] max-h-[64dvh]"}`}
       >
         {!full && (
-          <button onClick={() => setFull(true)} className="mx-auto mb-2 flex flex-col items-center gap-1 text-white/90" aria-label="Show all tabs">
+          <button onClick={() => setFull(true)} className="mx-auto mb-2 flex flex-col items-center gap-1 text-snow/90" aria-label="Show all tabs">
             <span className="h-1.5 w-10 rounded-full bg-white/70" />
             <span className="text-[12px] font-semibold">{tasks.length} {tasks.length === 1 ? "tab" : "tabs"}</span>
           </button>
         )}
         <div className={`no-scrollbar relative min-h-0 flex-1 px-3 ${full ? "overflow-y-auto pt-[max(14px,env(safe-area-inset-top))]" : "overflow-hidden"}`} style={{ perspective: 1100 }}>
           {full && (
-            <div className="mb-4 flex items-end justify-between px-2 pt-2 text-white">
+            <div className="mb-4 flex items-end justify-between px-2 pt-2 text-snow">
               <h1 className="text-[34px] leading-none">Tabs</h1>
-              <span className="text-[14px] font-semibold text-white/80">{tasks.length} open</span>
+              <span className="text-[14px] font-semibold text-snow/80">{tasks.length} open</span>
             </div>
           )}
           {tasks.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center text-white">
+            <div className="flex flex-col items-center justify-center py-10 text-center text-snow">
               <p className="text-[17px] font-semibold">No tabs open</p>
-              <p className="mt-1 text-[14.5px] text-white/80">Add a tab and tell Jagora what you need.</p>
+              <p className="mt-1 text-[14.5px] text-snow/80">Add a tab and tell Jagora what you need.</p>
             </div>
           ) : (
             <div className={full ? "pb-[250px]" : "pb-[96px]"}>
@@ -224,7 +224,7 @@ function Tabs({ full, setFull, onOpen, onNew, onDone }: { full: boolean; setFull
                 Add new tab
               </button>
               {full && (
-                <button onClick={onDone} className="h-11 rounded-full bg-ink px-6 text-[15px] font-semibold text-white transition active:scale-95">
+                <button onClick={onDone} className="h-11 rounded-full bg-ink px-6 text-[15px] font-semibold text-paper transition active:scale-95">
                   Done
                 </button>
               )}

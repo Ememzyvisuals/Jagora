@@ -38,7 +38,7 @@ export default function Landing() {
   };
 
   return (
-    <div className="bg-[#f8f2ea] text-ink">
+    <div className="bg-[#f8f2ea] dark:bg-[#16181d] text-ink">
       {/* hero */}
       <section className="sky relative min-h-[100svh] overflow-hidden" style={{ backgroundImage: "url(/sky/hero-desktop.webp)" }}>
         <picture className="absolute inset-0 md:hidden">
@@ -107,7 +107,7 @@ export default function Landing() {
                   type="button"
                   key={a.lang}
                   onClick={() => go(a.text)}
-                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13.5px] transition ${i === k ? "bg-ink text-white" : "bg-white/70 text-ink-2 hover:bg-white"}`}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13.5px] transition ${i === k ? "bg-ink text-paper" : "bg-white/70 text-ink-2 hover:bg-white"}`}
                 >
                   {a.lang}
                 </button>
@@ -196,9 +196,9 @@ export default function Landing() {
       </section>
 
       {/* languages */}
-      <section id="languages" className="bg-ink py-24 text-white md:py-32">
+      <section id="languages" className="bg-ink py-24 text-paper md:py-32">
         <div className="mx-auto max-w-[1200px] px-5 md:px-8">
-          <motion.p {...rise} className="text-[15px] font-medium text-white/60">
+          <motion.p {...rise} className="text-[15px] font-medium text-paper/60">
             Five languages, spoken and written
           </motion.p>
           <div className="mt-8 flex flex-col gap-1">
@@ -211,7 +211,7 @@ export default function Landing() {
             ].map(([line, name], i) => (
               <motion.div key={name} {...rise} transition={{ ...rise.transition, delay: i * 0.06 }} className="flex flex-wrap items-baseline gap-x-5 border-b border-white/10 py-5">
                 <span className="text-[28px] font-semibold leading-tight tracking-[-0.01em] sm:text-[44px]">{line}</span>
-                <span className="text-[15px] text-white/50">{name}</span>
+                <span className="text-[15px] text-paper/50">{name}</span>
               </motion.div>
             ))}
           </div>

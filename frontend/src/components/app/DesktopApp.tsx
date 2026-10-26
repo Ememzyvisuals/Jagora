@@ -16,6 +16,8 @@ import {
   Plus,
   SpeakerHigh,
   SidebarSimple,
+  Moon,
+  Sun,
   X,
 } from "@phosphor-icons/react";
 import { motion } from "motion/react";
@@ -35,8 +37,9 @@ import { LiveButton, LiveMode } from "../LiveMode";
 import { Glass } from "../glass/Glass";
 import { Orb } from "../Orb";
 import { Mark } from "../Brand";
+import { toggleTheme, useTheme } from "@/lib/theme";
 import { PageView } from "../PageView";
-import { AppIcon, CARDS, DISCOVER, SITES, VoiceBars, useNews } from "./MobileHome";
+import { AppIcon, CARDS, DISCOVER, SITES, THEME_L, VoiceBars, useNews } from "./MobileHome";
 
 type L = Record<Lang, string>;
 const TAGLINE: L = {
@@ -86,6 +89,7 @@ export function DesktopApp() {
   const profile = useApp((s) => s.profile);
   const [langOpen, setLangOpen] = useState(false);
   const [side, setSide] = useState(false);
+  const theme = useTheme();
   const showPage = task?.kind === "browse" && !!task.url;
   const url = showPage ? (task!.url.startsWith("/practice/") ? "skillsfair.ng/register (practice site)" : task!.url.replace(/^https?:\/\//, "")) : "";
 
@@ -97,7 +101,7 @@ export function DesktopApp() {
         <div className="no-scrollbar flex h-12 shrink-0 items-center gap-1.5 overflow-x-auto px-3">
           <button
             onClick={() => setSide((v) => !v)}
-            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${side ? "bg-ink text-white" : "text-ink-2 hover:bg-white/50"}`}
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${side ? "bg-ink text-paper" : "text-ink-2 hover:bg-white/50"}`}
             aria-label={side ? "Hide tasks" : "Show tasks"}
             aria-expanded={side}
           >
@@ -125,6 +129,14 @@ export function DesktopApp() {
           ))}
           <button onClick={() => setActive(null)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-white/40" aria-label="New tab">
             <Plus size={15} />
+          </button>
+          <button
+            onClick={toggleTheme}
+            className="ml-auto grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-white/40"
+            aria-label={theme === "dark" ? THEME_L.light[lang] : THEME_L.dark[lang]}
+            title={theme === "dark" ? THEME_L.light[lang] : THEME_L.dark[lang]}
+          >
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           </button>
         </div>
         {/* the address of the site Jagora is on, only while it is on one */}
@@ -190,7 +202,7 @@ export function DesktopApp() {
             </div>
             <div className="mt-2 flex flex-col gap-1 border-t border-white/60 pt-2">
               <Link href="/app/details" className="flex items-center gap-2.5 rounded-[14px] p-2 hover:bg-white/40">
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-[#7fb2ff] to-[#1d63ed] text-[13px] font-bold text-white">
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-[#7fb2ff] to-[#1d63ed] text-[13px] font-bold text-snow">
                   {(profile.full_name || "Me").slice(0, 1)}
                 </span>
                 <span className="truncate text-[14px] font-medium text-ink">{profile.full_name || "My details"}</span>
@@ -291,7 +303,7 @@ function StartPage() {
                 className="h-full min-w-0 flex-1 bg-transparent text-[16.5px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-3"
               />
               {text.trim() ? (
-                <button type="submit" aria-label="Go" className="grid h-[44px] w-[44px] place-items-center rounded-full bg-ink text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-90">
+                <button type="submit" aria-label="Go" className="grid h-[44px] w-[44px] place-items-center rounded-full bg-ink text-paper shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-90">
                   <ArrowRight size={18} weight="bold" />
                 </button>
               ) : (
@@ -336,7 +348,7 @@ function StartPage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={n.image} alt="" loading="lazy" className="aspect-[16/9] w-full object-cover" />
                   ) : (
-                    <span className="grid aspect-[16/9] w-full place-items-center bg-ink text-white">BBC</span>
+                    <span className="grid aspect-[16/9] w-full place-items-center bg-ink text-paper">BBC</span>
                   )}
                   <span className="block p-4">
                     <span className="line-clamp-2 text-[15.5px] font-semibold leading-snug text-ink">{n.title}</span>

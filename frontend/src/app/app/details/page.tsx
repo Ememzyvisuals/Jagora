@@ -140,7 +140,7 @@ function Editor({ k, lang, value, onSave, onCancel }: { k: keyof Profile; lang: 
       {k === "gender" ? (
         <div className="grid grid-cols-2 gap-2">
           {(["female", "male"] as const).map((g) => (
-            <button type="button" key={g} onClick={() => onSave(g)} className={`h-14 rounded-[18px] text-[17px] font-medium ${value === g ? "bg-ink text-white" : "bg-mist text-ink"}`}>
+            <button type="button" key={g} onClick={() => onSave(g)} className={`h-14 rounded-[18px] text-[17px] font-medium ${value === g ? "bg-ink text-paper" : "bg-mist text-ink"}`}>
               {g === "female" ? "Female" : "Male"}
             </button>
           ))}

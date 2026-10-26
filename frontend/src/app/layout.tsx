@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Pwa } from "@/components/Pwa";
+import { THEME_SCRIPT } from "@/lib/themeScript";
 
 export const metadata: Metadata = {
   title: "Jagora | The internet, in your own words",
@@ -19,8 +20,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <link rel="preload" href="/fonts/jagora-sans.woff2" as="font" type="font/woff2" crossOrigin="" />
         <link rel="preload" href="/fonts/jagora-pixel-sans-dot.woff2" as="font" type="font/woff2" crossOrigin="" />
         <link rel="preload" href="/sky/hero-desktop.webp" as="image" />

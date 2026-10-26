@@ -33,7 +33,7 @@ export function lastLine(task: Task) {
 const STATUS = {
   working: { label: "Working", cls: "bg-accent-soft text-accent" },
   waiting: { label: "Needs you", cls: "bg-stop-soft text-stop" },
-  done: { label: "Done", cls: "bg-[#e1f3ea] text-ok" },
+  done: { label: "Done", cls: "bg-[#e1f3ea] dark:bg-[#1f3a2c] text-ok" },
   stopped: { label: "Stopped", cls: "bg-mist-2 text-ink-3" },
 };
 

@@ -45,7 +45,7 @@ export function LiveButton({ compact = false }: { compact?: boolean }) {
   return (
     <button
       onClick={() => setLive(true)}
-      className={`flex shrink-0 items-center gap-1.5 rounded-full bg-ink font-semibold text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.22),0_8px_18px_-10px_rgba(10,20,40,.6)] transition active:scale-95 ${compact ? "h-10 px-3 text-[13.5px]" : "h-11 px-4 text-[14.5px]"}`}
+      className={`flex shrink-0 items-center gap-1.5 rounded-full bg-ink font-semibold text-paper shadow-[inset_0_1px_1px_rgba(255,255,255,.22),0_8px_18px_-10px_rgba(10,20,40,.6)] transition active:scale-95 ${compact ? "h-10 px-3 text-[13.5px]" : "h-11 px-4 text-[14.5px]"}`}
       aria-label="Start live voice"
     >
       <svg width={18} height={18} viewBox="0 0 24 24" aria-hidden="true">
@@ -178,7 +178,7 @@ export function LiveMode() {
             className="fixed inset-x-0 top-[max(8px,env(safe-area-inset-top))] z-[80] flex justify-center px-4"
           >
             <Glass flat radius={28} bezel={14} refraction={30} blur={14} tint="rgba(14,15,18,.82)">
-              <div className="flex h-14 items-center gap-2.5 pl-2 pr-2 text-white">
+              <div className="flex h-14 items-center gap-2.5 pl-2 pr-2 text-snow">
                 <Orb size={44} state={phase === "speak" ? "speaking" : phase === "think" ? "thinking" : "listening"} levelRef={level} />
                 <button onClick={() => setShowPage(false)} className="min-w-0 max-w-[48vw] truncate text-left text-[14px] font-medium" aria-label="Back to live view">
                   {label}
@@ -200,7 +200,7 @@ export function LiveMode() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[80] flex flex-col items-center bg-[#dcecfb]/55 px-6 pb-[max(24px,env(safe-area-inset-bottom))] pt-[max(24px,env(safe-area-inset-top))] backdrop-blur-[26px] backdrop-saturate-150"
+            className="fixed inset-0 z-[80] flex flex-col items-center bg-[#dcecfb]/55 dark:bg-[#141a24]/70 px-6 pb-[max(24px,env(safe-area-inset-bottom))] pt-[max(24px,env(safe-area-inset-top))] backdrop-blur-[26px] backdrop-saturate-150"
           >
             <div className="flex w-full items-center justify-between">
               <span className="font-pixel text-[26px] text-ink">Jagora</span>
@@ -226,7 +226,7 @@ export function LiveMode() {
               <button onClick={toggleMute} className="glass-2 grid h-16 w-16 place-items-center rounded-full text-ink transition active:scale-95" aria-label={muted ? "Turn microphone on" : "Turn microphone off"}>
                 {muted ? <MicrophoneSlash size={26} /> : <Microphone size={26} />}
               </button>
-              <button onClick={end} className="flex h-16 items-center gap-2 rounded-full bg-ink px-8 text-[17px] font-semibold text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.22),0_12px_24px_-12px_rgba(10,20,40,.7)] transition active:scale-95">
+              <button onClick={end} className="flex h-16 items-center gap-2 rounded-full bg-ink px-8 text-[17px] font-semibold text-paper shadow-[inset_0_1px_1px_rgba(255,255,255,.22),0_12px_24px_-12px_rgba(10,20,40,.7)] transition active:scale-95">
                 <X size={20} weight="bold" /> {SAY.end[lang]}
               </button>
             </div>

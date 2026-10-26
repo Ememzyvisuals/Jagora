@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
 
+/* dark: utilities for the few spots tokens cannot cover */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* "Jagora Sans" is Bricolage Grotesque and "Jagora Pixel" is Jagora Sans rebuilt from rounded pixels
    (scripts/patch-sans-font.py, scripts/pixelate-font.py). Both carry the Yorùbá and Igbo letters Bricolage lacks.
    Inter fills the Hausa hooked letters ɓ ɗ ƙ. */
@@ -33,6 +36,11 @@
   --color-danger-soft: #fde4e1;
   --color-mist: #f3f3f5;
   --color-mist-2: #e7e7eb;
+  /* "white" is the surface colour (it dims in dark mode); "snow" is always white, for text on photos, colour tiles
+     and dark overlays; "paper" is the text colour on ink buttons */
+  --color-white: #ffffff;
+  --color-snow: #ffffff;
+  --color-paper: #ffffff;
 
   --radius-panel: 28px;
   --radius-card: 20px;
@@ -52,8 +60,38 @@
 
 html,
 body {
-  background: #ffffff;
+  background: var(--color-white);
   color: var(--color-ink);
+}
+
+/* ---- soft dark: dims everything, keeps the sky and the glass, never pitch black ---------------------------- */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-white: #23262d;
+  --color-paper: #15171c;
+  --color-ink: #eceef2;
+  --color-ink-2: #b3b6be;
+  --color-ink-3: #848891;
+  --color-accent: #4f86f7;
+  --color-accent-deep: #2f6be6;
+  --color-accent-soft: #1e2a45;
+  --color-ok: #5cb27d;
+  --color-stop: #eceef2;
+  --color-stop-soft: #2b2e36;
+  --color-danger: #ef6a60;
+  --color-danger-soft: #3b2423;
+  --color-mist: #2b2e36;
+  --color-mist-2: #353842;
+  --glass: rgba(30, 33, 40, 0.5);
+  --glass-2: rgba(30, 33, 40, 0.68);
+  --glass-3: rgba(30, 33, 40, 0.84);
+}
+[data-theme="dark"] body {
+  background: #16181d;
+}
+.theme-fade,
+.theme-fade * {
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, filter 0.4s ease !important;
 }
 
 body {
@@ -123,7 +161,7 @@ h3,
   }
   .btn-ink {
     background: var(--color-ink);
-    color: #fff;
+    color: var(--color-paper);
   }
   .btn-ink {
     box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.22), 0 8px 18px -10px rgba(10, 20, 40, 0.6);
@@ -141,6 +179,32 @@ h3,
   }
   .btn-glass:hover {
     background: rgba(255, 255, 255, 0.78);
+  }
+  [data-theme="dark"] .glass,
+  [data-theme="dark"] .glass-2,
+  [data-theme="dark"] .glass-3,
+  [data-theme="dark"] .btn-glass {
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.16),
+      inset 0 0 24px rgba(255, 255, 255, 0.03),
+      0 16px 36px -18px rgba(0, 0, 0, 0.6);
+  }
+  [data-theme="dark"] .glass {
+    background: rgba(30, 33, 40, 0.45);
+  }
+  [data-theme="dark"] .glass-2 {
+    background: rgba(30, 33, 40, 0.62);
+  }
+  [data-theme="dark"] .glass-3,
+  [data-theme="dark"] .btn-glass {
+    background: rgba(30, 33, 40, 0.8);
+  }
+  [data-theme="dark"] .btn-glass:hover {
+    background: rgba(44, 48, 57, 0.9);
+  }
+  [data-theme="dark"] .btn-ink:hover {
+    background: #ffffff;
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
@@ -212,6 +276,19 @@ h3,
     radial-gradient(120% 90% at 50% -20%, rgba(255, 255, 255, 0.42), transparent 55%),
     radial-gradient(240px circle at var(--mx) var(--my), rgba(255, 255, 255, calc(0.28 * var(--sheen))), transparent 60%);
   transition: opacity 0.4s;
+}
+[data-theme="dark"] .lg {
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.18),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.05),
+    inset 0 0 22px rgba(255, 255, 255, 0.03),
+    0 14px 34px -16px rgba(0, 0, 0, 0.6);
+}
+[data-theme="dark"] .lg-rim {
+  opacity: 0.38;
+}
+[data-theme="dark"] .lg-sheen {
+  opacity: 0.25;
 }
 .lg-press:active {
   transform: scale(0.965);

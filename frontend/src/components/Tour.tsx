@@ -162,7 +162,7 @@ export function Tour() {
         <p className="text-[17px] leading-snug text-ink">{step.text[lang]}</p>
         {more && <p className="mt-2 text-[15px] leading-snug text-ink-2">{step.more[lang]}</p>}
         <div className="mt-4 flex items-center justify-between">
-          <button onClick={next} className="h-11 rounded-full bg-ink px-5 text-[15.5px] font-semibold text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-95">
+          <button onClick={next} className="h-11 rounded-full bg-ink px-5 text-[15.5px] font-semibold text-paper shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-95">
             {GOT[lang]}
           </button>
           {!more && (

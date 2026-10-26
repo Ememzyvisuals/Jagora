@@ -32,9 +32,9 @@ function Item({ m, task }: { m: Msg; task: Task }) {
     case "user":
       return (
         <div className="flex justify-end">
-          <div className="max-w-[85%] rounded-[20px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[15.5px] leading-snug text-white">
+          <div className="max-w-[85%] rounded-[20px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[15.5px] leading-snug text-paper">
             {m.attachment && (
-              <div className="mb-1 flex items-center gap-1.5 text-[13px] text-white/75">
+              <div className="mb-1 flex items-center gap-1.5 text-[13px] text-paper/75">
                 {m.attachment.kind === "image" ? <ImageIcon size={14} /> : m.attachment.kind === "link" ? <LinkSimple size={14} /> : <Paperclip size={14} />}
                 {m.attachment.name === "sample" ? "Sample letter" : m.attachment.name}
               </div>
@@ -154,7 +154,7 @@ function Handoff({ m, task }: { m: Extract<Msg, { kind: "handoff" }>; task: Task
 }
 
 function Verdict({ m }: { m: Extract<Msg, { kind: "verdict" }> }) {
-  const tone = m.verdict === "scam" ? "bg-danger-soft/80 ring-danger/20" : m.verdict === "safe" ? "bg-[#e3f4ec]/85 ring-ok/20" : "bg-stop-soft/85 ring-stop/20";
+  const tone = m.verdict === "scam" ? "bg-danger-soft/80 ring-danger/20" : m.verdict === "safe" ? "bg-[#e3f4ec]/85 dark:bg-[#1f3a2c]/85 ring-ok/20" : "bg-stop-soft/85 ring-stop/20";
   return (
     <div className={`rounded-[24px] p-4 ring-1 backdrop-blur-xl ${tone}`}>
       <div className="flex items-center gap-3">

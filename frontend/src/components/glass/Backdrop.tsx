@@ -26,7 +26,7 @@ export function Backdrop({ level }: { level?: MutableRefObject<number> }) {
   }, []);
   return (
     <>
-      <div className="fixed inset-0" style={SKY_CSS} aria-hidden="true" />
+      <div className="fixed inset-0 transition-[filter] duration-500 dark:brightness-[.42] dark:saturate-[.8]" style={SKY_CSS} aria-hidden="true" />
       {lite === false && idle && <GlassStage level={level} />}
     </>
   );

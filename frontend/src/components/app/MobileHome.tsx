@@ -8,6 +8,8 @@ import {
   CaretLeft,
   CaretRight,
   DotsThree,
+  Moon,
+  Sun,
   GraduationCap,
   House,
   IdentificationCard,
@@ -35,6 +37,7 @@ import { CloudWordmark } from "../glass/CloudWordmark";
 import { siFacebook, siGmail, siGoogle, siInstagram, siTiktok, siWhatsapp, siX, siYoutube } from "simple-icons";
 import { canFullscreen, toggleFullscreen } from "../Pwa";
 import { LiveButton } from "../LiveMode";
+import { toggleTheme, useTheme } from "@/lib/theme";
 import { Glass } from "../glass/Glass";
 import { Orb } from "../Orb";
 
@@ -55,6 +58,11 @@ const PLACEHOLDER: L = {
   ig: "Jụọ Jagora ma ọ bụ dee adreesị",
 };
 export const DISCOVER: L = { en: "Discover", pcm: "Discover", yo: "Ṣàwárí", ha: "Gano", ig: "Chọpụta" };
+export const THEME_L: Record<"dark" | "light", L> = {
+  dark: { en: "Dark mode", pcm: "Dark mode", yo: "Ìrísí òkùnkùn", ha: "Yanayin duhu", ig: "Ọnọdụ ọchịchịrị" },
+  light: { en: "Light mode", pcm: "Light mode", yo: "Ìrísí ìmọ́lẹ̀", ha: "Yanayin haske", ig: "Ọnọdụ ìhè" },
+};
+
 const NAV: Record<"back" | "fwd" | "tabs" | "home", L> = {
   back: { en: "Back", pcm: "Back", yo: "Ẹ̀yìn", ha: "Baya", ig: "Azụ" },
   fwd: { en: "Forward", pcm: "Front", yo: "Iwájú", ha: "Gaba", ig: "N'ihu" },
@@ -200,7 +208,7 @@ export function AppIcon({ site, size = 46 }: { site: Site; size?: number }) {
     );
   return (
     <span
-      className="relative grid place-items-center overflow-hidden text-white"
+      className="relative grid place-items-center overflow-hidden text-snow"
       style={{
         width: size,
         height: size,
@@ -332,7 +340,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
                 className="h-full min-w-0 flex-1 bg-transparent text-[16px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-3"
               />
               {text.trim() ? (
-                <button type="submit" aria-label="Go" className="grid h-[42px] w-[42px] place-items-center rounded-full bg-ink text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-90">
+                <button type="submit" aria-label="Go" className="grid h-[42px] w-[42px] place-items-center rounded-full bg-ink text-paper shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-90">
                   <ArrowRight size={18} weight="bold" />
                 </button>
               ) : (
@@ -405,7 +413,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={n.image} alt="" loading="lazy" className="h-[80px] w-[96px] shrink-0 rounded-[14px] object-cover shadow-[0_4px_10px_-6px_rgba(0,0,0,.35)]" />
                   ) : (
-                    <span className="grid h-[80px] w-[96px] shrink-0 place-items-center rounded-[14px] bg-ink text-white">
+                    <span className="grid h-[80px] w-[96px] shrink-0 place-items-center rounded-[14px] bg-ink text-paper">
                       <Newspaper size={28} weight="fill" />
                     </span>
                   )}
@@ -446,6 +454,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
   const pulse = useSpeakingPulse(orb === "speaking");
   const [small, setSmall] = useState(false);
   const [menu, setMenu] = useState(false);
+  const theme = useTheme();
   useEffect(() => {
     const on = (e: Event) => setSmall((e as CustomEvent<{ down: boolean }>).detail.down);
     addEventListener("jagora:scroll", on);
@@ -496,7 +505,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
           {!small && (
             <motion.div key="right" className="flex gap-2" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }} transition={spring}>
               <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable>
-                <button className={`grid h-[52px] w-[52px] place-items-center transition ${screen === "tabs" ? "rounded-full bg-ink text-white" : "text-ink"}`} onClick={() => setScreen("tabs")} aria-label={`${NAV.tabs[lang]}, ${count}`} aria-pressed={screen === "tabs"} data-tour="tabs">
+                <button className={`grid h-[52px] w-[52px] place-items-center transition ${screen === "tabs" ? "rounded-full bg-ink text-paper" : "text-ink"}`} onClick={() => setScreen("tabs")} aria-label={`${NAV.tabs[lang]}, ${count}`} aria-pressed={screen === "tabs"} data-tour="tabs">
                   <TabsGlyph count={count} />
                 </button>
               </Glass>
@@ -521,6 +530,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
                             { k: "home", Icon: House, label: NAV.home[lang], on: () => setScreen("home") },
                             { k: "fwd", Icon: CaretRight, label: NAV.fwd[lang], on: () => task?.kind === "browse" && setScreen("page") },
                             { k: "full", Icon: CornersOut, label: "Full screen", on: () => void toggleFullscreen() },
+                            { k: "theme", Icon: theme === "dark" ? Sun : Moon, label: theme === "dark" ? THEME_L.light[lang] : THEME_L.dark[lang], on: toggleTheme },
                           ].map(({ k, Icon, label: l, on }) => (
                             <button key={k} onClick={() => (on(), setMenu(false))} className="flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-left text-[15px] font-medium text-ink hover:bg-black/5">
                               <Icon size={19} /> {l}

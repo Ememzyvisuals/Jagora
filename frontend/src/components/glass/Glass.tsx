@@ -5,6 +5,7 @@
    bending at the bezel, clear in the middle), then lightly blurred and saturated. Other browsers: frosted blur.
    On top, a specular rim and a soft sheen follow the pointer, and the surface gives a little when pressed. */
 import { glass, onStage } from "@/lib/glassRegistry";
+import { themedTint, useTheme } from "@/lib/theme";
 import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
 
 const canRefract = () => typeof navigator !== "undefined" && /Chrome\/|Chromium|Edg\//.test(navigator.userAgent) && !/Firefox|CriOS|FxiOS/.test(navigator.userAgent);
@@ -95,6 +96,7 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
   outer,
 ) {
   const el = useRef<HTMLDivElement>(null);
+  const dark = useTheme() === "dark";
   useImperativeHandle(outer, () => el.current!);
   const id = useId().replace(/:/g, "");
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
@@ -163,8 +165,8 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
       style={
         {
           borderRadius: radius,
-          background: nested ? "rgba(255,255,255,0.55)" : stage ? "rgba(255,255,255,0.06)" : tint,
-          backdropFilter: nested ? "blur(14px) saturate(160%)" : stage ? "none" : backdrop,
+          background: nested ? (dark ? "rgba(44,48,57,0.6)" : "rgba(255,255,255,0.55)") : stage ? (dark ? "rgba(20,22,28,0.38)" : "rgba(255,255,255,0.06)") : themedTint(tint, dark ? "dark" : "light"),
+          backdropFilter: nested ? "blur(14px) saturate(160%)" : stage ? "none" : dark ? backdrop.replace("brightness(1.07)", "brightness(.9)").replace("brightness(1.06)", "brightness(.9)") : backdrop,
           WebkitBackdropFilter: nested ? "blur(14px) saturate(160%)" : stage ? "none" : `blur(${Math.max(blur, 4) * 2.4}px) saturate(150%)`,
           ...style,
         } as CSSProperties

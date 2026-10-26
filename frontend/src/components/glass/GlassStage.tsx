@@ -10,6 +10,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { glass, type GlassEntry } from "@/lib/glassRegistry";
+import { useTheme } from "@/lib/theme";
 
 function slabGeometry(w: number, h: number, r: number, bevel: number) {
   const b = Math.min(bevel, w / 2 - 1, h / 2 - 1);
@@ -34,6 +35,7 @@ function Slab({ e, buffer }: { e: GlassEntry; buffer: THREE.Texture }) {
   const mesh = useRef<THREE.Mesh>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const { size: view } = useThree();
+  const dark = useTheme() === "dark";
 
   useEffect(() => {
     const ro = new ResizeObserver(() => {
@@ -72,8 +74,8 @@ function Slab({ e, buffer }: { e: GlassEntry; buffer: THREE.Texture }) {
         clearcoat={1}
         clearcoatRoughness={0.05}
         specularIntensity={1.2}
-        color="#ffffff"
-        background={new THREE.Color("#cfe6ff")}
+        color={dark ? "#9ba4b4" : "#ffffff"}
+        background={new THREE.Color(dark ? "#2a3446" : "#cfe6ff")}
         attenuationDistance={Infinity}
         backside={false}
         toneMapped={false}
@@ -85,6 +87,7 @@ function Slab({ e, buffer }: { e: GlassEntry; buffer: THREE.Texture }) {
 function Sky({ src }: { src: string }) {
   const tex = useTexture(src);
   const { size } = useThree();
+  const dark = useTheme() === "dark";
   tex.colorSpace = THREE.SRGBColorSpace;
   const img = tex.image as { width: number; height: number };
   const a = img.width / img.height;
@@ -92,7 +95,7 @@ function Sky({ src }: { src: string }) {
   return (
     <mesh position={[0, 0, -200]} scale={[w, w / a, 1]}>
       <planeGeometry />
-      <meshBasicMaterial map={tex} toneMapped={false} color="#9fcdf6" />
+      <meshBasicMaterial map={tex} toneMapped={false} color={dark ? "#3c5272" : "#9fcdf6"} />
     </mesh>
   );
 }
@@ -136,6 +139,11 @@ function Scene({ src, level }: { src: string; level?: MutableRefObject<number> }
       clearInterval(speak);
     };
   }, [invalidate, level]);
+  const theme = useTheme();
+  useEffect(() => {
+    gl.setClearColor(theme === "dark" ? "#1c2533" : "#8cc4f2");
+    invalidate();
+  }, [theme, gl, invalidate]);
   useFrame(() => {
     // the sky leans a touch toward the finger, so the glass always has something to bend
     if (skyGroup.current) {

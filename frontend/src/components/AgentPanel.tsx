@@ -23,7 +23,7 @@ export function ModeSwitch() {
           role="radio"
           aria-checked={mode === m}
           onClick={() => setMode(m)}
-          className={`rounded-full px-4 py-2 font-semibold transition ${mode === m ? "bg-ink text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.2)]" : "text-ink-2 hover:text-ink"}`}
+          className={`rounded-full px-4 py-2 font-semibold transition ${mode === m ? "bg-ink text-paper shadow-[inset_0_1px_1px_rgba(255,255,255,.2)]" : "text-ink-2 hover:text-ink"}`}
         >
           {t(m === "guide" ? "guide" : "doIt", lang)}
         </button>
