@@ -271,7 +271,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
         {/* discover */}
         <section className="mt-5 px-4">
           <div className="flex items-center justify-between px-1">
-            <h2 className="text-[20px] font-bold text-ink">{DISCOVER[lang]}</h2>
+            <h2 className="text-[28px] leading-none text-ink">{DISCOVER[lang]}</h2>
             <CaretRight size={18} weight="bold" className="text-ink-2" />
           </div>
           <div className="mt-3 flex flex-col gap-2.5">

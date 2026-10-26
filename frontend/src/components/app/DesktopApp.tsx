@@ -124,7 +124,7 @@ export function DesktopApp() {
           <aside className="flex w-[252px] shrink-0 flex-col rounded-[24px] bg-white/30 p-3 shadow-[inset_0_1px_1px_rgba(255,255,255,.8)]">
             <div className="flex items-center gap-2.5 px-1.5 pt-1">
               <Orb size={40} />
-              <span className="text-[22px] font-bold tracking-[-0.01em] text-ink">Jagora</span>
+              <span className="font-pixel text-[30px] leading-none text-ink">Jagora</span>
             </div>
             <button
               onClick={() => setActive(null)}

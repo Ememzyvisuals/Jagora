@@ -107,15 +107,20 @@ def _xor(a, b):
 def draw_cells(cells):
     pen = TTGlyphPen(None)
     if style == "dot":
-        r = CELL * 0.42
-        k = 0.5523 * r
+        # rounded square pixels, close together
+        size, rad = CELL * 0.9, CELL * 0.2
         for x, y in cells:
-            cx, cy = x + CELL / 2, y + CELL / 2
-            pen.moveTo((cx, cy - r))
-            pen.qCurveTo((cx + r, cy - r), (cx + r, cy))
-            pen.qCurveTo((cx + r, cy + r), (cx, cy + r))
-            pen.qCurveTo((cx - r, cy + r), (cx - r, cy))
-            pen.qCurveTo((cx - r, cy - r), (cx, cy - r))
+            x0, y0 = x + (CELL - size) / 2, y + (CELL - size) / 2
+            x1, y1 = x0 + size, y0 + size
+            pen.moveTo((x0 + rad, y0))
+            pen.lineTo((x1 - rad, y0))
+            pen.qCurveTo((x1, y0), (x1, y0 + rad))
+            pen.lineTo((x1, y1 - rad))
+            pen.qCurveTo((x1, y1), (x1 - rad, y1))
+            pen.lineTo((x0 + rad, y1))
+            pen.qCurveTo((x0, y1), (x0, y1 - rad))
+            pen.lineTo((x0, y0 + rad))
+            pen.qCurveTo((x0, y0), (x0 + rad, y0))
             pen.closePath()
     else:
         # merge horizontal runs into one rectangle each

@@ -1,8 +1,8 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
 
-/* "Jagora Sans" is Bricolage Grotesque and "Jagora Pixel" is Geist Pixel (both SIL OFL), each with the Yorùbá and
-   Igbo letters it was missing added from its own glyphs (scripts/patch-sans-font.py, scripts/patch-pixel-font.py).
+/* "Jagora Sans" is Bricolage Grotesque and "Jagora Pixel" is Jagora Sans rebuilt from rounded pixels
+   (scripts/patch-sans-font.py, scripts/pixelate-font.py). Both carry the Yorùbá and Igbo letters Bricolage lacks.
    Inter fills the Hausa hooked letters ɓ ɗ ƙ. */
 @font-face {
   font-family: "Jagora Sans";
@@ -13,7 +13,7 @@
 }
 @font-face {
   font-family: "Jagora Pixel";
-  src: url("/fonts/jagora-pixel-square.woff2") format("woff2");
+  src: url("/fonts/jagora-pixel-sans-dot.woff2") format("woff2");
   font-display: swap;
 }
 @theme {
@@ -221,4 +221,14 @@ h3,
   .lg-rim {
     transition: none;
   }
+}
+
+/* big headings in Jagora Pixel (it needs ~24px+ for the dots to read), everything else in Jagora Sans */
+h1,
+h2,
+h3,
+.font-pixel {
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  letter-spacing: 0;
 }
