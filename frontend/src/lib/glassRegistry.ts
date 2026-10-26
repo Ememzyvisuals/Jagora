@@ -1,0 +1,44 @@
+"use client";
+
+/* Glass surfaces on the page register here; the GlassStage draws a real glass slab under each one. */
+export type GlassEntry = { id: number; el: HTMLElement; radius: number; frost: number; bevel: number };
+
+let next = 1;
+const entries = new Map<number, GlassEntry>();
+const listeners = new Set<() => void>();
+let stageOn = false;
+
+export const glass = {
+  add(el: HTMLElement, radius: number, frost: number, bevel: number) {
+    const id = next++;
+    entries.set(id, { id, el, radius, frost, bevel });
+    listeners.forEach((l) => l());
+    return () => {
+      entries.delete(id);
+      listeners.forEach((l) => l());
+    };
+  },
+  list: () => [...entries.values()],
+  subscribe(l: () => void) {
+    listeners.add(l);
+    return () => {
+      listeners.delete(l);
+    };
+  },
+  /** true while a GlassStage is mounted and running in 3D */
+  get stage() {
+    return stageOn;
+  },
+  setStage(v: boolean) {
+    stageOn = v;
+    stageListeners.forEach((l) => l(v));
+  },
+};
+
+const stageListeners = new Set<(v: boolean) => void>();
+export const onStage = (l: (v: boolean) => void) => {
+  stageListeners.add(l);
+  return () => {
+    stageListeners.delete(l);
+  };
+};

@@ -17,13 +17,13 @@ float fbm(vec3 p){float v=0.,a=.5;for(int k=0;k<5;k++){v+=a*n(p);p=p*2.03+vec3(1
 void main(){
  vec2 q=uv; float r=length(q), ang=atan(q.y,q.x);
  vec2 dir=vec2(cos(ang),sin(ang));
- float slow=t*(.04+.5*amp+.12*think);
- float R=.60*(1.+.012*sin(t*.7))*(1.+.13*amp);
- R+=(fbm(vec3(dir*2.7,slow))-.5)*(.085+.08*amp);          // lumpy, cloud-like outline
+ float slow=t*(.09+.6*amp+.14*think);
+ float R=.56*(1.+.025*sin(t*.9)+.012*sin(t*2.3))*(1.+.26*amp);
+ R+=(fbm(vec3(dir*2.7,slow))-.5)*(.1+.12*amp);          // lumpy, cloud-like outline
  R+=(fbm(vec3(dir*6.,slow*1.6))-.5)*(.025+.04*amp);
  float z=sqrt(max(R*R-r*r,0.));
  vec3 P=vec3(q,z)*2.4;
- float sp=.05+.9*amp+.25*think;
+ float sp=.12+1.1*amp+.25*think;
  float d=fbm(P+vec3(t*sp*.5,-t*sp*.3,t*sp*.4));
  float bump=fbm(P*3.1+vec3(0.,0.,t*.03)+d);                // small puffs on the surface
  vec3 N=normalize(vec3(q,z+1e-3));

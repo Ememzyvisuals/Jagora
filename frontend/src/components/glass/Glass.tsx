@@ -4,6 +4,7 @@
    Chromium: the backdrop is refracted through an SVG displacement filter shaped like a rounded slab of glass (strong
    bending at the bezel, clear in the middle), then lightly blurred and saturated. Other browsers: frosted blur.
    On top, a specular rim and a soft sheen follow the pointer, and the surface gives a little when pressed. */
+import { glass, onStage } from "@/lib/glassRegistry";
 import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
 
 const canRefract = () => typeof navigator !== "undefined" && /Chrome\/|Chromium|Edg\//.test(navigator.userAgent) && !/Firefox|CriOS|FxiOS/.test(navigator.userAgent);
@@ -79,6 +80,8 @@ export type GlassProps = HTMLAttributes<HTMLDivElement> & {
   dispersion?: number;
   /** body colour of the glass */
   tint?: string;
+  /** frost of the 3D lens, 0 clear to ~0.4 milky */
+  frost?: number;
   /** react to the pointer: moving light and a soft press */
   interactive?: boolean;
   pressable?: boolean;
@@ -86,7 +89,7 @@ export type GlassProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
-  { radius = 28, bezel = 22, refraction = 60, blur = 1.5, dispersion = 0.14, tint = "rgba(255,255,255,0.10)", interactive = true, pressable = false, className = "", style, children, ...rest },
+  { radius = 28, bezel = 22, refraction = 60, blur = 9, dispersion = 0.14, tint = "rgba(255,255,255,0.18)", frost = 0.16, interactive = true, pressable = false, className = "", style, children, ...rest },
   outer,
 ) {
   const el = useRef<HTMLDivElement>(null);
@@ -94,6 +97,17 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
   const id = useId().replace(/:/g, "");
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [refract, setRefract] = useState(false);
+  const [stage, setStageOn] = useState(false);
+
+  // when the 3D glass layer is running, a real lens slab is drawn under this element instead of a CSS filter
+  useEffect(() => {
+    setStageOn(glass.stage);
+    return onStage(setStageOn);
+  }, []);
+  useEffect(() => {
+    if (!stage || !el.current) return;
+    return glass.add(el.current, radius, frost, Math.min(bezel, radius, 26));
+  }, [stage, radius, frost, bezel]);
 
   useEffect(() => {
     setRefract(canRefract());
@@ -129,8 +143,8 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
     };
   }, [interactive]);
 
-  const map = refract && size && size.w > 4 && size.h > 4 ? displacementMap(size.w, size.h, radius, Math.min(bezel, size.h / 2, size.w / 2)) : null;
-  const backdrop = map ? `blur(${blur}px) url(#lg${id}) saturate(140%) brightness(1.06)` : `blur(${Math.max(blur, 4) * 2.4}px) saturate(150%) brightness(1.06)`;
+  const map = !stage && refract && size && size.w > 4 && size.h > 4 ? displacementMap(size.w, size.h, radius, Math.min(bezel, size.h / 2, size.w / 2)) : null;
+  const backdrop = map ? `url(#lg${id}) blur(${blur}px) saturate(150%) brightness(1.07)` : `blur(${Math.max(blur, 4) * 2.4}px) saturate(150%) brightness(1.06)`;
 
   return (
     <div
@@ -140,9 +154,9 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
       style={
         {
           borderRadius: radius,
-          background: tint,
-          backdropFilter: backdrop,
-          WebkitBackdropFilter: `blur(${Math.max(blur, 4) * 2.4}px) saturate(150%)`,
+          background: stage ? "rgba(255,255,255,0.06)" : tint,
+          backdropFilter: stage ? "none" : backdrop,
+          WebkitBackdropFilter: stage ? "none" : `blur(${Math.max(blur, 4) * 2.4}px) saturate(150%)`,
           ...style,
         } as CSSProperties
       }

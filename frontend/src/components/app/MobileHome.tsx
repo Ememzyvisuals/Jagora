@@ -179,18 +179,6 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
 
   return (
     <div className="relative h-full">
-      {/* the sky */}
-      <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage: "url(/sky/hero-desktop.webp), linear-gradient(180deg,#5ea9ec 0%,#8cc4f2 38%,#cfe6f8 70%,#eef6fc 100%)",
-          backgroundSize: "cover",
-          backgroundPosition: "center top",
-          backgroundBlendMode: "multiply",
-        }}
-      />
-      <div className="absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-b from-transparent via-white/35 to-white/75" />
-
       <div className="no-scrollbar relative h-full overflow-y-auto pb-36">
         {/* top row */}
         <div className="flex items-center justify-between px-4 pt-[max(14px,env(safe-area-inset-top))]">
@@ -229,12 +217,12 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
           </Link>
         </div>
 
-        {/* orb and wordmark */}
-        <div className="mt-2 flex flex-col items-center">
-          <button onClick={() => (setActive(null), setSheet(true))} aria-label="Talk to Jagora" className="transition active:scale-95">
-            <Orb size={96} state={orb} levelRef={pulse} />
+        {/* the orb, big and alive, and the word */}
+        <div className="flex flex-col items-center">
+          <button onClick={() => (setActive(null), setSheet(true))} aria-label="Talk to Jagora" className="-mt-1 transition active:scale-95">
+            <Orb size={168} state={orb} levelRef={pulse} />
           </button>
-          <CloudWordmark width={278} levelRef={pulse} className="-mt-3" />
+          <CloudWordmark width={270} levelRef={pulse} className="-mt-7" />
           <p className="-mt-1 px-8 text-center text-[15px] font-medium text-ink-2">{TAGLINE[lang]}</p>
         </div>
 

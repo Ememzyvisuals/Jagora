@@ -29,6 +29,7 @@ import { TalkOrb } from "../AgentPanel";
 import { Composer } from "../Composer";
 import { Conversation } from "../Conversation";
 import { CloudWordmark } from "../glass/CloudWordmark";
+import { Backdrop } from "../glass/Backdrop";
 import { Glass } from "../glass/Glass";
 import { Orb } from "../Orb";
 import { PageView } from "../PageView";
@@ -85,15 +86,8 @@ export function DesktopApp() {
   const url = showPage ? "skillsfair.ng/register" : "jagora.ng";
 
   return (
-    <div
-      className="relative h-dvh overflow-hidden p-6 xl:p-8"
-      style={{
-        backgroundImage: "url(/sky/hero-desktop.webp), linear-gradient(180deg,#5ea9ec 0%,#8cc4f2 45%,#d6ebfa 100%)",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundBlendMode: "multiply",
-      }}
-    >
+    <div className="relative h-dvh overflow-hidden p-6 xl:p-8">
+      <Backdrop />
       <Glass radius={30} bezel={26} refraction={70} blur={10} tint="rgba(255,255,255,.22)" interactive={false} className="flex h-full flex-col overflow-hidden">
         {/* tab strip */}
         <div className="flex h-12 shrink-0 items-center gap-3 px-5">
@@ -241,19 +235,11 @@ function StartPage() {
   const [text, setText] = useState("");
   const send = () => text.trim() && (ask(text.trim()), setText(""));
   return (
-    <div
-      className="relative flex h-full flex-col items-center overflow-y-auto"
-      style={{
-        backgroundImage: "url(/sky/app.webp), linear-gradient(180deg,#6fb3ef,#cfe6f8)",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundBlendMode: "multiply",
-      }}
-    >
-      <div className="flex w-full max-w-[620px] flex-1 flex-col items-center justify-center px-8 py-10">
-        <Orb size={120} state={orb} levelRef={pulse} />
-        <CloudWordmark width={440} levelRef={pulse} className="-mt-4" />
-        <p className="-mt-2 text-[17px] font-medium text-ink-2">{TAGLINE[lang]}</p>
+    <div className="relative flex h-full flex-col items-center overflow-y-auto">
+      <div className="flex w-full max-w-[700px] flex-1 flex-col items-center justify-center px-8 py-8">
+        <Orb size={190} state={orb} levelRef={pulse} />
+        <CloudWordmark width={420} levelRef={pulse} className="-mt-9" />
+        <p className="-mt-1 text-[17px] font-medium text-ink-2">{TAGLINE[lang]}</p>
         <form onSubmit={(e) => (e.preventDefault(), send())} className="mt-7 w-full">
           <Glass radius={32} bezel={20} refraction={50} blur={6} tint="rgba(255,255,255,.55)">
             <span className="flex h-[62px] items-center gap-3 pl-6 pr-2">

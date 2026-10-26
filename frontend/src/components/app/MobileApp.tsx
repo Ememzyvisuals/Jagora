@@ -16,6 +16,7 @@ import { Orb } from "../Orb";
 import { PageView } from "../PageView";
 import { TaskIcon, lastLine } from "./Shared";
 import { BottomBar, Home } from "./MobileHome";
+import { Backdrop } from "../glass/Backdrop";
 
 type Screen = "home" | "page" | "tabs";
 
@@ -32,7 +33,8 @@ export function MobileApp() {
   }, [task?.id, task?.kind, task?.url]);
 
   return (
-    <div className="relative h-dvh overflow-hidden bg-white">
+    <div className="relative h-dvh overflow-hidden">
+      <Backdrop />
       <AnimatePresence mode="wait" initial={false}>
         {screen === "home" && (
           <motion.div key="home" className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
