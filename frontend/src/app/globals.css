@@ -1,14 +1,15 @@
 @import "tailwindcss";
+@import "@fontsource-variable/mulish";
 @import "@fontsource-variable/inter";
 
-/* Inter writes every Nigerian letter (ẹ ọ ṣ ṅ, ɓ ɗ ƙ, ₦) and its tone marks sit correctly on dotted vowels. */
+/* Mulish for everything; it writes ẹ ọ ṣ ị ụ ṅ, tone marks and ₦. Inter only fills the Hausa hooked letters ɓ ɗ ƙ. */
 @theme {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Mulish Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Mulish Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 
-  --color-ink: #1f1a15;
-  --color-ink-2: #5a4d40;
-  --color-ink-3: #948676;
+  --color-ink: #1c1b1f;
+  --color-ink-2: #4b4a50;
+  --color-ink-3: #8b8a91;
   --color-accent: #e07a1f;
   --color-accent-deep: #b85d0e;
   --color-accent-soft: #fdebd8;
@@ -17,8 +18,8 @@
   --color-stop-soft: #fbe3d8;
   --color-danger: #c2352f;
   --color-danger-soft: #fde4e1;
-  --color-mist: #f8f2ea;
-  --color-mist-2: #ede3d6;
+  --color-mist: #f3f3f5;
+  --color-mist-2: #e7e7eb;
 
   --radius-panel: 28px;
   --radius-card: 20px;
@@ -38,7 +39,7 @@
 
 html,
 body {
-  background: #f8f2ea;
+  background: #ffffff;
   color: var(--color-ink);
 }
 
@@ -58,7 +59,7 @@ h3,
 }
 
 ::selection {
-  background: rgba(53, 83, 212, 0.18);
+  background: rgba(224, 122, 31, 0.2);
 }
 
 :focus-visible {
