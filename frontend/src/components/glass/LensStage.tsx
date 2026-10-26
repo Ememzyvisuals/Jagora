@@ -384,7 +384,9 @@ export default function LensStage({ src }: { src: string }) {
       if (!img || !blurA || document.hidden) return;
       const list: { e: GlassEntry; r: DOMRect; clip: DOMRect | null }[] = [];
       let sig = `${W}x${H}`;
-      for (const e of glass.list()) {
+      // parents first, so a lens inside another lens is drawn on top of it
+      const all = glass.list().sort((a, b) => (a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+      for (const e of all) {
         const el = e.el as HTMLElement & { checkVisibility?: (o: object) => boolean };
         if (!el.isConnected) continue;
         if (el.checkVisibility && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;

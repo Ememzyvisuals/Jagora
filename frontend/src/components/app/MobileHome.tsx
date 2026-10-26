@@ -41,6 +41,7 @@ import { LiveButton } from "../LiveMode";
 import { CLOSE_L, DiscoverStack, deal } from "./DiscoverStack";
 import { toggleTheme, useTheme } from "@/lib/theme";
 import { Glass } from "../glass/Glass";
+import { PILL } from "@/lib/glassRegistry";
 import { Orb } from "../Orb";
 
 type L = Record<Lang, string>;
@@ -332,7 +333,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
 
         {/* ask bar */}
         <form onSubmit={(e) => (e.preventDefault(), send())} className="mx-4 mt-5" data-tour="ask">
-          <Glass radius={30} bezel={18} refraction={40} tint="rgba(255,255,255,.5)">
+          <Glass radius={30} bezel={18} refraction={40} tint="rgba(255,255,255,.5)" lens={PILL} lensTint={0.14}>
             <span className="flex h-[58px] items-center gap-3 pl-5 pr-2">
               <VoiceBars />
               <input
@@ -368,12 +369,10 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
             {[0, 1, 2].map((p) => (
               <div key={p} className="grid w-full shrink-0 grid-cols-4 gap-2.5 px-4">
                 {SITES.slice(p * 4, p * 4 + 4).map((s) => (
-                  <Glass key={s.goal} radius={22} bezel={14} refraction={28} pressable className="cursor-pointer" onClick={() => ask(s.goal)}>
-                    <span className="flex flex-col items-center gap-1.5 pb-2.5 pt-3">
-                      <AppIcon site={s} />
-                      <span className="max-w-full truncate px-1 text-[12px] font-medium text-ink-2">{s.name[lang]}</span>
-                    </span>
-                  </Glass>
+                  <button key={s.goal} onClick={() => ask(s.goal)} className="flex flex-col items-center gap-1.5 rounded-[18px] py-1.5 transition active:scale-95" title={s.name[lang]}>
+                    <AppIcon site={s} size={54} />
+                    <span className="max-w-full truncate px-1 text-[12.5px] font-medium text-ink [text-shadow:0_1px_6px_rgba(255,255,255,.7)] dark:[text-shadow:0_1px_6px_rgba(0,0,0,.6)]">{s.name[lang]}</span>
+                  </button>
                 ))}
               </div>
             ))}
@@ -485,7 +484,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
         <AnimatePresence initial={false}>
           {!small && (
             <motion.div key="back" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }} transition={spring}>
-              <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable>
+              <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable lens={PILL} lensTint={0.38} overContent>
                 <button className="grid h-[52px] w-[52px] place-items-center text-ink disabled:opacity-30" disabled={screen !== "page"} onClick={() => setScreen("home")} aria-label={NAV.back[lang]}>
                   <CaretLeft size={22} weight="bold" />
                 </button>
@@ -495,7 +494,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
         </AnimatePresence>
 
         <motion.div layout transition={spring} className={small ? "" : "min-w-0 flex-1"}>
-          <Glass radius={30} bezel={16} refraction={36} blur={10} tint="rgba(255,255,255,.66)" pressable>
+          <Glass radius={30} bezel={16} refraction={36} blur={10} tint="rgba(255,255,255,.66)" pressable lens={PILL} lensTint={0.38} overContent>
             {small ? (
               <button onClick={() => setSmall(false)} className="flex h-9 items-center gap-1.5 px-4 text-[13px] font-semibold text-ink">
                 {onPage && <LockSimple size={12} weight="bold" className="text-ink-2" />}
@@ -519,13 +518,13 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
         <AnimatePresence initial={false}>
           {!small && (
             <motion.div key="right" className="flex gap-2" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }} transition={spring}>
-              <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable>
+              <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable lens={PILL} lensTint={0.38} overContent>
                 <button className={`grid h-[52px] w-[52px] place-items-center transition ${screen === "tabs" ? "rounded-full bg-ink text-paper" : "text-ink"}`} onClick={() => setScreen("tabs")} aria-label={`${NAV.tabs[lang]}, ${count}`} aria-pressed={screen === "tabs"} data-tour="tabs">
                   <TabsGlyph count={count} />
                 </button>
               </Glass>
               <div className="relative">
-                <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable>
+                <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable lens={PILL} lensTint={0.38} overContent>
                   <button className="grid h-[52px] w-[52px] place-items-center text-ink" onClick={() => setMenu((v) => !v)} aria-label="More" aria-expanded={menu}>
                     <DotsThree size={24} weight="bold" />
                   </button>

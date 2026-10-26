@@ -94,13 +94,17 @@ export type GlassProps = HTMLAttributes<HTMLDivElement> & {
   /** react to the pointer: moving light and a soft press */
   interactive?: boolean;
   pressable?: boolean;
-  /** settings for the WebGL lens drawn under this surface (LiquidGlass names) */
+  /** opt in to the liquid lens (WebGL) under this surface, with LiquidGlass settings. Without it: white frosted glass. */
   lens?: Partial<LensConfig>;
+  /** how much white sits on top of the lens (0 = clear glass) */
+  lensTint?: number;
+  /** the surface floats over page content (bars, pockets): frost what is behind it too, since the lens only sees the sky */
+  overContent?: boolean;
   children?: ReactNode;
 };
 
 export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
-  { radius = 28, bezel = 22, refraction = 60, blur = 9, dispersion = 0.14, tint = "rgba(255,255,255,0.18)", frost = 0.16, flat = false, interactive = true, pressable = false, lens, className = "", style, children, ...rest },
+  { radius = 28, bezel = 22, refraction = 60, blur = 9, dispersion = 0.14, tint = "rgba(255,255,255,0.18)", frost = 0.16, flat = false, interactive = true, pressable = false, lens, lensTint = 0.06, overContent = false, className = "", style, children, ...rest },
   outer,
 ) {
   const el = useRef<HTMLDivElement>(null);
@@ -114,20 +118,22 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
   // inner one uses a clean frosted style instead of refraction or a 3D slab
   const [nested, setNested] = useState(false);
   useEffect(() => {
-    setNested(!!el.current?.parentElement?.closest(".lg"));
+    // inside a white frosted surface the lens could not be seen, so it stays frosted too; inside another lens it is fine
+    setNested(!!el.current?.parentElement?.closest(".lg:not([data-lens])"));
   }, []);
 
   // when the 3D glass layer is running, a real lens slab is drawn under this element instead of a CSS filter
+  const liquid = !!lens && !flat;
   useEffect(() => {
-    if (flat) return;
+    if (!liquid) return;
     setStageOn(glass.stage);
     return onStage(setStageOn);
-  }, [flat]);
+  }, [liquid]);
   useEffect(() => {
-    if (!stage || nested || !el.current) return;
+    if (!liquid || !stage || nested || !el.current) return;
     return glass.add(el.current, radius, frost, Math.min(bezel, radius, 26), lens);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, nested, radius, frost, bezel, JSON.stringify(lens ?? null)]);
+  }, [liquid, stage, nested, radius, frost, bezel, JSON.stringify(lens ?? null)]);
 
   useEffect(() => {
     setRefract(canRefract());
@@ -173,13 +179,14 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
     <div
       ref={el}
       {...rest}
+      data-lens={liquid ? "" : undefined}
       className={`lg ${stage && !nested ? "lg-stage" : ""} ${pressable ? "lg-press" : ""} ${className}`}
       style={
         {
           borderRadius: radius,
-          background: nested ? (dark ? "rgba(44,48,57,0.6)" : "rgba(255,255,255,0.55)") : stage ? (dark ? "rgba(20,22,28,0.38)" : "rgba(255,255,255,0.06)") : themedTint(whiter(tint), dark ? "dark" : "light"),
-          backdropFilter: stage && !nested ? "none" : map ? backdrop : "blur(16px) saturate(120%)",
-          WebkitBackdropFilter: stage && !nested ? "none" : "blur(16px) saturate(120%)",
+          background: nested ? (dark ? "rgba(44,48,57,0.6)" : "rgba(255,255,255,0.55)") : stage ? (dark ? `rgba(20,22,28,${Math.min(0.85, lensTint + 0.3)})` : `rgba(255,255,255,${lensTint})`) : themedTint(whiter(tint), dark ? "dark" : "light"),
+          backdropFilter: stage && !nested ? (overContent ? "blur(10px) saturate(130%)" : "none") : map ? backdrop : "blur(16px) saturate(120%)",
+          WebkitBackdropFilter: stage && !nested ? (overContent ? "blur(10px) saturate(130%)" : "none") : "blur(16px) saturate(120%)",
           ...style,
         } as CSSProperties
       }

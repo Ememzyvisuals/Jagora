@@ -8,9 +8,9 @@ import { useLite } from "@/lib/lite";
 import { useTheme } from "@/lib/theme";
 
 const LensStage = dynamic(() => import("./LensStage"), { ssr: false });
-// The WebGL lens layer is kept but switched off: the white frosted glass reads better and looks the same on every
-// phone and computer. Set to true to bring the lens back.
-const USE_LENS = false;
+// The WebGL lens is drawn only under surfaces that opt in (lens prop): the bottom bar, the search bar and Discover's
+// pocket. Everything else is the white frosted glass.
+const USE_LENS = true;
 
 /** The same sky the CSS layer shows, for the 3D layer. */
 export function useSkySrc() {

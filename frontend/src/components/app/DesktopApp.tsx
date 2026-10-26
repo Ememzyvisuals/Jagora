@@ -36,6 +36,7 @@ import { CloudWordmark } from "../glass/CloudWordmark";
 import { Backdrop } from "../glass/Backdrop";
 import { LiveButton, LiveMode } from "../LiveMode";
 import { Glass } from "../glass/Glass";
+import { PILL } from "@/lib/glassRegistry";
 import { Orb } from "../Orb";
 import { Mark } from "../Brand";
 import { toggleTheme, useTheme } from "@/lib/theme";
@@ -99,7 +100,7 @@ export function DesktopApp() {
   return (
     <div className="relative h-dvh overflow-hidden p-6 xl:p-8">
       <Backdrop />
-      <Glass radius={30} bezel={26} refraction={70} blur={10} tint="rgba(255,255,255,.55)" interactive={false} className="flex h-full flex-col overflow-hidden">
+      <Glass radius={30} bezel={26} refraction={70} blur={10} tint="rgba(255,255,255,.55)" interactive={false} lens={{ blurAmount: 0.3, refraction: 0.5, zRadius: 26, chromAberration: 0.06, brightness: 0.04 }} lensTint={0.42} className="flex h-full flex-col overflow-hidden">
         {/* Jagora's own tabs: one per task (not a copy of the real browser's tabs) */}
         <div className="no-scrollbar flex h-12 shrink-0 items-center gap-1.5 overflow-x-auto px-3">
           <button
@@ -299,7 +300,7 @@ function StartPage() {
         </HeroFloat>
 
         <form onSubmit={(e) => (e.preventDefault(), send())} className="mt-6 w-full max-w-[720px]">
-          <Glass radius={30} bezel={20} refraction={50} blur={6} tint="rgba(255,255,255,.6)">
+          <Glass radius={30} bezel={20} refraction={50} blur={6} tint="rgba(255,255,255,.6)" lens={PILL} lensTint={0.14}>
             <span className="flex h-[58px] items-center gap-3 pl-6 pr-2">
               <VoiceBars />
               <input

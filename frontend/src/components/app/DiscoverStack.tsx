@@ -5,9 +5,10 @@
    forward. Tap the top card to open it. Arrows do the same with a mouse or keyboard. "See all" lays them out. */
 import { CaretLeft, CaretRight, SpeakerHigh } from "@phosphor-icons/react";
 import { motion, useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Lang } from "@/lib/i18n";
 import { Glass } from "../glass/Glass";
+import { PILL } from "@/lib/glassRegistry";
 
 type L = Record<Lang, string>;
 export const SEE_ALL: L = { en: "See all", pcm: "See all", yo: "Wo gbogbo rẹ̀", ha: "Duba duka", ig: "Lee ha niile" };
@@ -19,21 +20,32 @@ const COUNT: L = { en: "{n} stories", pcm: "{n} stories", yo: "Ìtàn {n}", ha: 
 export type Story = { key: string; image: string | null; title: string; source: string; listen?: boolean; open: () => void };
 
 export function DiscoverStack(props: { stories: Story[]; lang: Lang; onSeeAll: () => void; wide?: boolean }) {
-  return props.wide ? <DiscoverFan {...props} /> : <DiscoverDeck {...props} />;
+  return <DiscoverFan {...props} />;
 }
 
 /* Wide screens: the stories spread out in a fan, like cards held in a hand, rising out of the glass pocket. Hover
    lifts one out; the arrows slide the next ones in. */
-function DiscoverFan({ stories, lang, onSeeAll }: { stories: Story[]; lang: Lang; onSeeAll: () => void }) {
+function DiscoverFan({ stories, lang, onSeeAll, wide = false }: { stories: Story[]; lang: Lang; onSeeAll: () => void; wide?: boolean }) {
   const [start, setStart] = useState(0);
   const [hover, setHover] = useState<string | null>(null);
-  const n = Math.min(7, stories.length);
+  const n = Math.min(wide ? 7 : 5, stories.length);
   const shown = Array.from({ length: n }, (_, i) => stories[(start + i) % stories.length]);
-  const step = (d: number) => setStart((x) => (x + d + stories.length) % stories.length);
-  const CW = 236;
+  const step = (d: number) => stories.length > 1 && setStart((x) => (x + d + stories.length) % stories.length);
+  const CW = wide ? 236 : 156;
+  const spreadW = wide ? Math.min(620, n * 110) : Math.min(150, n * 34);
+  const imgH = wide ? 150 : 96;
+  const panned = useRef(false);
   return (
     <div className="relative mx-auto w-full max-w-[920px]">
-      <div className="relative h-[372px]">
+      {/* swipe across the fan (phone) to bring the next stories in */}
+      <motion.div
+        className={`relative touch-pan-y ${wide ? "h-[372px]" : "h-[290px]"}`}
+        onPanStart={() => (panned.current = true)}
+        onPanEnd={(_, info) => {
+          if (Math.abs(info.offset.x) > 40) step(info.offset.x < 0 ? 1 : -1);
+          setTimeout(() => (panned.current = false), 60);
+        }}
+      >
         {shown.map((s, i) => {
           const t = n > 1 ? i / (n - 1) - 0.5 : 0; // -0.5 .. 0.5 across the fan
           const lifted = hover === s.key;
@@ -43,21 +55,21 @@ function DiscoverFan({ stories, lang, onSeeAll }: { stories: Story[]; lang: Lang
               className="absolute top-[4px] cursor-pointer"
               style={{ width: CW, left: `calc(50% - ${CW / 2}px)`, zIndex: lifted ? 30 : 10 - Math.round(Math.abs(t) * 10), transformOrigin: "50% 120%" }}
               initial={{ opacity: 0, y: 60, x: 0, rotate: 0 }}
-              animate={{ opacity: 1, x: t * Math.min(620, n * 110), y: lifted ? -30 : Math.abs(t) * 40, rotate: lifted ? 0 : t * 22, scale: lifted ? 1.04 : 1 }}
+              animate={{ opacity: 1, x: t * spreadW, y: lifted ? -30 : Math.abs(t) * (wide ? 40 : 30), rotate: lifted ? 0 : t * (wide ? 22 : 20), scale: lifted ? 1.04 : 1 }}
               transition={{ type: "spring", stiffness: 260, damping: 24, delay: lifted || hover ? 0 : i * 0.04 }}
               onHoverStart={() => setHover(s.key)}
               onHoverEnd={() => setHover((h) => (h === s.key ? null : h))}
-              onClick={s.open}
+              onClick={() => !panned.current && s.open()}
             >
               <Glass flat radius={26} bezel={18} refraction={34} blur={10} tint="rgba(255,255,255,.55)" className="p-2 shadow-[0_24px_44px_-20px_rgba(10,25,60,.55)]">
                 {s.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={s.image} alt="" draggable={false} className="h-[150px] w-full rounded-[19px] object-cover object-left-top" />
+                  <img src={s.image} alt="" draggable={false} className="w-full rounded-[19px] object-cover object-left-top" style={{ height: imgH }} />
                 ) : (
-                  <span className="grid h-[150px] w-full place-items-center rounded-[19px] bg-ink text-[15px] font-bold text-paper">BBC</span>
+                  <span className="grid w-full place-items-center rounded-[19px] bg-ink text-[15px] font-bold text-paper" style={{ height: imgH }}>BBC</span>
                 )}
-                <div className="px-2 pb-[64px] pt-2.5">
-                  <p className="line-clamp-2 text-[14.5px] font-semibold leading-snug text-ink">{s.title}</p>
+                <div className={`px-2 pt-2.5 ${wide ? "pb-[64px]" : "pb-[58px]"}`}>
+                  <p className={`line-clamp-2 font-semibold leading-snug text-ink ${wide ? "text-[14.5px]" : "text-[13px]"}`}>{s.title}</p>
                   <p className="mt-1 flex items-center gap-1.5 text-[12px] text-ink-3">
                     <span className="truncate">{s.source}</span>
                     {s.listen && <SpeakerHigh size={14} className="ml-auto shrink-0 text-accent" aria-label="Listen" />}
@@ -69,7 +81,7 @@ function DiscoverFan({ stories, lang, onSeeAll }: { stories: Story[]; lang: Lang
         })}
 
         {/* the glass pocket they rise out of */}
-        <Glass radius={30} bezel={22} refraction={50} blur={8} tint="rgba(255,255,255,.45)" className="!absolute inset-x-0 bottom-0 z-40 flex h-[84px] items-center justify-between px-4">
+        <Glass radius={30} bezel={22} refraction={50} blur={8} tint="rgba(255,255,255,.45)" lens={PILL} lensTint={0.4} overContent className={`!absolute inset-x-0 bottom-0 z-40 flex items-center justify-between ${wide ? "h-[84px] px-4" : "h-[72px] px-2"}`}>
           <button onClick={() => step(-1)} className="grid h-11 w-11 place-items-center rounded-full text-ink-2 hover:bg-white/50" aria-label="Previous stories">
             <CaretLeft size={18} weight="bold" />
           </button>
@@ -83,7 +95,7 @@ function DiscoverFan({ stories, lang, onSeeAll }: { stories: Story[]; lang: Lang
             <CaretRight size={18} weight="bold" />
           </button>
         </Glass>
-      </div>
+      </motion.div>
     </div>
   );
 }

@@ -58,3 +58,6 @@ export const onStage = (l: (v: boolean) => void) => {
     stageListeners.delete(l);
   };
 };
+
+/** The liquid lens used on Jagora's bars and pockets: a thick pill bevel, light frost, a little light on top. */
+export const PILL: Partial<LensConfig> = { blurAmount: 0.15, refraction: 1.0, chromAberration: 0.12, zRadius: 40, brightness: 0.02, edgeHighlight: 0.12, specular: 0.25 };
