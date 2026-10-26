@@ -13,6 +13,7 @@ import { TaskIcon, lastLine } from "./Shared";
 import { BottomBar, EdgeBlur, Home } from "./MobileHome";
 import { Backdrop } from "../glass/Backdrop";
 import { Glass } from "../glass/Glass";
+import { Tour } from "../Tour";
 
 type Screen = "home" | "page" | "tabs";
 
@@ -77,6 +78,7 @@ export function MobileApp() {
       {screen !== "tabs" && <EdgeBlur />}
       {!(screen === "tabs" && tabsFull) && <BottomBar screen={screen} setScreen={go} />}
       <Sheet open={sheet} onClose={() => setSheet(false)} />
+      {screen === "home" && !sheet && <Tour />}
     </div>
   );
 }
@@ -152,7 +154,7 @@ function Tabs({ full, setFull, onOpen, onNew, onDone }: { full: boolean; setFull
   const spring = { type: "spring", stiffness: 300, damping: 34 } as const;
   return (
     <div className="relative h-full">
-      <motion.div className="absolute inset-0 bg-[#0b1426]/25 backdrop-blur-[20px] backdrop-saturate-150" onClick={onDone} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+      <motion.div className="absolute inset-0 bg-white/10 backdrop-blur-[5px]" onClick={onDone} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
       <motion.div
         layout
         transition={spring}

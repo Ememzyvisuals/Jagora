@@ -229,7 +229,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
         {/* top row */}
         <div className="flex items-center justify-between px-4 pt-[max(14px,env(safe-area-inset-top))]">
           <div className="relative">
-            <Glass radius={22} bezel={12} refraction={30} pressable className="cursor-pointer" onClick={() => setLangOpen((v) => !v)}>
+            <Glass radius={22} bezel={12} refraction={30} pressable className="cursor-pointer" onClick={() => setLangOpen((v) => !v)} data-tour="lang">
               <span className="flex h-11 items-center gap-2 px-3">
                 <Flag />
                 <span className="text-[15px] font-semibold text-ink">{LANGS.find((x) => x.id === lang)?.native}</span>
@@ -282,7 +282,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
         </div>
 
         {/* ask bar */}
-        <form onSubmit={(e) => (e.preventDefault(), send())} className="mx-4 mt-5">
+        <form onSubmit={(e) => (e.preventDefault(), send())} className="mx-4 mt-5" data-tour="ask">
           <Glass radius={30} bezel={18} refraction={40} tint="rgba(255,255,255,.5)">
             <span className="flex h-[58px] items-center gap-3 pl-5 pr-2">
               <VoiceBars />
@@ -428,7 +428,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
               </button>
             ) : (
               <div className="flex h-[52px] items-center gap-2 pl-1.5 pr-3">
-                <button onClick={() => setSheet(!sheet)} aria-label="Talk to Jagora" className="shrink-0 transition active:scale-90">
+                <button onClick={() => setSheet(!sheet)} aria-label="Talk to Jagora" className="shrink-0 transition active:scale-90" data-tour="orb">
                   <Orb size={42} state={orb} levelRef={pulse} />
                 </button>
                 <button onClick={() => setSheet(true)} className="min-w-0 flex-1 truncate text-left text-[15px] font-medium text-ink-2">
@@ -444,7 +444,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
           {!small && (
             <motion.div key="right" className="flex gap-2" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }} transition={spring}>
               <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable>
-                <button className={`grid h-[52px] w-[52px] place-items-center transition ${screen === "tabs" ? "rounded-full bg-ink text-white" : "text-ink"}`} onClick={() => setScreen("tabs")} aria-label={`${NAV.tabs[lang]}, ${count}`} aria-pressed={screen === "tabs"}>
+                <button className={`grid h-[52px] w-[52px] place-items-center transition ${screen === "tabs" ? "rounded-full bg-ink text-white" : "text-ink"}`} onClick={() => setScreen("tabs")} aria-label={`${NAV.tabs[lang]}, ${count}`} aria-pressed={screen === "tabs"} data-tour="tabs">
                   <TabsGlyph count={count} />
                 </button>
               </Glass>
