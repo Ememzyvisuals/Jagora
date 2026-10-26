@@ -80,6 +80,8 @@ export type GlassProps = HTMLAttributes<HTMLDivElement> & {
   dispersion?: number;
   /** body colour of the glass */
   tint?: string;
+  /** use CSS glass even when the 3D layer runs (for things drawn above overlays, like tips) */
+  flat?: boolean;
   /** frost of the 3D lens, 0 clear to ~0.4 milky */
   frost?: number;
   /** react to the pointer: moving light and a soft press */
@@ -89,7 +91,7 @@ export type GlassProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
-  { radius = 28, bezel = 22, refraction = 60, blur = 9, dispersion = 0.14, tint = "rgba(255,255,255,0.18)", frost = 0.16, interactive = true, pressable = false, className = "", style, children, ...rest },
+  { radius = 28, bezel = 22, refraction = 60, blur = 9, dispersion = 0.14, tint = "rgba(255,255,255,0.18)", frost = 0.16, flat = false, interactive = true, pressable = false, className = "", style, children, ...rest },
   outer,
 ) {
   const el = useRef<HTMLDivElement>(null);
@@ -101,9 +103,10 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
 
   // when the 3D glass layer is running, a real lens slab is drawn under this element instead of a CSS filter
   useEffect(() => {
+    if (flat) return;
     setStageOn(glass.stage);
     return onStage(setStageOn);
-  }, []);
+  }, [flat]);
   useEffect(() => {
     if (!stage || !el.current) return;
     return glass.add(el.current, radius, frost, Math.min(bezel, radius, 26));

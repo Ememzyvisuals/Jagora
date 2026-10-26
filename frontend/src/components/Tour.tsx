@@ -5,6 +5,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useState } from "react";
 import type { Lang } from "@/lib/i18n";
+import { Glass } from "./glass/Glass";
 import { useApp } from "@/lib/store";
 
 type Step = { target: string; text: Record<Lang, string>; more: Record<Lang, string> };
@@ -131,11 +132,11 @@ export function Tour() {
 
   return (
     <AnimatePresence>
-      <motion.div key="dim" className="fixed inset-0 z-[90] bg-black/35" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={next} />
+      <motion.div key="dim" className="fixed inset-0 z-[90] bg-[#0b1426]/30" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={next} />
       {rect && (
         <motion.div
           key={`ring-${i}`}
-          className="pointer-events-none fixed z-[91] rounded-[28px] ring-2 ring-white/90"
+          className="pointer-events-none fixed z-[91] rounded-[28px] ring-[1.5px] ring-white"
           initial={{ opacity: 0, scale: 1.15 }}
           animate={{ opacity: 1, scale: 1 }}
           style={{ left: rect.left - 6, top: rect.top - 6, width: rect.width + 12, height: rect.height + 12, boxShadow: "0 0 0 6px rgba(255,255,255,.18)" }}
@@ -148,22 +149,23 @@ export function Tour() {
         initial={{ opacity: 0, y: below ? -8 : 8, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: "spring", stiffness: 340, damping: 28 }}
-        className="fixed z-[92] rounded-[24px] bg-white p-5 shadow-[0_24px_60px_-20px_rgba(0,0,0,.45)]"
+        className="fixed z-[92]"
         style={{ width: W, left, ...(rect ? (below ? { top: rect.bottom + 16 } : { bottom: vh - rect.top + 16 }) : { top: vh * 0.4 }) }}
       >
         <span
-          className="absolute h-4 w-4 rotate-45 bg-white"
+          className="absolute z-10 h-4 w-4 rotate-45 bg-white/90"
           style={{ left: arrowX - 8, ...(below ? { top: -7 } : { bottom: -7 }) }}
           aria-hidden="true"
         />
+        <Glass flat radius={26} bezel={16} refraction={34} blur={12} tint="rgba(255,255,255,.8)" className="p-5 shadow-[0_24px_60px_-20px_rgba(10,25,60,.5)]">
         <p className="text-[17px] leading-snug text-ink">{step.text[lang]}</p>
         {more && <p className="mt-2 text-[15px] leading-snug text-ink-2">{step.more[lang]}</p>}
         <div className="mt-4 flex items-center justify-between">
-          <button onClick={next} className="h-11 rounded-full border border-ink/25 px-5 text-[15.5px] font-semibold text-ink transition active:scale-95">
+          <button onClick={next} className="h-11 rounded-full bg-ink px-5 text-[15.5px] font-semibold text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-95">
             {GOT[lang]}
           </button>
           {!more && (
-            <button onClick={() => setMore(true)} className="px-2 text-[15px] font-medium text-ink-2">
+            <button onClick={() => setMore(true)} className="h-11 rounded-full bg-white/60 px-4 text-[15px] font-medium text-ink shadow-[inset_0_1px_1px_rgba(255,255,255,1)] transition active:scale-95">
               {HOW[lang]}
             </button>
           )}
@@ -171,6 +173,7 @@ export function Tour() {
             {i + 1}/{STEPS.length}
           </span>
         </div>
+        </Glass>
       </motion.div>
     </AnimatePresence>
   );
