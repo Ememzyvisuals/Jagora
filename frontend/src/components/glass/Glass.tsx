@@ -31,7 +31,8 @@ function displacementMap(w: number, h: number, r: number, bezel: number) {
       const outside = Math.hypot(ox, oy);
       const sdf = outside + Math.min(Math.max(qx, qy), 0) - rr; // < 0 inside
       const d = -sdf; // distance from edge, inside
-      let dx = 0, dy = 0;
+      // whole surface: a gentle magnifying lens (samples pulled toward the centre)
+      let dx = (-px / hw) * 0.12, dy = (-py / hh) * 0.12;
       if (d > 0 && d < bezel) {
         // outward normal
         let nx: number, ny: number;
@@ -49,12 +50,12 @@ function displacementMap(w: number, h: number, r: number, bezel: number) {
         ny *= Math.sign(py) || 1;
         const t = 1 - d / bezel; // 0 inside, 1 at the edge
         const m = Math.pow(t, 2.2); // convex: bends hardest at the rim
-        dx = -nx * m;
-        dy = -ny * m;
+        dx += -nx * m * 0.88;
+        dy += -ny * m * 0.88;
       }
       const k = (j * cw + i) * 4;
-      img.data[k] = 128 + dx * 127;
-      img.data[k + 1] = 128 + dy * 127;
+      img.data[k] = 128 + Math.max(-1, Math.min(1, dx)) * 127;
+      img.data[k + 1] = 128 + Math.max(-1, Math.min(1, dy)) * 127;
       img.data[k + 2] = 128;
       img.data[k + 3] = 255;
     }
@@ -74,6 +75,8 @@ export type GlassProps = HTMLAttributes<HTMLDivElement> & {
   refraction?: number;
   /** frost in px */
   blur?: number;
+  /** colour fringing at the rim, 0 to ~0.3 */
+  dispersion?: number;
   /** body colour of the glass */
   tint?: string;
   /** react to the pointer: moving light and a soft press */
@@ -83,7 +86,7 @@ export type GlassProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
-  { radius = 28, bezel = 22, refraction = 46, blur = 6, tint = "rgba(255,255,255,0.34)", interactive = true, pressable = false, className = "", style, children, ...rest },
+  { radius = 28, bezel = 22, refraction = 60, blur = 1.5, dispersion = 0.14, tint = "rgba(255,255,255,0.10)", interactive = true, pressable = false, className = "", style, children, ...rest },
   outer,
 ) {
   const el = useRef<HTMLDivElement>(null);
@@ -127,7 +130,7 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
   }, [interactive]);
 
   const map = refract && size && size.w > 4 && size.h > 4 ? displacementMap(size.w, size.h, radius, Math.min(bezel, size.h / 2, size.w / 2)) : null;
-  const backdrop = map ? `url(#lg${id}) blur(${blur * 0.5}px) saturate(135%) brightness(1.08)` : `blur(${blur * 2.6}px) saturate(135%) brightness(1.07)`;
+  const backdrop = map ? `blur(${blur}px) url(#lg${id}) saturate(140%) brightness(1.06)` : `blur(${Math.max(blur, 4) * 2.4}px) saturate(150%) brightness(1.06)`;
 
   return (
     <div
@@ -139,7 +142,7 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
           borderRadius: radius,
           background: tint,
           backdropFilter: backdrop,
-          WebkitBackdropFilter: `blur(${blur * 2.6}px) saturate(135%)`,
+          WebkitBackdropFilter: `blur(${Math.max(blur, 4) * 2.4}px) saturate(150%)`,
           ...style,
         } as CSSProperties
       }
@@ -148,7 +151,14 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
         <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
           <filter id={`lg${id}`} x="0" y="0" width={size.w} height={size.h} filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" colorInterpolationFilters="sRGB">
             <feImage href={map} x="0" y="0" width={size.w} height={size.h} preserveAspectRatio="none" result="map" />
-            <feDisplacementMap in="SourceGraphic" in2="map" scale={refraction} xChannelSelector="R" yChannelSelector="G" />
+            <feDisplacementMap in="SourceGraphic" in2="map" scale={refraction} xChannelSelector="R" yChannelSelector="G" result="dr" />
+            <feDisplacementMap in="SourceGraphic" in2="map" scale={refraction * (1 + dispersion)} xChannelSelector="R" yChannelSelector="G" result="dg" />
+            <feDisplacementMap in="SourceGraphic" in2="map" scale={refraction * (1 + dispersion * 2)} xChannelSelector="R" yChannelSelector="G" result="db" />
+            <feColorMatrix in="dr" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r" />
+            <feColorMatrix in="dg" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g" />
+            <feColorMatrix in="db" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="b" />
+            <feComposite in="r" in2="g" operator="arithmetic" k2="1" k3="1" result="rg" />
+            <feComposite in="rg" in2="b" operator="arithmetic" k2="1" k3="1" />
           </filter>
         </svg>
       )}
