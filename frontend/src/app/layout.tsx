@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Pwa } from "@/components/Pwa";
+import { FontPicker } from "@/components/FontPicker";
 import { THEME_SCRIPT } from "@/lib/themeScript";
 
 export const metadata: Metadata = {
@@ -25,10 +26,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <link rel="preload" href="/fonts/jagora-sans.woff2" as="font" type="font/woff2" crossOrigin="" />
         <link rel="preload" href="/fonts/jagora-pixel-sans-dot.woff2" as="font" type="font/woff2" crossOrigin="" />
+        <link rel="preload" href="/fonts/galgo-condensed.woff2" as="font" type="font/woff2" crossOrigin="" />
+        <link rel="preload" href="/fonts/climate-crisis.woff2" as="font" type="font/woff2" crossOrigin="" />
         
       </head>
       <body className="min-h-dvh antialiased">
         <Pwa />
+        <FontPicker />
         {children}
       </body>
     </html>

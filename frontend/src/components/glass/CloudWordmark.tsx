@@ -5,6 +5,7 @@
    a specular highlight from a light that follows the pointer. A tap sends a ripple through the glass; while Jagora
    speaks (level > 0) the clouds move faster. */
 import { useEffect, useRef, type MutableRefObject } from "react";
+import { WORDMARK, getFont, useFont } from "@/lib/fontChoice";
 
 const VS = `attribute vec2 p; varying vec2 v; void main(){ v = p*.5+.5; gl_Position = vec4(p,0.,1.); }`;
 
@@ -66,6 +67,7 @@ export function CloudWordmark({
   className?: string;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const fontChoice = useFont();
   const height = Math.round(width * 0.38);
 
   useEffect(() => {
@@ -116,7 +118,8 @@ export function CloudWordmark({
     };
 
     const draw = () => {
-      const font = `800 ${H}px "Jagora Sans", sans-serif`;
+      const wf = WORDMARK[getFont()];
+      const font = `${wf.weight} ${H}px "${wf.family}", "Jagora Sans", sans-serif`;
       const mk = (blur: number) => {
         const c = document.createElement("canvas");
         c.width = W;
@@ -126,9 +129,9 @@ export function CloudWordmark({
         x.fillRect(0, 0, W, H);
         x.font = font;
         const m = x.measureText(text);
-        const size = H * Math.min(0.92, (W * 0.94) / m.width);
-        x.font = `800 ${size}px "Jagora Sans", sans-serif`;
-        x.letterSpacing = `${-size * 0.02}px`;
+        const size = H * Math.min(wf.maxH, (W * 0.94) / m.width);
+        x.font = `${wf.weight} ${size}px "${wf.family}", "Jagora Sans", sans-serif`;
+        x.letterSpacing = `${size * wf.spacing}px`;
         x.textAlign = "center";
         x.textBaseline = "middle";
         if (blur) x.filter = `blur(${blur}px)`;
@@ -191,7 +194,8 @@ export function CloudWordmark({
     window.addEventListener("pointermove", move);
     cv.addEventListener("pointerdown", down);
 
-    document.fonts.load(`800 40px "Jagora Sans"`).finally(() => {
+    const wf0 = WORDMARK[getFont()];
+    document.fonts.load(`${wf0.weight} 40px "${wf0.family}"`).finally(() => {
       if (!alive) return;
       draw();
       raf = requestAnimationFrame(frame);
@@ -204,7 +208,7 @@ export function CloudWordmark({
       window.removeEventListener("pointermove", move);
       cv.removeEventListener("pointerdown", down);
     };
-  }, [text, width, height, levelRef]);
+  }, [text, width, height, levelRef, fontChoice]);
 
   return (
     <canvas
