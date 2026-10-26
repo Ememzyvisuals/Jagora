@@ -18,18 +18,33 @@
   src: url("/fonts/jagora-pixel-sans-dot.woff2") format("woff2");
   font-display: swap;
 }
+/* body text: Piazzolla (SIL OFL), patched for Yorùbá and Igbo by scripts/patch-display-font.py */
 @font-face {
-  font-family: "Jagora Galgo";
-  src: url("/fonts/galgo-condensed.woff2") format("woff2");
+  font-family: "Jagora Body";
+  src: url("/fonts/jagora-body-400.woff2") format("woff2");
+  font-weight: 400;
   font-display: swap;
 }
 @font-face {
-  font-family: "Jagora Climate";
-  src: url("/fonts/climate-crisis.woff2") format("woff2");
+  font-family: "Jagora Body";
+  src: url("/fonts/jagora-body-500.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Jagora Body";
+  src: url("/fonts/jagora-body-600.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Jagora Body";
+  src: url("/fonts/jagora-body-700.woff2") format("woff2");
+  font-weight: 700;
   font-display: swap;
 }
 @theme {
-  --font-sans: "Jagora Sans", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Jagora Body", "Jagora Sans", "Inter Variable", ui-serif, Georgia, serif;
   --font-pixel: "Jagora Pixel", ui-monospace, monospace;
   --font-display: "Jagora Sans", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 
@@ -360,23 +375,4 @@ h3,
   font-family: var(--font-pixel);
   font-weight: 400;
   letter-spacing: 0;
-}
-
-/* trying other display fonts (scripts/patch-display-font.py adds the Yorùbá and Igbo letters they lack) */
-[data-font="galgo"] {
-  --font-pixel: "Jagora Galgo", "Jagora Sans", "Inter Variable", sans-serif;
-}
-[data-font="galgo"] :is(h1, h2, h3, .font-pixel) {
-  /* condensed: scale it up so it carries the same weight on the page */
-  font-size-adjust: ex-height 0.6;
-  letter-spacing: 0.005em;
-  line-height: 0.95;
-}
-[data-font="climate"] {
-  --font-pixel: "Jagora Climate", "Jagora Sans", "Inter Variable", sans-serif;
-}
-[data-font="climate"] :is(h1, h2, h3, .font-pixel) {
-  /* very wide and heavy: a little smaller */
-  font-size-adjust: ex-height 0.5;
-  letter-spacing: -0.01em;
 }

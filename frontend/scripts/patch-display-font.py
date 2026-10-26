@@ -169,8 +169,11 @@ for name in f.getGlyphOrder():
     else:
         glyf.glyphs[name] = f["glyf"][name]
 for name, (parts, adv) in new_glyphs.items():
-    glyf.glyphs[name] = tt_glyph(lambda p, parts=parts: draw_into(p, parts))
-    hmtx[name] = (int(round(adv)), 0)
+    gl = tt_glyph(lambda p, parts=parts: draw_into(p, parts))
+    glyf.glyphs[name] = gl
+    gl.recalcBounds(glyf)
+    # left side bearing must match the outline's left edge, or renderers shift the letter
+    hmtx[name] = (int(round(adv)), getattr(gl, "xMin", 0))
 if is_cff:
     del f["CFF "]
     f["loca"] = newTable("loca")
