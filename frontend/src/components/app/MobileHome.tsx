@@ -32,6 +32,7 @@ import { activeTask, useApp } from "@/lib/store";
 import { ago } from "@/lib/hooks";
 import { useSpeakingPulse } from "@/lib/voice";
 import { CloudWordmark } from "../glass/CloudWordmark";
+import { siFacebook, siGmail, siGoogle, siInstagram, siTiktok, siWhatsapp, siX, siYoutube } from "simple-icons";
 import { canFullscreen, toggleFullscreen } from "../Pwa";
 import { Glass } from "../glass/Glass";
 import { Orb } from "../Orb";
@@ -60,16 +61,23 @@ const NAV: Record<"back" | "fwd" | "tabs" | "home", L> = {
   home: { en: "Home", pcm: "Home", yo: "Ilé", ha: "Gida", ig: "Ụlọ" },
 };
 
-type Site = { name: L; domain?: string; goal: string; Icon: ComponentType<{ size?: number; weight?: "fill" }>; from: string; to: string };
+type Brand = { path: string; fg: string; bg: string };
+type Site = { name: L; domain?: string; brand?: Brand; goal: string; Icon: ComponentType<{ size?: number; weight?: "fill" }>; from: string; to: string };
 const l = (en: string, yo: string, ha: string, ig: string, pcm = en): L => ({ en, yo, ha, ig, pcm });
+const IG = "linear-gradient(45deg,#feda75 0%,#fa7e1e 25%,#d62976 50%,#962fbf 75%,#4f5bd5 100%)";
+// real brand marks (simple-icons, CC0) for the big platforms; Nigerian sites use their own site icon
 export const SITES: Site[] = [
-  { name: l("Google", "Google", "Google", "Google"), domain: "google.com", goal: "Open google.com", Icon: MagnifyingGlass, from: "#5aa2ff", to: "#2b6fe8" },
-  { name: l("Facebook", "Facebook", "Facebook", "Facebook"), domain: "facebook.com", goal: "Open facebook.com", Icon: ChatCircleText, from: "#4f8dff", to: "#1b5fe0" },
-  { name: l("YouTube", "YouTube", "YouTube", "YouTube"), domain: "youtube.com", goal: "Open youtube.com", Icon: Play, from: "#ff6b6b", to: "#e02424" },
+  { name: l("Google", "Google", "Google", "Google"), domain: "google.com", brand: { path: siGoogle.path, fg: "#4285F4", bg: "#ffffff" }, goal: "Open google.com", Icon: MagnifyingGlass, from: "#5aa2ff", to: "#2b6fe8" },
+  { name: l("WhatsApp", "WhatsApp", "WhatsApp", "WhatsApp"), domain: "web.whatsapp.com", brand: { path: siWhatsapp.path, fg: "#ffffff", bg: "#25D366" }, goal: "Open WhatsApp Web", Icon: ChatCircleText, from: "#3ddc84", to: "#1ea952" },
+  { name: l("Facebook", "Facebook", "Facebook", "Facebook"), domain: "facebook.com", brand: { path: siFacebook.path, fg: "#ffffff", bg: "#0866FF" }, goal: "Open facebook.com", Icon: ChatCircleText, from: "#4f8dff", to: "#1b5fe0" },
+  { name: l("Instagram", "Instagram", "Instagram", "Instagram"), domain: "instagram.com", brand: { path: siInstagram.path, fg: "#ffffff", bg: IG }, goal: "Open instagram.com", Icon: Play, from: "#d62976", to: "#962fbf" },
+  { name: l("YouTube", "YouTube", "YouTube", "YouTube"), domain: "youtube.com", brand: { path: siYoutube.path, fg: "#ffffff", bg: "#FF0000" }, goal: "Open youtube.com", Icon: Play, from: "#ff6b6b", to: "#e02424" },
+  { name: l("X", "X", "X", "X"), domain: "x.com", brand: { path: siX.path, fg: "#ffffff", bg: "#000000" }, goal: "Open x.com", Icon: ChatCircleText, from: "#333", to: "#000" },
+  { name: l("TikTok", "TikTok", "TikTok", "TikTok"), domain: "tiktok.com", brand: { path: siTiktok.path, fg: "#ffffff", bg: "#000000" }, goal: "Open tiktok.com", Icon: Play, from: "#333", to: "#000" },
+  { name: l("Gmail", "Gmail", "Gmail", "Gmail"), domain: "mail.google.com", brand: { path: siGmail.path, fg: "#EA4335", bg: "#ffffff" }, goal: "Open Gmail", Icon: ChatCircleText, from: "#ff7a6b", to: "#e2412f" },
   { name: l("BBC News", "BBC Yorùbá", "BBC Hausa", "BBC Igbo", "BBC Pidgin"), domain: "bbc.com", goal: "Open BBC news in my language", Icon: Newspaper, from: "#5b5b66", to: "#1d1d22" },
   { name: l("JAMB", "JAMB", "JAMB", "JAMB"), domain: "jamb.gov.ng", goal: "Open jamb.gov.ng", Icon: GraduationCap, from: "#3fcf86", to: "#14965a" },
   { name: l("NIMC", "NIMC", "NIMC", "NIMC"), domain: "nimc.gov.ng", goal: "Open nimc.gov.ng", Icon: IdentificationCard, from: "#36b37e", to: "#0e7a4f" },
-  { name: l("WAEC", "WAEC", "WAEC", "WAEC"), domain: "waecdirect.org", goal: "Open waecdirect.org", Icon: Certificate, from: "#5a8dee", to: "#2a55b8" },
   { name: l("Jumia", "Jumia", "Jumia", "Jumia"), domain: "jumia.com.ng", goal: "Open jumia.com.ng", Icon: ShoppingBag, from: "#ffae4d", to: "#f08a12" },
 ];
 
@@ -143,7 +151,18 @@ export function VoiceBars({ size = 22, color = "#1D63ED" }: { size?: number; col
 }
 
 export function AppIcon({ site, size = 46 }: { site: Site; size?: number }) {
-  const { Icon, from, to, domain } = site;
+  const { Icon, from, to, domain, brand } = site;
+  if (brand)
+    return (
+      <span
+        className="relative grid place-items-center overflow-hidden"
+        style={{ width: size, height: size, borderRadius: size * 0.3, background: brand.bg, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.06), inset 0 1px 1px rgba(255,255,255,.5), 0 6px 14px -8px rgba(10,30,70,.4)" }}
+      >
+        <svg viewBox="0 0 24 24" width={size * 0.56} height={size * 0.56} fill={brand.fg} aria-hidden="true">
+          <path d={brand.path} />
+        </svg>
+      </span>
+    );
   const [failed, setFailed] = useState(!domain);
   if (!failed && domain)
     return (
@@ -302,8 +321,17 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
 
         {/* shortcuts */}
         <div className="mt-5 overflow-hidden">
-          <div className="flex transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)]" style={{ transform: `translateX(-${page * 100}%)` }}>
-            {[0, 1].map((p) => (
+          <div
+            className="flex touch-pan-y transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)]"
+            style={{ transform: `translateX(-${page * 100}%)` }}
+            onPointerDown={(e) => (e.currentTarget.dataset.x = String(e.clientX))}
+            onPointerUp={(e) => {
+              const dx = e.clientX - Number(e.currentTarget.dataset.x || e.clientX);
+              if (dx < -40) setPage((p) => Math.min(2, p + 1));
+              if (dx > 40) setPage((p) => Math.max(0, p - 1));
+            }}
+          >
+            {[0, 1, 2].map((p) => (
               <div key={p} className="grid w-full shrink-0 grid-cols-4 gap-2.5 px-4">
                 {SITES.slice(p * 4, p * 4 + 4).map((s) => (
                   <Glass key={s.goal} radius={22} bezel={14} refraction={28} pressable className="cursor-pointer" onClick={() => ask(s.goal)}>
@@ -317,7 +345,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
             ))}
           </div>
           <div className="mt-3 flex justify-center gap-1.5">
-            {[0, 1].map((p) => (
+            {[0, 1, 2].map((p) => (
               <button key={p} onClick={() => setPage(p)} aria-label={`Shortcuts ${p + 1}`} className={`h-[7px] rounded-full transition-all duration-300 ${page === p ? "w-[7px] bg-accent" : "w-[7px] bg-ink/20"}`} />
             ))}
           </div>
