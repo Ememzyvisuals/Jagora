@@ -8,6 +8,7 @@ import {
   CaretLeft,
   CaretRight,
   CaretUp,
+  Info,
   DotsThree,
   Moon,
   Sun,
@@ -552,6 +553,9 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
                           ))}
                           <Link href="/app/details" className="flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-[15px] font-medium text-ink hover:bg-black/5">
                             <User size={19} /> My details
+                          </Link>
+                          <Link href="/about" className="flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-[15px] font-medium text-ink hover:bg-black/5">
+                            <Info size={19} /> About and credits
                           </Link>
                         </div>
                       </Glass>

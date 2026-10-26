@@ -7,7 +7,9 @@ import { Eye, EyeSlash, Key, Sparkle } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import Link from "next/link";
 import { Mark } from "@/components/Brand";
+import { SiteFooter } from "@/components/SiteFooter";
 import { CloudWordmark } from "@/components/glass/CloudWordmark";
 import { Backdrop } from "@/components/glass/Backdrop";
 import { Glass } from "@/components/glass/Glass";
@@ -38,6 +40,10 @@ const T: Record<string, L> = {
   },
   badEmail: { en: "Check the email address.", pcm: "Check the email well.", yo: "Ẹ yẹ ímeèlì náà wò.", ha: "Duba adireshin imel ɗin.", ig: "Lelee adreesị email ahụ." },
   badPw: { en: "Use at least 8 characters.", pcm: "Use at least 8 letters.", yo: "Lo ó kéré tán lẹ́tà 8.", ha: "Yi amfani da aƙalla haruffa 8.", ig: "Jiri opekata mpe mkpụrụedemede 8." },
+  agree: { en: "By continuing you agree to our", pcm: "If you continue, you agree to our", yo: "Bí ẹ bá tẹ̀síwájú, ẹ gbà sí", ha: "Idan ka ci gaba, ka yarda da", ig: "Ọ bụrụ na ị gaa n'ihu, ị kwenyere na" },
+  terms: { en: "Terms", pcm: "Terms", yo: "Àwọn òfin", ha: "Sharuɗɗa", ig: "Usoro" },
+  privacy: { en: "Privacy", pcm: "Privacy", yo: "Ìpamọ́", ha: "Sirri", ig: "Nzuzo" },
+  about: { en: "What is Jagora?", pcm: "Wetin be Jagora?", yo: "Kí ni Jagora?", ha: "Mene ne Jagora?", ig: "Gịnị bụ Jagora?" },
   pick: { en: "Jagora speaks", pcm: "Jagora dey talk", yo: "Jagora ń sọ", ha: "Jagora tana magana da", ig: "Jagora na-asụ" },
 };
 
@@ -221,9 +227,17 @@ export default function Start() {
               )}
             </form>
           </Glass>
-          <p className="mt-4 text-center text-[12px] text-ink-2 dark:text-ink/80">Voice by PlotWeaver STORM. Built with Meta Muse.</p>
+          <p className="mt-4 px-4 text-center text-[12.5px] leading-relaxed text-ink-2 md:text-[13.5px] dark:text-ink/80">
+            {T.agree[lang]}{" "}
+            <Link href="/terms" className="font-semibold text-ink underline underline-offset-2">{T.terms[lang]}</Link>
+            <span className="mx-1.5 text-ink-3">|</span>
+            <Link href="/privacy" className="font-semibold text-ink underline underline-offset-2">{T.privacy[lang]}</Link>
+            <span className="mx-1.5 text-ink-3">|</span>
+            <Link href="/about" className="font-semibold text-ink underline underline-offset-2">{T.about[lang]}</Link>
+          </p>
         </section>
       </div>
+      <SiteFooter />
     </div>
   );
 }

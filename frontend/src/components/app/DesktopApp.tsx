@@ -16,6 +16,7 @@ import {
   Plus,
   SpeakerHigh,
   SidebarSimple,
+  Info,
   CaretUp,
   Moon,
   Sun,
@@ -210,6 +211,12 @@ export function DesktopApp() {
                   {(profile.full_name || "Me").slice(0, 1)}
                 </span>
                 <span className="truncate text-[14px] font-medium text-ink">{profile.full_name || "My details"}</span>
+              </Link>
+              <Link href="/about" className="flex items-center gap-2.5 rounded-[14px] p-2 text-[14px] font-medium text-ink hover:bg-white/40">
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-white/70 text-ink-2">
+                  <Info size={16} weight="bold" />
+                </span>
+                About and credits
               </Link>
               <div className="relative">
                 <button onClick={() => setLangOpen((v) => !v)} className="flex w-full items-center gap-2.5 rounded-[14px] p-2 text-[14px] font-medium text-ink hover:bg-white/40">

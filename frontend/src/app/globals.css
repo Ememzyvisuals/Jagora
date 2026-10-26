@@ -388,3 +388,50 @@ h3,
   font-weight: 700;
   letter-spacing: -0.035em;
 }
+
+/* reading pages (about, legal): calm, roomy, professional */
+.prose-jagora {
+  color: var(--color-ink);
+  font-size: 17px;
+  line-height: 1.72;
+}
+.prose-jagora > * + * {
+  margin-top: 1.1em;
+}
+.prose-jagora h2 {
+  font-size: clamp(24px, 3.4vw, 32px);
+  line-height: 1.15;
+  margin-top: 2.2em;
+  scroll-margin-top: 24px;
+}
+.prose-jagora h2:first-child {
+  margin-top: 0;
+}
+.prose-jagora h3 {
+  font-size: 19px;
+  letter-spacing: -0.02em;
+  margin-top: 1.8em;
+}
+.prose-jagora p,
+.prose-jagora li {
+  color: var(--color-ink-2);
+}
+.prose-jagora strong {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+.prose-jagora ul {
+  padding-left: 1.2em;
+  list-style: disc;
+}
+.prose-jagora ul li + li {
+  margin-top: 0.45em;
+}
+.prose-jagora li::marker {
+  color: var(--color-accent);
+}
+.prose-jagora a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
