@@ -100,6 +100,12 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [refract, setRefract] = useState(false);
   const [stage, setStageOn] = useState(false);
+  // glass inside glass (e.g. tiles inside the desktop window): the browser cannot see through two layers, so the
+  // inner one uses a clean frosted style instead of refraction or a 3D slab
+  const [nested, setNested] = useState(false);
+  useEffect(() => {
+    setNested(!!el.current?.parentElement?.closest(".lg"));
+  }, []);
 
   // when the 3D glass layer is running, a real lens slab is drawn under this element instead of a CSS filter
   useEffect(() => {
@@ -108,9 +114,9 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
     return onStage(setStageOn);
   }, [flat]);
   useEffect(() => {
-    if (!stage || !el.current) return;
+    if (!stage || nested || !el.current) return;
     return glass.add(el.current, radius, frost, Math.min(bezel, radius, 26));
-  }, [stage, radius, frost, bezel]);
+  }, [stage, nested, radius, frost, bezel]);
 
   useEffect(() => {
     setRefract(canRefract());
@@ -146,7 +152,7 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
     };
   }, [interactive]);
 
-  const map = !stage && refract && size && size.w > 4 && size.h > 4 ? displacementMap(size.w, size.h, radius, Math.min(bezel, size.h / 2, size.w / 2)) : null;
+  const map = !stage && !nested && refract && size && size.w > 4 && size.h > 4 ? displacementMap(size.w, size.h, radius, Math.min(bezel, size.h / 2, size.w / 2)) : null;
   const backdrop = map ? `url(#lg${id}) blur(${blur}px) saturate(150%) brightness(1.07)` : `blur(${Math.max(blur, 4) * 2.4}px) saturate(150%) brightness(1.06)`;
 
   return (
@@ -157,9 +163,9 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
       style={
         {
           borderRadius: radius,
-          background: stage ? "rgba(255,255,255,0.06)" : tint,
-          backdropFilter: stage ? "none" : backdrop,
-          WebkitBackdropFilter: stage ? "none" : `blur(${Math.max(blur, 4) * 2.4}px) saturate(150%)`,
+          background: nested ? "rgba(255,255,255,0.55)" : stage ? "rgba(255,255,255,0.06)" : tint,
+          backdropFilter: nested ? "blur(14px) saturate(160%)" : stage ? "none" : backdrop,
+          WebkitBackdropFilter: nested ? "blur(14px) saturate(160%)" : stage ? "none" : `blur(${Math.max(blur, 4) * 2.4}px) saturate(150%)`,
           ...style,
         } as CSSProperties
       }

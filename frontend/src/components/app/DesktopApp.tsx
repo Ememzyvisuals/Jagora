@@ -15,9 +15,11 @@ import {
   LockSimple,
   Plus,
   SpeakerHigh,
+  SidebarSimple,
   Star,
   X,
 } from "@phosphor-icons/react";
+import { motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
 import { ask } from "@/lib/engine";
@@ -84,6 +86,7 @@ export function DesktopApp() {
   const closeTask = useApp((s) => s.closeTask);
   const profile = useApp((s) => s.profile);
   const [langOpen, setLangOpen] = useState(false);
+  const [side, setSide] = useState(false);
   const showPage = task?.kind === "browse" && !!task.url;
   const url = showPage ? (task!.url.startsWith("/practice/") ? "practice.jagora.app/skills-fair" : task!.url.replace(/^https?:\/\//, "")) : "jagora.ng";
 
@@ -98,7 +101,15 @@ export function DesktopApp() {
             <span className="h-3 w-3 rounded-full bg-[#febc2e] shadow-[inset_0_0_0_.5px_rgba(0,0,0,.15)]" />
             <span className="h-3 w-3 rounded-full bg-[#28c840] shadow-[inset_0_0_0_.5px_rgba(0,0,0,.15)]" />
           </span>
-          <div className="ml-3 flex h-9 items-center gap-2 rounded-t-[14px] bg-white/55 px-3.5 text-[13.5px] font-medium text-ink shadow-[inset_0_1px_1px_rgba(255,255,255,.9)]">
+          <button
+            onClick={() => setSide((v) => !v)}
+            className={`ml-2 grid h-9 w-9 place-items-center rounded-full transition ${side ? "bg-ink text-white" : "text-ink-2 hover:bg-white/50"}`}
+            aria-label={side ? "Hide tasks" : "Show tasks"}
+            aria-expanded={side}
+          >
+            <SidebarSimple size={18} />
+          </button>
+          <div className="ml-1 flex h-9 items-center gap-2 rounded-t-[14px] bg-white/55 px-3.5 text-[13.5px] font-medium text-ink shadow-[inset_0_1px_1px_rgba(255,255,255,.9)]">
             <Mark size={16} />
             {showPage ? task!.title : "Jagora"}
             <X size={12} className="ml-6 text-ink-3" />
@@ -123,7 +134,14 @@ export function DesktopApp() {
 
         <div className="flex min-h-0 flex-1 gap-3 p-3">
           {/* tasks */}
-          <aside className="flex w-[252px] shrink-0 flex-col rounded-[24px] bg-white/30 p-3 shadow-[inset_0_1px_1px_rgba(255,255,255,.8)]">
+          <motion.aside
+            initial={false}
+            animate={{ width: side ? 252 : 0, opacity: side ? 1 : 0, marginRight: side ? 0 : -12 }}
+            transition={{ type: "spring", stiffness: 320, damping: 34 }}
+            className="flex shrink-0 flex-col overflow-hidden rounded-[24px] bg-white/30 shadow-[inset_0_1px_1px_rgba(255,255,255,.8)]"
+            aria-hidden={!side}
+          >
+            <div className="flex h-full w-[252px] flex-col p-3">
             <div className="flex items-center gap-2.5 px-1.5 pt-1">
               <Mark size={32} />
               <span className="font-pixel text-[30px] leading-none text-ink">Jagora</span>
@@ -187,7 +205,8 @@ export function DesktopApp() {
                 )}
               </div>
             </div>
-          </aside>
+            </div>
+          </motion.aside>
 
           {/* the page */}
           <main className="relative min-w-0 flex-1 overflow-hidden rounded-[24px] shadow-[inset_0_1px_1px_rgba(255,255,255,.8)]">{showPage ? <PageView bar={false} /> : <StartPage />}</main>
@@ -199,8 +218,8 @@ export function DesktopApp() {
                 <SpeakerHigh size={17} />
               </button>
             </div>
-            <div className="-mt-4 flex flex-col items-center">
-              <TalkOrb size={92} />
+            <div className="-mt-8 flex flex-col items-center">
+              <TalkOrb size={170} />
             </div>
             <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pt-2">{task ? <Conversation task={task} /> : <Hello lang={lang} />}</div>
             <div className="p-3">
@@ -239,9 +258,9 @@ function StartPage() {
   const send = () => text.trim() && (ask(text.trim()), setText(""));
   return (
     <div className="relative flex h-full flex-col items-center overflow-y-auto">
-      <div className="flex w-full max-w-[700px] flex-1 flex-col items-center justify-center px-8 py-8">
-        <Orb size={190} state={orb} levelRef={pulse} />
-        <CloudWordmark width={420} levelRef={pulse} className="-mt-9" />
+      <div className="flex w-full max-w-[700px] flex-1 flex-col items-center justify-center px-8 py-4">
+        <Orb size={250} state={orb} levelRef={pulse} />
+        <CloudWordmark width={420} levelRef={pulse} className="-mt-16" />
         <p className="-mt-1 text-[17px] font-medium text-ink-2">{TAGLINE[lang]}</p>
         <form onSubmit={(e) => (e.preventDefault(), send())} className="mt-7 w-full">
           <Glass radius={32} bezel={20} refraction={50} blur={6} tint="rgba(255,255,255,.55)">
