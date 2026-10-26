@@ -116,7 +116,7 @@ export function CloudWordmark({
     };
 
     const draw = () => {
-      const font = `800 ${H}px "Outfit Variable", Outfit, sans-serif`;
+      const font = `800 ${H}px "Jagora Sans", sans-serif`;
       const mk = (blur: number) => {
         const c = document.createElement("canvas");
         c.width = W;
@@ -127,7 +127,7 @@ export function CloudWordmark({
         x.font = font;
         const m = x.measureText(text);
         const size = H * Math.min(0.92, (W * 0.94) / m.width);
-        x.font = `800 ${size}px "Outfit Variable", Outfit, sans-serif`;
+        x.font = `800 ${size}px "Jagora Sans", sans-serif`;
         x.letterSpacing = `${-size * 0.02}px`;
         x.textAlign = "center";
         x.textBaseline = "middle";
@@ -191,7 +191,7 @@ export function CloudWordmark({
     window.addEventListener("pointermove", move);
     cv.addEventListener("pointerdown", down);
 
-    document.fonts.load(`800 40px "Outfit Variable"`).finally(() => {
+    document.fonts.load(`800 40px "Jagora Sans"`).finally(() => {
       if (!alive) return;
       draw();
       raf = requestAnimationFrame(frame);

@@ -12,12 +12,17 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#f8f2ea",
+  themeColor: "#8cc4f2",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preload" href="/fonts/jagora-sans.woff2" as="font" type="font/woff2" crossOrigin="" />
+        <link rel="preload" href="/fonts/jagora-pixel-sans-dot.woff2" as="font" type="font/woff2" crossOrigin="" />
+        <link rel="preload" href="/sky/hero-desktop.webp" as="image" />
+      </head>
       <body className="min-h-dvh antialiased">{children}</body>
     </html>
   );
