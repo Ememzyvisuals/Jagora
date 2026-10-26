@@ -411,7 +411,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
           {!small && (
             <motion.div key="back" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }} transition={spring}>
               <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable>
-                <button className="grid h-[52px] w-[52px] place-items-center text-ink disabled:opacity-30" disabled={screen === "home"} onClick={() => setScreen("home")} aria-label={NAV.back[lang]}>
+                <button className="grid h-[52px] w-[52px] place-items-center text-ink disabled:opacity-30" disabled={screen !== "page"} onClick={() => setScreen("home")} aria-label={NAV.back[lang]}>
                   <CaretLeft size={22} weight="bold" />
                 </button>
               </Glass>
@@ -444,7 +444,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
           {!small && (
             <motion.div key="right" className="flex gap-2" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }} transition={spring}>
               <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable>
-                <button className="grid h-[52px] w-[52px] place-items-center text-ink" onClick={() => setScreen("tabs")} aria-label={`${NAV.tabs[lang]}, ${count}`}>
+                <button className={`grid h-[52px] w-[52px] place-items-center transition ${screen === "tabs" ? "rounded-full bg-ink text-white" : "text-ink"}`} onClick={() => setScreen("tabs")} aria-label={`${NAV.tabs[lang]}, ${count}`} aria-pressed={screen === "tabs"}>
                   <TabsGlyph count={count} />
                 </button>
               </Glass>

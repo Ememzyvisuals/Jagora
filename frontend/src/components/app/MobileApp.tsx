@@ -27,6 +27,13 @@ export function MobileApp() {
     if (screen !== "tabs") setUnder(screen);
   }, [screen]);
   const shown = screen === "tabs" ? under : screen;
+  const [tabsFull, setTabsFull] = useState(false);
+  // the tabs button toggles the stack; closing tabs returns to the screen she came from
+  const go = (s: Screen) => {
+    if (screen === "tabs" && (s === "tabs" || s === "home")) return setScreen(under);
+    if (s === "tabs") setTabsFull(false);
+    setScreen(s);
+  };
 
   // a task with a web page opens the page; Jagora's sheet slides down while it works so she can watch
   useEffect(() => {
@@ -59,14 +66,16 @@ export function MobileApp() {
                 if (k !== "browse") setSheet(true);
               }}
               onNew={() => (setActive(null), setScreen("home"), setSheet(true))}
-              onDone={() => setScreen(task?.kind === "browse" && task.url ? "page" : "home")}
+              onDone={() => setScreen(under)}
+              full={tabsFull}
+              setFull={setTabsFull}
             />
           </motion.div>
         )}
       </AnimatePresence>
 
       {screen !== "tabs" && <EdgeBlur />}
-      {screen !== "tabs" && <BottomBar screen={screen} setScreen={setScreen} />}
+      {!(screen === "tabs" && tabsFull) && <BottomBar screen={screen} setScreen={go} />}
       <Sheet open={sheet} onClose={() => setSheet(false)} />
     </div>
   );
@@ -88,7 +97,7 @@ function StatusChip({ s }: { s: Task["status"] }) {
 }
 
 /** One tab in the stack: a glass title bar over a live-looking preview of the page. */
-function TabCard({ task, index, count, onOpen, onClose }: { task: Task; index: number; count: number; onOpen: () => void; onClose: () => void }) {
+function TabCard({ task, index, count, full, onOpen, onClose }: { task: Task; index: number; count: number; full: boolean; onOpen: () => void; onClose: () => void }) {
   const thumb = thumbFor(task);
   // deeper cards lean back a little more and sit a touch smaller, so the stack reads in depth
   const depth = count - 1 - index;
@@ -103,8 +112,8 @@ function TabCard({ task, index, count, onOpen, onClose }: { task: Task; index: n
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={{ left: 0.8, right: 0.12 }}
       onDragEnd={(_, i) => (i.offset.x < -100 || i.velocity.x < -550) && onClose()}
-      className="sticky mb-[-210px] origin-top"
-      style={{ top: `calc(max(16px, env(safe-area-inset-top)) + ${index * 16}px)`, zIndex: index + 1, scale: 1 - Math.min(depth, 5) * 0.012, transformPerspective: 1000 }}
+      className={`origin-top ${full ? "sticky mb-[-210px]" : "relative mb-[-96px]"}`}
+      style={{ top: full ? `calc(max(16px, env(safe-area-inset-top)) + ${index * 16}px)` : undefined, zIndex: index + 1, scale: 1 - Math.min(depth, 5) * 0.012, transformPerspective: 1000 }}
     >
       <motion.div layoutId={`tab-${task.id}`} className="overflow-hidden rounded-[26px] bg-white shadow-[0_-10px_30px_-12px_rgba(10,25,60,.28),0_24px_40px_-22px_rgba(10,25,60,.5)]">
         <Glass radius={0} bezel={10} refraction={20} blur={14} tint="rgba(255,255,255,.82)" interactive={false}>
@@ -117,7 +126,7 @@ function TabCard({ task, index, count, onOpen, onClose }: { task: Task; index: n
             </button>
           </div>
         </Glass>
-        <button onClick={onOpen} className="block h-[262px] w-full overflow-hidden text-left">
+        <button onClick={onOpen} className={`block w-full overflow-hidden text-left transition-[height] duration-500 ${full ? "h-[262px]" : "h-[150px]"}`}>
           {thumb ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={thumb} alt="" className="h-full w-full object-cover object-left-top" draggable={false} />
@@ -133,51 +142,82 @@ function TabCard({ task, index, count, onOpen, onClose }: { task: Task; index: n
   );
 }
 
-function Tabs({ onOpen, onNew, onDone }: { onOpen: (id: string) => void; onNew: () => void; onDone: () => void }) {
+/* Tabs open the way the reference does: the screen behind blurs and the tab stack rises from the bottom, above the
+   bar. Drag it up for the full-screen stack; drag it down, tap the blur or tap the tabs button again to close. */
+function Tabs({ full, setFull, onOpen, onNew, onDone }: { full: boolean; setFull: (v: boolean) => void; onOpen: (id: string) => void; onNew: () => void; onDone: () => void }) {
   const tasks = useApp((s) => s.tasks);
   const close = useApp((s) => s.closeTask);
   const list = [...tasks].reverse(); // newest at the front of the stack
+  const shown = full ? list : list.slice(-3);
+  const spring = { type: "spring", stiffness: 300, damping: 34 } as const;
   return (
     <div className="relative h-full">
-      <div className="absolute inset-0 bg-[#0b1426]/30 backdrop-blur-[22px] backdrop-saturate-150" />
-      <div className="no-scrollbar relative h-full overflow-y-auto px-3 pt-[max(14px,env(safe-area-inset-top))]" style={{ perspective: 1100 }}>
-        <div className="mb-4 flex items-end justify-between px-2 pt-2 text-white">
-          <h1 className="text-[34px] leading-none">Tabs</h1>
-          <span className="text-[14px] font-semibold text-white/80">{tasks.length} open</span>
-        </div>
-        {tasks.length === 0 ? (
-          <div className="flex h-[60dvh] flex-col items-center justify-center text-center text-white">
-            <Orb size={120} />
-            <p className="mt-3 text-[17px] font-semibold">No tabs open</p>
-            <p className="mt-1 text-[14.5px] text-white/80">Add a tab and tell Jagora what you need.</p>
-          </div>
-        ) : (
-          <div className="pb-[250px]">
-            <AnimatePresence initial={false}>
-              {list.map((t, i) => (
-                <TabCard key={t.id} task={t} index={i} count={list.length} onOpen={() => onOpen(t.id)} onClose={() => close(t.id)} />
-              ))}
-            </AnimatePresence>
-          </div>
+      <motion.div className="absolute inset-0 bg-[#0b1426]/25 backdrop-blur-[20px] backdrop-saturate-150" onClick={onDone} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+      <motion.div
+        layout
+        transition={spring}
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0.25, bottom: 0.5 }}
+        dragListener={!full}
+        onDragEnd={(_, i) => {
+          if (i.offset.y < -60 || i.velocity.y < -500) setFull(true);
+          else if (i.offset.y > 90 || i.velocity.y > 600) onDone();
+        }}
+        initial={{ y: 80, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 120, opacity: 0 }}
+        className={`absolute inset-x-0 flex flex-col ${full ? "bottom-0 top-0" : "bottom-[calc(max(10px,env(safe-area-inset-bottom))+64px)] max-h-[64dvh]"}`}
+      >
+        {!full && (
+          <button onClick={() => setFull(true)} className="mx-auto mb-2 flex flex-col items-center gap-1 text-white/90" aria-label="Show all tabs">
+            <span className="h-1.5 w-10 rounded-full bg-white/70" />
+            <span className="text-[12px] font-semibold">{tasks.length} {tasks.length === 1 ? "tab" : "tabs"}</span>
+          </button>
         )}
-        <div className="h-40" />
-      </div>
-      {/* add a tab, like the reference's "Add new tab" row */}
-      <div className="absolute inset-x-3 bottom-[max(10px,env(safe-area-inset-bottom))] z-40">
-        <Glass radius={30} bezel={18} refraction={40} blur={14} tint="rgba(255,255,255,.78)">
-          <div className="flex h-[62px] items-center gap-2 px-2">
-            <button onClick={onNew} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full text-[15.5px] font-semibold text-ink transition active:scale-[.97]">
-              <span className="grid h-7 w-7 place-items-center rounded-[9px] border-[1.8px] border-ink">
-                <Plus size={14} weight="bold" />
-              </span>
-              Add new tab
-            </button>
-            <button onClick={onDone} className="h-12 rounded-full bg-ink px-6 text-[15px] font-semibold text-white transition active:scale-95">
-              Done
-            </button>
-          </div>
-        </Glass>
-      </div>
+        <div className={`no-scrollbar relative min-h-0 flex-1 px-3 ${full ? "overflow-y-auto pt-[max(14px,env(safe-area-inset-top))]" : "overflow-hidden"}`} style={{ perspective: 1100 }}>
+          {full && (
+            <div className="mb-4 flex items-end justify-between px-2 pt-2 text-white">
+              <h1 className="text-[34px] leading-none">Tabs</h1>
+              <span className="text-[14px] font-semibold text-white/80">{tasks.length} open</span>
+            </div>
+          )}
+          {tasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center text-white">
+              <Orb size={96} />
+              <p className="mt-3 text-[17px] font-semibold">No tabs open</p>
+              <p className="mt-1 text-[14.5px] text-white/80">Add a tab and tell Jagora what you need.</p>
+            </div>
+          ) : (
+            <div className={full ? "pb-[250px]" : "pb-[96px]"}>
+              <AnimatePresence initial={false}>
+                {shown.map((t, i) => (
+                  <TabCard key={t.id} task={t} index={i} count={shown.length} full={full} onOpen={() => onOpen(t.id)} onClose={() => close(t.id)} />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+          {full && <div className="h-40" />}
+        </div>
+        {/* "Add new tab", as in the reference; in full view it sits with Done */}
+        <div className={full ? "absolute inset-x-3 bottom-[max(10px,env(safe-area-inset-bottom))] z-40" : "relative z-40 px-3 pt-2"}>
+          <Glass radius={26} bezel={16} refraction={36} blur={14} tint="rgba(255,255,255,.86)">
+            <div className="flex h-[56px] items-center gap-2 px-2">
+              <button onClick={onNew} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full text-[15.5px] font-semibold text-ink transition active:scale-[.97]">
+                <span className="grid h-7 w-7 place-items-center rounded-[9px] border-[1.8px] border-ink">
+                  <Plus size={14} weight="bold" />
+                </span>
+                Add new tab
+              </button>
+              {full && (
+                <button onClick={onDone} className="h-11 rounded-full bg-ink px-6 text-[15px] font-semibold text-white transition active:scale-95">
+                  Done
+                </button>
+              )}
+            </div>
+          </Glass>
+        </div>
+      </motion.div>
     </div>
   );
 }
