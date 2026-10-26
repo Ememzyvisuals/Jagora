@@ -4,7 +4,7 @@
    Chromium: the backdrop is refracted through an SVG displacement filter shaped like a rounded slab of glass (strong
    bending at the bezel, clear in the middle), then lightly blurred and saturated. Other browsers: frosted blur.
    On top, a specular rim and a soft sheen follow the pointer, and the surface gives a little when pressed. */
-import { glass, onStage } from "@/lib/glassRegistry";
+import { glass, onStage, type LensConfig } from "@/lib/glassRegistry";
 import { themedTint, useTheme } from "@/lib/theme";
 import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
 
@@ -88,11 +88,13 @@ export type GlassProps = HTMLAttributes<HTMLDivElement> & {
   /** react to the pointer: moving light and a soft press */
   interactive?: boolean;
   pressable?: boolean;
+  /** settings for the WebGL lens drawn under this surface (LiquidGlass names) */
+  lens?: Partial<LensConfig>;
   children?: ReactNode;
 };
 
 export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
-  { radius = 28, bezel = 22, refraction = 60, blur = 9, dispersion = 0.14, tint = "rgba(255,255,255,0.18)", frost = 0.16, flat = false, interactive = true, pressable = false, className = "", style, children, ...rest },
+  { radius = 28, bezel = 22, refraction = 60, blur = 9, dispersion = 0.14, tint = "rgba(255,255,255,0.18)", frost = 0.16, flat = false, interactive = true, pressable = false, lens, className = "", style, children, ...rest },
   outer,
 ) {
   const el = useRef<HTMLDivElement>(null);
@@ -117,8 +119,9 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
   }, [flat]);
   useEffect(() => {
     if (!stage || nested || !el.current) return;
-    return glass.add(el.current, radius, frost, Math.min(bezel, radius, 26));
-  }, [stage, nested, radius, frost, bezel]);
+    return glass.add(el.current, radius, frost, Math.min(bezel, radius, 26), lens);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, nested, radius, frost, bezel, JSON.stringify(lens ?? null)]);
 
   useEffect(() => {
     setRefract(canRefract());

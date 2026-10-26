@@ -9,7 +9,26 @@
    What is ours: one shared canvas for every surface (no per-element canvases, no DOM capture, so it stays cheap on
    phones), the sky as the scene, per-surface frost, clipping to scroll areas, and drawing only when something moved. */
 import { useEffect, useRef } from "react";
-import { glass, type GlassEntry } from "@/lib/glassRegistry";
+import { glass, type GlassEntry, type LensConfig } from "@/lib/glassRegistry";
+
+/** LiquidGlass's defaults, then Jagora's: a thick pill bevel, light frost, a little darker, light on top. */
+const BASE: LensConfig = {
+  blurAmount: 0.3,
+  refraction: 1.0,
+  chromAberration: 0.12,
+  edgeHighlight: 0.1,
+  specular: 0.2,
+  fresnel: 1,
+  zRadius: 40,
+  saturation: 0.1,
+  tintStrength: 0,
+  brightness: -0.04,
+  shadowOpacity: 0.25,
+  shadowSpread: 10,
+  shadowOffsetY: 2,
+};
+const BLUR_REF = 0.3; // the blur texture is made at this blurAmount; each surface mixes toward it
+const PAD = 30; // room for the shadow, CSS px
 import { useTheme } from "@/lib/theme";
 
 const VS_QUAD = `
@@ -72,6 +91,7 @@ uniform float u_edgeHL;
 uniform float u_spec;
 uniform float u_fresnel;
 uniform float u_frost;
+uniform float u_alpha;
 uniform float u_sat;
 uniform float u_tint;
 uniform float u_zRadius;
@@ -103,7 +123,7 @@ void main() {
     float spread = max(u_shadowSpread, 1.0);
     float outerShadow = exp(-d * d / (spread * spread)) * 0.65;
     float contactShadow = exp(-d * 0.08 / max(spread * 0.04, 0.01)) * 0.35;
-    gl_FragColor = vec4(0.02, 0.06, 0.16, (outerShadow + contactShadow) * u_shadowAlpha);
+    gl_FragColor = vec4(0.0, 0.0, 0.0, (outerShadow + contactShadow) * u_shadowAlpha);
     return;
   }
 
@@ -133,7 +153,7 @@ void main() {
   vec2 base = v_screenUV + refrPx * pxToUV;
 
   // colour fringing at the rim
-  vec2 caD = N.xy * (u_chroma * 36.0 * (edge * 0.7 + 0.3)) * pxToUV;
+  vec2 caD = N.xy * (u_chroma * 18.0 * (edge * 0.7 + 0.3) * 2.0) * pxToUV;
   vec3 sharp = vec3(texture2D(u_bgTex, base + caD).r, texture2D(u_bgTex, base).g, texture2D(u_bgTex, base - caD).b);
   vec3 blur = vec3(texture2D(u_blurTex, base + caD).r, texture2D(u_blurTex, base).g, texture2D(u_blurTex, base - caD).b);
   vec3 col = mix(sharp, blur, (1.0 - edge * 0.15) * u_frost);
@@ -160,7 +180,7 @@ void main() {
 
   vec3 fin = col + vec3(totalSpec) + vec3(rim + innerGlow) + vec3(innerStroke * u_edgeHL * 0.55) + vec3(envRefl);
   fin = mix(fin, vec3(1.0), fres * 0.2);
-  gl_FragColor = vec4(fin, mask);
+  gl_FragColor = vec4(fin, mask * u_alpha);
 }`;
 
 type Prog = { p: WebGLProgram; u: (n: string) => WebGLUniformLocation | null };
@@ -245,13 +265,13 @@ export default function LensStage({ src }: { src: string }) {
     // the sky, cover-fitted to the screen exactly like the CSS sky underneath, then a blurred copy for the frost
     const prepare = () => {
       if (!img) return;
-      dpr = Math.min(devicePixelRatio || 1, 1.5);
+      dpr = Math.min(devicePixelRatio || 1, 2);
       W = innerWidth;
       H = innerHeight;
       cv.width = Math.round(W * dpr);
       cv.height = Math.round(H * dpr);
       const c2 = document.createElement("canvas");
-      const sw = Math.min(1600, Math.round(W * Math.min(dpr, 1.25)));
+      const sw = Math.min(2400, Math.round(W * dpr));
       c2.width = sw;
       c2.height = Math.round((sw * H) / W);
       const x = c2.getContext("2d")!;
@@ -265,7 +285,7 @@ export default function LensStage({ src }: { src: string }) {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      const bw = Math.max(64, Math.round(c2.width / 4)), bh = Math.max(64, Math.round(c2.height / 4));
+      const bw = Math.max(64, Math.round(c2.width / 2)), bh = Math.max(64, Math.round(c2.height / 2));
       blurA = target(gl, bw, bh);
       blurB = target(gl, bw, bh);
       gl.viewport(0, 0, bw, bh);
@@ -276,14 +296,16 @@ export default function LensStage({ src }: { src: string }) {
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       gl.useProgram(blurP.p);
       gl.uniform1i(blurP.u("u_tex"), 0);
-      for (let i = 0; i < 4; i++) {
+      // same as LiquidGlass: 6 passes, spread = blurAmount * 2.5 device px (half of that at half resolution)
+      const spread = (BLUR_REF * 2.5 * (bw / c2.width)) * (cv.width / c2.width);
+      for (let i = 0; i < 6; i++) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, blurB.fb);
         gl.bindTexture(gl.TEXTURE_2D, blurA.tex);
-        gl.uniform2f(blurP.u("u_dir"), 1.6 / bw, 0);
+        gl.uniform2f(blurP.u("u_dir"), spread / bw, 0);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         gl.bindFramebuffer(gl.FRAMEBUFFER, blurA.fb);
         gl.bindTexture(gl.TEXTURE_2D, blurB.tex);
-        gl.uniform2f(blurP.u("u_dir"), 0, 1.6 / bh);
+        gl.uniform2f(blurP.u("u_dir"), 0, spread / bh);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       }
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -318,31 +340,34 @@ export default function LensStage({ src }: { src: string }) {
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, blurA!.tex);
       const u = lens.u;
+      const D = dpr;
       gl.uniform1i(u("u_bgTex"), 0);
       gl.uniform1i(u("u_blurTex"), 1);
-      gl.uniform2f(u("u_res"), W, H);
-      gl.uniform1f(u("u_chroma"), 0.1);
-      gl.uniform1f(u("u_edgeHL"), dark ? 0.1 : 0.2);
-      gl.uniform1f(u("u_spec"), dark ? 0.25 : 0.45);
-      gl.uniform1f(u("u_fresnel"), dark ? 0.5 : 1.0);
-      gl.uniform1f(u("u_sat"), 0.12);
-      gl.uniform1f(u("u_tint"), 0.12);
-      gl.uniform1f(u("u_brightness"), dark ? -0.04 : 0.05);
-      gl.uniform1f(u("u_shadowAlpha"), dark ? 0.3 : 0.2);
-      gl.uniform1f(u("u_shadowOffY"), 4);
+      gl.uniform2f(u("u_res"), cv.width, cv.height);
+      gl.uniform1f(u("u_alpha"), 1);
       for (const { e, r, clip } of list) {
-        const pad = 26;
-        gl.uniform2f(u("u_center"), r.left + r.width / 2, r.top + r.height / 2);
-        gl.uniform2f(u("u_size"), r.width, r.height);
-        gl.uniform1f(u("u_pad"), pad);
-        gl.uniform1f(u("u_radius"), e.radius);
-        gl.uniform1f(u("u_zRadius"), Math.max(10, Math.min(e.radius * 1.1, 44, r.height / 2, r.width / 2)));
-        gl.uniform1f(u("u_refract"), 1.15);
-        gl.uniform1f(u("u_frost"), Math.min(1, 0.1 + e.frost * 1.6));
-        gl.uniform1f(u("u_shadowSpread"), Math.min(16, r.height / 4));
+        const c: LensConfig = { ...BASE, ...(dark ? { brightness: -0.1, specular: 0.12, edgeHighlight: 0.06, fresnel: 0.6, shadowOpacity: 0.35 } : {}), ...e.lens };
+        const zR = Math.min(c.zRadius, r.height / 2, r.width / 2);
+        gl.uniform2f(u("u_center"), (r.left + r.width / 2) * D, (r.top + r.height / 2) * D);
+        gl.uniform2f(u("u_size"), r.width * D, r.height * D);
+        gl.uniform1f(u("u_pad"), PAD * D);
+        gl.uniform1f(u("u_radius"), e.radius * D);
+        gl.uniform1f(u("u_zRadius"), zR * D);
+        gl.uniform1f(u("u_refract"), c.refraction);
+        gl.uniform1f(u("u_chroma"), c.chromAberration);
+        gl.uniform1f(u("u_edgeHL"), c.edgeHighlight);
+        gl.uniform1f(u("u_spec"), c.specular);
+        gl.uniform1f(u("u_fresnel"), c.fresnel);
+        gl.uniform1f(u("u_frost"), Math.min(1, c.blurAmount / BLUR_REF));
+        gl.uniform1f(u("u_sat"), c.saturation);
+        gl.uniform1f(u("u_tint"), c.tintStrength);
+        gl.uniform1f(u("u_brightness"), c.brightness);
+        gl.uniform1f(u("u_shadowAlpha"), c.shadowOpacity);
+        gl.uniform1f(u("u_shadowSpread"), c.shadowSpread * D);
+        gl.uniform1f(u("u_shadowOffY"), c.shadowOffsetY * D);
         if (clip) {
           gl.enable(gl.SCISSOR_TEST);
-          gl.scissor(Math.floor(clip.left * dpr), Math.floor((H - clip.bottom) * dpr), Math.ceil(clip.width * dpr), Math.ceil(clip.height * dpr));
+          gl.scissor(Math.floor(clip.left * D), Math.floor((H - clip.bottom) * D), Math.ceil(clip.width * D), Math.ceil(clip.height * D));
         } else gl.disable(gl.SCISSOR_TEST);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       }
