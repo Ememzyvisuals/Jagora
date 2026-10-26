@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Pwa } from "@/components/Pwa";
+import { Effects } from "@/components/Effects";
 import { THEME_SCRIPT } from "@/lib/themeScript";
 
 export const metadata: Metadata = {
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body className="min-h-dvh antialiased">
         <Pwa />
+        <Effects />
         {children}
       </body>
     </html>

@@ -4,6 +4,7 @@
    No email check and no puzzle (the bot check runs on its own in the background). An access code gives a bigger
    allowance. Personal details are not asked here: Jagora asks for what a task needs, when it needs it. */
 import { Eye, EyeSlash, Key, Sparkle } from "@phosphor-icons/react";
+import { fly } from "@/components/Effects";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -99,7 +100,8 @@ export default function Start() {
     }
     setProfile({ email: email.trim() });
     setOnboarded(true);
-    router.push("/app");
+    fly(document.querySelector('[data-send="signup"]'));
+    setTimeout(() => router.push("/app"), 650);
   };
 
   if (!ready) return <div className="sky-bg h-dvh" />;
@@ -216,7 +218,7 @@ export default function Start() {
                 </p>
               )}
 
-              <button type="submit" disabled={busy} className="btn btn-ink mt-1 h-[56px] w-full text-[16.5px] md:mt-3 md:h-[64px] md:text-[18px] font-semibold disabled:opacity-60">
+              <button type="submit" data-send="signup" disabled={busy} className="btn btn-ink mt-1 h-[56px] w-full text-[16.5px] md:mt-3 md:h-[64px] md:text-[18px] font-semibold disabled:opacity-60">
                 {busy ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-paper/30 border-t-paper" /> : mode === "create" ? T.go[lang] : T.goIn[lang]}
               </button>
 

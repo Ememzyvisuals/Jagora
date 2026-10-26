@@ -1,6 +1,7 @@
 "use client";
 
 import { PaperPlaneRight, ClipboardText, Paperclip, Stop } from "@phosphor-icons/react";
+import { fly } from "./Effects";
 import { useRef, useState } from "react";
 import { ask, live } from "@/lib/engine";
 import { remoteAudio } from "@/lib/engine/remote";
@@ -37,6 +38,7 @@ export function Composer() {
   const send = () => {
     const v = text.trim();
     if (!v) return;
+    fly(document.querySelector('[data-send="composer"]'));
     ask(v);
     setText("");
   };
@@ -79,7 +81,7 @@ export function Composer() {
         </button>
         <input ref={file} type="file" accept="image/*,application/pdf" capture="environment" hidden onChange={(e) => attach(e.target.files?.[0])} />
         {text.trim() ? (
-          <button className="btn btn-ink h-10 w-10 shrink-0" onClick={send} aria-label="Send">
+          <button className="btn btn-ink h-10 w-10 shrink-0" data-send="composer" onClick={send} aria-label="Send">
             <PaperPlaneRight size={18} weight="fill" />
           </button>
         ) : (

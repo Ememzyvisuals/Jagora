@@ -27,6 +27,7 @@ import {
   SpeakerHigh,
   LockSimple,
 } from "@phosphor-icons/react";
+import { fly } from "../Effects";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useState, type ComponentType } from "react";
@@ -260,6 +261,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
   const send = () => {
     const q = text.trim();
     if (!q) return (setActive(null), setSheet(true));
+    fly(document.querySelector('[data-tour="ask"] button[type="submit"]'));
     ask(q);
     setText("");
   };

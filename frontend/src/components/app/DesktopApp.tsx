@@ -22,6 +22,7 @@ import {
   Sun,
   X,
 } from "@phosphor-icons/react";
+import { fly } from "../Effects";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
@@ -293,7 +294,7 @@ function StartPage() {
   const [text, setText] = useState("");
   const news = useNews(lang);
   const [open, setOpen] = useState(false);
-  const send = () => text.trim() && (ask(text.trim()), setText(""));
+  const send = () => text.trim() && (fly(document.querySelector('[data-send="start"]')), ask(text.trim()), setText(""));
   const run = (id: "register" | "scam" | "paper") => (id === "register" ? ask(lang === "yo" ? "Forúkọ mi sílẹ̀ fún Skills Fair" : "Register me for the Skills Fair") : quick(id));
   return (
     <div className="no-scrollbar relative h-full overflow-y-auto">
@@ -317,7 +318,7 @@ function StartPage() {
                 className="h-full min-w-0 flex-1 bg-transparent text-[16.5px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-3"
               />
               {text.trim() ? (
-                <button type="submit" aria-label="Go" className="grid h-[44px] w-[44px] place-items-center rounded-full bg-ink text-paper shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-90">
+                <button type="submit" data-send="start" aria-label="Go" className="grid h-[44px] w-[44px] place-items-center rounded-full bg-ink text-paper shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-90">
                   <PaperPlaneRight size={18} weight="fill" />
                 </button>
               ) : (

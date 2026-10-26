@@ -129,15 +129,15 @@ export function SiteFooter() {
             </span>
             <span className="mt-auto text-[13.5px] font-semibold text-[#c8f31d] group-hover:underline">developer.plotweaver.app</span>
           </a>
-          <div className="flex flex-col gap-3 rounded-[24px] bg-white/70 p-5 ring-1 ring-black/5 dark:bg-white/10">
-            <span className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-ink-3">Intelligence by</span>
-            <span className="flex items-center gap-2 font-display text-[18px] font-bold tracking-[-0.03em] text-ink">
-              <span className="text-[#0866FF]">
+          <div className="flex flex-col gap-3 rounded-[24px] bg-gradient-to-br from-[#0866FF] to-[#0a4fd6] p-5 text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.25)]">
+            <span className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-white/65">Intelligence by</span>
+            <span className="flex items-center gap-2 font-display text-[18px] font-bold tracking-[-0.03em] text-white">
+              <span className="text-white">
                 <Brand path={siMeta.path} size={22} />
               </span>
               Meta Muse
             </span>
-            <span className="text-[14px] leading-snug text-ink-2">Muse Spark runs the browsing agent. Muse Wonder reads photos, videos and voice notes. Muse Image draws picture guides.</span>
+            <span className="text-[14px] leading-snug text-white/80">Muse Spark runs the browsing agent. Muse Wonder reads photos, videos and voice notes. Muse Image draws picture guides.</span>
           </div>
           <div id="builder" className="flex flex-col gap-3 rounded-[24px] bg-ink p-5 text-paper">
             <span className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-paper/60">Designed and built by</span>

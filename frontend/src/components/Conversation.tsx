@@ -4,6 +4,7 @@ import { CheckCircle, CircleNotch, Eye, EyeSlash, Hand, Image as ImageIcon, Link
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { answer, giveSecret } from "@/lib/engine";
+import { celebrate } from "./Effects";
 import type { Lang } from "@/lib/i18n";
 import { t } from "@/lib/i18n";
 import { useApp, type Msg, type Task } from "@/lib/store";
@@ -311,7 +312,14 @@ function Explain({ m }: { m: Extract<Msg, { kind: "explain" }> }) {
   );
 }
 
+const celebrated = new Set<string>();
 function Result({ m }: { m: Extract<Msg, { kind: "result" }> }) {
+  useEffect(() => {
+    // once per result, and only for ones that just arrived (not when reopening an old task)
+    if (celebrated.has(m.id)) return;
+    celebrated.add(m.id);
+    if (performance.now() > 3000) celebrate();
+  }, [m.id]);
   return (
     <div className="glass-3 rounded-[24px] p-4">
       <div className="flex items-center gap-2 text-[13px] font-medium text-ok">
