@@ -1,0 +1,25 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# node
+node_modules/
+.next/
+out/
+
+# licensed or private assets that must not be public
+frontend/public/fonts/licensed/
+
+# runtime
+backend/runs/
+*.log
+.DS_Store
