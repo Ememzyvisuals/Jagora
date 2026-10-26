@@ -161,7 +161,7 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
     <div
       ref={el}
       {...rest}
-      className={`lg ${pressable ? "lg-press" : ""} ${className}`}
+      className={`lg ${stage && !nested ? "lg-stage" : ""} ${pressable ? "lg-press" : ""} ${className}`}
       style={
         {
           borderRadius: radius,

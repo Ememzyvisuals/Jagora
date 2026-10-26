@@ -1,13 +1,13 @@
 "use client";
 
-/* The page background. Full devices get the 3D glass layer (sky + a lens slab under every glass surface); light
+/* The page background. Full devices get the liquid-glass layer (the sky plus a lens under every glass surface); light
    mode (slow data, Data Saver, small phones, reduced motion) gets the same sky as a still image and CSS glass. */
 import dynamic from "next/dynamic";
 import { useEffect, useState, type MutableRefObject } from "react";
 import { useLite } from "@/lib/lite";
 import { useTheme } from "@/lib/theme";
 
-const GlassStage = dynamic(() => import("./GlassStage"), { ssr: false });
+const LensStage = dynamic(() => import("./LensStage"), { ssr: false });
 
 /** The same sky the CSS layer shows, for the 3D layer. */
 export function useSkySrc() {
@@ -23,7 +23,7 @@ export function useSkySrc() {
   return `/sky/${theme === "dark" ? "dusk" : "beach"}-${wide ? "desktop" : "phone"}.webp`;
 }
 
-export function Backdrop({ level }: { level?: MutableRefObject<number> }) {
+export function Backdrop(_: { level?: MutableRefObject<number> }) {
   const lite = useLite();
   const src = useSkySrc();
   // the 3D layer loads only after the page is usable
@@ -36,7 +36,7 @@ export function Backdrop({ level }: { level?: MutableRefObject<number> }) {
   return (
     <>
       <div className="sky-bg fixed inset-0" aria-hidden="true" />
-      {lite === false && idle && <GlassStage src={src} level={level} />}
+      {lite === false && idle && <LensStage src={src} />}
     </>
   );
 }

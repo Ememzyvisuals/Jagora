@@ -332,7 +332,8 @@ function StartPage() {
         {/* Discover: a wide feed in columns */}
         <section className="mt-10 w-full">
           {!open ? (
-            <div className="flex justify-center">
+            <div className="flex flex-col gap-2">
+              <h2 className="px-1 text-[30px] leading-none text-ink">{DISCOVER[lang]}</h2>
               <DiscoverStack wide lang={lang} onSeeAll={() => setOpen(true)} stories={[...CARDS.map((c) => ({ key: c.id, image: c.thumb, title: c.title[lang], source: c.source, open: () => run(c.id) })), ...news.slice(0, 6).map((n) => ({ key: n.link, image: n.image, title: n.title, source: n.source, listen: true, open: () => ask(`Read this news story to me: ${n.title} ${n.link}`) }))]} />
             </div>
           ) : (

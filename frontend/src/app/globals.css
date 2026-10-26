@@ -326,6 +326,14 @@ h3,
 [data-theme="dark"] .lg-sheen {
   opacity: 0.25;
 }
+/* when the WebGL lens is drawn under the surface, the shader does the rim, light and shadow: no CSS imitation on top */
+.lg.lg-stage {
+  box-shadow: none;
+}
+.lg.lg-stage > .lg-rim,
+.lg.lg-stage > .lg-sheen {
+  display: none;
+}
 .lg-press:active {
   transform: scale(0.965);
 }
