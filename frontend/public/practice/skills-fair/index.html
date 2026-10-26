@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naija Skills Fair 2026 | Registration</title>
+<style>
+  :root { --green:#0B6E4F; --ink:#1B2430; --muted:#5B6675; --line:#D9DEE5; --bg:#F5F7F9; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: Arial, Helvetica, sans-serif; color:var(--ink); background:var(--bg); }
+  header { background:var(--green); color:#fff; padding:14px 24px; display:flex; align-items:center; gap:12px; }
+  header strong { font-size:18px; }
+  header span { opacity:.85; font-size:13px; }
+  .practice { background:#FFF7E0; color:#6B4E00; font-size:13px; padding:8px 24px; border-bottom:1px solid #F0E2B6; }
+  .notice { background:#E8F3EE; border:1px solid #BFDCCD; margin:16px auto 0; max-width:720px; padding:12px 14px; border-radius:6px; display:flex; gap:10px; align-items:flex-start; font-size:14px; }
+  .notice button { margin-left:auto; border:0; background:transparent; font-size:18px; cursor:pointer; color:var(--muted); }
+  main { max-width:720px; margin:16px auto 48px; background:#fff; border:1px solid var(--line); border-radius:8px; padding:28px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:14px; margin:0 0 22px; }
+  .row { margin-bottom:16px; }
+  label.f { display:block; font-weight:bold; font-size:14px; margin-bottom:6px; }
+  .req { color:#C0392B; }
+  input[type=text], input[type=tel], input[type=email], input[type=date], select {
+    width:100%; padding:10px 12px; font-size:15px; border:1px solid var(--line); border-radius:6px; background:#fff; }
+  .radios label, .check label { font-size:15px; margin-right:18px; }
+  .hint { color:var(--muted); font-size:12.5px; margin-top:4px; }
+  .err { color:#C0392B; font-size:13px; margin-top:4px; display:none; }
+  .actions { margin-top:24px; display:flex; gap:12px; }
+  button.primary { background:var(--green); color:#fff; border:0; padding:12px 22px; font-size:15px; border-radius:6px; cursor:pointer; }
+  button.secondary { background:#fff; color:var(--ink); border:1px solid var(--line); padding:12px 18px; font-size:15px; border-radius:6px; cursor:pointer; }
+  .done { display:none; }
+  .ref { font-size:20px; font-weight:bold; letter-spacing:1px; background:var(--bg); padding:10px 14px; border-radius:6px; display:inline-block; }
+  dl { display:grid; grid-template-columns:160px 1fr; gap:6px 12px; font-size:14px; }
+  dt { color:var(--muted); }
+</style>
+</head>
+<body>
+<header><strong>Naija Skills Fair 2026</strong><span>Free skills training for young Nigerians</span></header>
+<div class="practice">Practice website for Jagora demos. This is not a real event and nothing you enter is sent anywhere.</div>
+
+<div class="notice" id="notice" role="status">
+  <div><strong>Registration closes on 30 November.</strong> Bring a valid ID to the venue on the training day.</div>
+  <button type="button" aria-label="Close notice" onclick="document.getElementById('notice').remove()">×</button>
+</div>
+
+<main>
+  <section id="form-section">
+    <h1>Register for the fair</h1>
+    <p class="sub">Fields marked <span class="req">*</span> are required. It takes about two minutes.</p>
+    <form id="reg" novalidate>
+      <div class="row">
+        <label class="f" for="fullname">Full name <span class="req">*</span></label>
+        <input type="text" id="fullname" name="fullname" autocomplete="name" required>
+        <div class="hint">As written on your ID card</div>
+        <div class="err" id="err-fullname">Enter your full name.</div>
+      </div>
+      <div class="row">
+        <label class="f" for="phone">Phone number <span class="req">*</span></label>
+        <input type="tel" id="phone" name="phone" autocomplete="tel" placeholder="e.g. 08012345678" required>
+        <div class="err" id="err-phone">Enter an 11-digit Nigerian phone number.</div>
+      </div>
+      <div class="row">
+        <label class="f" for="email">Email address</label>
+        <input type="email" id="email" name="email" autocomplete="email" placeholder="name@example.com">
+        <div class="err" id="err-email">Enter a valid email address.</div>
+      </div>
+      <div class="row">
+        <label class="f" for="dob">Date of birth <span class="req">*</span></label>
+        <input type="date" id="dob" name="dob" required>
+        <div class="err" id="err-dob">Enter your date of birth.</div>
+      </div>
+      <div class="row">
+        <span class="f" style="font-weight:bold;font-size:14px;display:block;margin-bottom:6px">Gender <span class="req">*</span></span>
+        <div class="radios">
+          <label><input type="radio" name="gender" value="female"> Female</label>
+          <label><input type="radio" name="gender" value="male"> Male</label>
+        </div>
+        <div class="err" id="err-gender">Choose one.</div>
+      </div>
+      <div class="row">
+        <label class="f" for="state">State of residence <span class="req">*</span></label>
+        <select id="state" name="state" required>
+          <option value="">Select your state</option>
+        </select>
+        <div class="err" id="err-state">Choose your state.</div>
+      </div>
+      <div class="row">
+        <label class="f" for="track">Skill you want to learn <span class="req">*</span></label>
+        <select id="track" name="track" required>
+          <option value="">Select a skill</option>
+          <option>Tailoring and fashion design</option>
+          <option>Hairdressing and beauty</option>
+          <option>Phone and computer repair</option>
+          <option>Catering and baking</option>
+          <option>Solar installation</option>
+          <option>Digital marketing</option>
+        </select>
+        <div class="err" id="err-track">Choose a skill.</div>
+      </div>
+      <div class="row check">
+        <label><input type="checkbox" id="consent" name="consent"> I agree to be contacted about my registration <span class="req">*</span></label>
+        <div class="err" id="err-consent">You must agree to continue.</div>
+      </div>
+      <div class="actions">
+        <button type="submit" class="primary">Submit registration</button>
+        <button type="reset" class="secondary">Clear form</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="done" id="done">
+    <h1>You are registered</h1>
+    <p class="sub">Keep this reference. You will need it on the training day.</p>
+    <p class="ref" id="ref"></p>
+    <dl id="summary"></dl>
+  </section>
+</main>
+
+<script>
+  const STATES = ["Abia","Adamawa","Akwa Ibom","Anambra","Bauchi","Bayelsa","Benue","Borno","Cross River","Delta","Ebonyi",
+    "Edo","Ekiti","Enugu","FCT Abuja","Gombe","Imo","Jigawa","Kaduna","Kano","Katsina","Kebbi","Kogi","Kwara","Lagos",
+    "Nasarawa","Niger","Ogun","Ondo","Osun","Oyo","Plateau","Rivers","Sokoto","Taraba","Yobe","Zamfara"];
+  const sel = document.getElementById("state");
+  STATES.forEach(s => { const o = document.createElement("option"); o.textContent = s; sel.appendChild(o); });
+
+  const form = document.getElementById("reg");
+  function show(id, bad) { document.getElementById("err-" + id).style.display = bad ? "block" : "none"; return bad; }
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const v = Object.fromEntries(new FormData(form).entries());
+    const phone = (v.phone || "").replace(/\D/g, "");
+    let bad = false;
+    bad = show("fullname", (v.fullname || "").trim().split(/\s+/).length < 2) || bad;
+    bad = show("phone", !/^0[789][01]\d{8}$/.test(phone)) || bad;
+    bad = show("email", !!v.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.email)) || bad;
+    bad = show("dob", !v.dob) || bad;
+    bad = show("gender", !v.gender) || bad;
+    bad = show("state", !v.state) || bad;
+    bad = show("track", !v.track) || bad;
+    bad = show("consent", !document.getElementById("consent").checked) || bad;
+    if (bad) return;
+    const ref = "NSF-26-" + Math.floor(100000 + Math.random() * 900000);
+    document.getElementById("ref").textContent = ref;
+    const rows = [["Name", v.fullname], ["Phone", phone], ["Email", v.email || "Not given"], ["Date of birth", v.dob],
+      ["State", v.state], ["Skill", v.track]];
+    document.getElementById("summary").innerHTML = rows.map(([k, x]) => `<dt>${k}</dt><dd>${String(x).replace(/</g, "&lt;")}</dd>`).join("");
+    document.getElementById("form-section").style.display = "none";
+    document.getElementById("done").style.display = "block";
+    document.title = "Registered | Naija Skills Fair 2026";
+  });
+</script>
+</body>
+</html>

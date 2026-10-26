@@ -1,0 +1,142 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+/* Inter writes every Nigerian letter (ẹ ọ ṣ ṅ, ɓ ɗ ƙ, ₦) and its tone marks sit correctly on dotted vowels. */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #1f1a15;
+  --color-ink-2: #5a4d40;
+  --color-ink-3: #948676;
+  --color-accent: #e07a1f;
+  --color-accent-deep: #b85d0e;
+  --color-accent-soft: #fdebd8;
+  --color-ok: #3f8f5c;
+  --color-stop: #b2431c;
+  --color-stop-soft: #fbe3d8;
+  --color-danger: #c2352f;
+  --color-danger-soft: #fde4e1;
+  --color-mist: #f8f2ea;
+  --color-mist-2: #ede3d6;
+
+  --radius-panel: 28px;
+  --radius-card: 20px;
+  --radius-ctl: 14px;
+
+  --ease-calm: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root {
+  --glass: rgba(255, 255, 255, 0.42);
+  --glass-2: rgba(255, 255, 255, 0.68);
+  --glass-3: rgba(255, 255, 255, 0.86);
+  --glass-line: rgba(255, 255, 255, 0.72);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 18px 44px -24px rgba(60, 38, 16, 0.28);
+  color-scheme: light;
+}
+
+html,
+body {
+  background: #f8f2ea;
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
+}
+
+::selection {
+  background: rgba(53, 83, 212, 0.18);
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+
+@layer components {
+  .glass {
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(28px) saturate(1.5);
+    backdrop-filter: blur(28px) saturate(1.5);
+    border: 1px solid var(--glass-line);
+    box-shadow: var(--glass-shadow);
+  }
+  .glass-2 {
+    background: var(--glass-2);
+    -webkit-backdrop-filter: blur(28px) saturate(1.5);
+    backdrop-filter: blur(28px) saturate(1.5);
+    border: 1px solid var(--glass-line);
+    box-shadow: var(--glass-shadow);
+  }
+  .glass-3 {
+    background: var(--glass-3);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    backdrop-filter: blur(24px) saturate(1.4);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    box-shadow: var(--glass-shadow);
+  }
+  .sky {
+    background: #dfe8f2 center / cover no-repeat;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 999px;
+    font-weight: 500;
+    transition: transform 0.2s var(--ease-calm), background-color 0.2s, box-shadow 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active {
+    transform: scale(0.97);
+  }
+  .btn-ink {
+    background: var(--color-ink);
+    color: #fff;
+  }
+  .btn-ink:hover {
+    background: #1d2838;
+  }
+  .btn-glass {
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid var(--glass-line);
+    color: var(--color-ink);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+  }
+  .btn-glass:hover {
+    background: rgba(255, 255, 255, 0.75);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
