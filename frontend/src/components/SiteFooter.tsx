@@ -59,9 +59,9 @@ function PlotWeaverMark() {
   }, []);
   return ok ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src="/brand/plotweaver.png" alt="PlotWeaver" className="h-7 w-auto self-start" />
+    <img src="/brand/plotweaver.png" alt="PlotWeaver" className="h-[26px] w-auto self-start" />
   ) : (
-    <span className="font-display text-[18px] font-bold tracking-[-0.03em] text-ink">PlotWeaver</span>
+    <span className="font-display text-[18px] font-bold tracking-[-0.03em] text-white">PlotWeaver</span>
   );
 }
 
@@ -121,13 +121,13 @@ export function SiteFooter() {
 
         {/* credits */}
         <div className="mx-6 grid gap-3 border-t border-ink/10 py-8 sm:mx-10 md:grid-cols-3 lg:mx-14">
-          <a href={PLOTWEAVER.url} target="_blank" rel="noreferrer" className="group flex flex-col gap-3 rounded-[24px] bg-white/70 p-5 ring-1 ring-black/5 transition hover:bg-white dark:bg-white/10">
-            <span className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-ink-3">Voice by</span>
+          <a href={PLOTWEAVER.url} target="_blank" rel="noreferrer" className="group flex flex-col gap-3 rounded-[24px] bg-[#061113] p-5 text-white ring-1 ring-white/5 transition hover:bg-[#0a1b1e]">
+            <span className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-white/55">Voice by</span>
             <PlotWeaverMark />
-            <span className="text-[14px] leading-snug text-ink-2">
+            <span className="text-[14px] leading-snug text-white/75">
               STORM speech recognition and voices for Yorùbá, Hausa, Igbo, Pidgin and English. {PLOTWEAVER.line}.
             </span>
-            <span className="text-[13.5px] font-semibold text-accent group-hover:underline">developer.plotweaver.app</span>
+            <span className="mt-auto text-[13.5px] font-semibold text-[#c8f31d] group-hover:underline">developer.plotweaver.app</span>
           </a>
           <div className="flex flex-col gap-3 rounded-[24px] bg-white/70 p-5 ring-1 ring-black/5 dark:bg-white/10">
             <span className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-ink-3">Intelligence by</span>
