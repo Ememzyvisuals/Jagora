@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   title: "Jagora | The internet, in your own words",
   description:
     "Speak Yorùbá, Hausa, Igbo, Pidgin or English. Jagora reads websites with you, shows you where to tap, and fills forms for you.",
-  icons: { icon: "/icon.svg", apple: "/icons/apple-touch-icon.png" },
+  icons: { icon: "/favicon-48.png", apple: "/icons/apple-touch-icon.png" },
   appleWebApp: { capable: true, title: "Jagora", statusBarStyle: "black-translucent" },
 };
 

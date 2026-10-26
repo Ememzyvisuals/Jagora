@@ -1,18 +1,10 @@
 import Link from "next/link";
 
-export function Mark({ size = 26 }: { size?: number }) {
+/** Jagora's mark: her cloud, rendered from the real orb, on a patch of sky. */
+export function Mark({ size = 26, className = "" }: { size?: number; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
-      <defs>
-        <radialGradient id="jg-cloud" cx="38%" cy="32%" r="72%">
-          <stop offset="0" stopColor="#fff" />
-          <stop offset=".55" stopColor="#EEF3FA" />
-          <stop offset="1" stopColor="#B9C7DA" />
-        </radialGradient>
-      </defs>
-      <rect width="64" height="64" rx="18" fill="#0E0F12" />
-      <circle cx="32" cy="33" r="17.5" fill="url(#jg-cloud)" />
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={size <= 40 ? "/brand/mark-64.png" : "/brand/mark.png"} width={size} height={size} alt="" aria-hidden="true" className={`shrink-0 ${className}`} style={{ borderRadius: size * 0.27 }} />
   );
 }
 
