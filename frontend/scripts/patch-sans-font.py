@@ -16,6 +16,7 @@ from fontTools.ttLib.tables import otTables as ot
 
 src = sys.argv[1]
 f = TTFont(src)
+f.ensureDecompiled()  # read every table before the glyph count changes
 cmap = f.getBestCmap()
 glyf, hmtx = f["glyf"], f["hmtx"]
 order = f.getGlyphOrder()
@@ -102,6 +103,13 @@ for mark in ("̀", "́"):
 
 f.setGlyphOrder(order)
 f["maxp"].numGlyphs = len(order)
+# new composites do not vary on their own (their parts do); give them empty variation records
+if "gvar" in f:
+    for name in order:
+        f["gvar"].variations.setdefault(name, [])
+if "HVAR" in f:
+    del f["HVAR"]  # advances then come from the glyph outlines' phantom points
+
 if "GDEF" in f and f["GDEF"].table.GlyphClassDef:
     for name in order:
         if name not in f["GDEF"].table.GlyphClassDef.classDefs and (name.startswith("uni") or name.startswith("m_")):
