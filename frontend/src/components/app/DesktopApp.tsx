@@ -16,13 +16,12 @@ import {
   Plus,
   SpeakerHigh,
   SidebarSimple,
-  Star,
   X,
 } from "@phosphor-icons/react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
-import { ask } from "@/lib/engine";
+import { ask, quick } from "@/lib/engine";
 import { ago } from "@/lib/hooks";
 import { LANGS, type Lang } from "@/lib/i18n";
 import { activeTask, useApp, type Task } from "@/lib/store";
@@ -37,7 +36,7 @@ import { Glass } from "../glass/Glass";
 import { Orb } from "../Orb";
 import { Mark } from "../Brand";
 import { PageView } from "../PageView";
-import { AppIcon, SITES, VoiceBars } from "./MobileHome";
+import { AppIcon, CARDS, DISCOVER, SITES, VoiceBars, useNews } from "./MobileHome";
 
 type L = Record<Lang, string>;
 const TAGLINE: L = {
@@ -88,49 +87,61 @@ export function DesktopApp() {
   const [langOpen, setLangOpen] = useState(false);
   const [side, setSide] = useState(false);
   const showPage = task?.kind === "browse" && !!task.url;
-  const url = showPage ? (task!.url.startsWith("/practice/") ? "practice.jagora.app/skills-fair" : task!.url.replace(/^https?:\/\//, "")) : "jagora.ng";
+  const url = showPage ? (task!.url.startsWith("/practice/") ? "skillsfair.ng/register (practice site)" : task!.url.replace(/^https?:\/\//, "")) : "";
 
   return (
     <div className="relative h-dvh overflow-hidden p-6 xl:p-8">
       <Backdrop />
       <Glass radius={30} bezel={26} refraction={70} blur={10} tint="rgba(255,255,255,.22)" interactive={false} className="flex h-full flex-col overflow-hidden">
-        {/* tab strip */}
-        <div className="flex h-12 shrink-0 items-center gap-3 px-5">
-          <span className="flex gap-2" aria-hidden="true">
-            <span className="h-3 w-3 rounded-full bg-[#ff5f57] shadow-[inset_0_0_0_.5px_rgba(0,0,0,.15)]" />
-            <span className="h-3 w-3 rounded-full bg-[#febc2e] shadow-[inset_0_0_0_.5px_rgba(0,0,0,.15)]" />
-            <span className="h-3 w-3 rounded-full bg-[#28c840] shadow-[inset_0_0_0_.5px_rgba(0,0,0,.15)]" />
-          </span>
+        {/* Jagora's own tabs: one per task (not a copy of the real browser's tabs) */}
+        <div className="no-scrollbar flex h-12 shrink-0 items-center gap-1.5 overflow-x-auto px-3">
           <button
             onClick={() => setSide((v) => !v)}
-            className={`ml-2 grid h-9 w-9 place-items-center rounded-full transition ${side ? "bg-ink text-white" : "text-ink-2 hover:bg-white/50"}`}
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${side ? "bg-ink text-white" : "text-ink-2 hover:bg-white/50"}`}
             aria-label={side ? "Hide tasks" : "Show tasks"}
             aria-expanded={side}
           >
             <SidebarSimple size={18} />
           </button>
-          <div className="ml-1 flex h-9 items-center gap-2 rounded-t-[14px] bg-white/55 px-3.5 text-[13.5px] font-medium text-ink shadow-[inset_0_1px_1px_rgba(255,255,255,.9)]">
-            <Mark size={16} />
-            {showPage ? task!.title : "Jagora"}
-            <X size={12} className="ml-6 text-ink-3" />
-          </div>
-          <button onClick={() => setActive(null)} className="grid h-8 w-8 place-items-center rounded-full text-ink-2 hover:bg-white/40" aria-label="New tab">
+          <button
+            onClick={() => setActive(null)}
+            className={`flex h-9 shrink-0 items-center gap-2 rounded-[14px] px-3.5 text-[13.5px] font-medium transition ${!task ? "bg-white/75 text-ink shadow-[inset_0_1px_1px_rgba(255,255,255,1)]" : "text-ink-2 hover:bg-white/40"}`}
+          >
+            <Mark size={16} /> Home
+          </button>
+          {tasks.map((x) => (
+            <div
+              key={x.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setActive(x.id)}
+              className={`group flex h-9 max-w-[220px] shrink-0 items-center gap-2 rounded-[14px] pl-3.5 pr-2 text-[13.5px] font-medium transition ${x.id === task?.id ? "bg-white/75 text-ink shadow-[inset_0_1px_1px_rgba(255,255,255,1)]" : "text-ink-2 hover:bg-white/40"}`}
+            >
+              <span className="truncate">{x.title}</span>
+              <button onClick={(e) => (e.stopPropagation(), closeTask(x.id))} className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-black/5" aria-label={`Close ${x.title}`}>
+                <X size={11} weight="bold" />
+              </button>
+            </div>
+          ))}
+          <button onClick={() => setActive(null)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-white/40" aria-label="New tab">
             <Plus size={15} />
           </button>
         </div>
-        {/* address bar */}
-        <div className="flex h-12 shrink-0 items-center gap-1 border-b border-white/50 px-4">
-          {[CaretLeft, CaretRight, ArrowClockwise].map((I, i) => (
-            <button key={i} className="grid h-9 w-9 place-items-center rounded-full text-ink-2 hover:bg-white/40" aria-label={["Back", "Forward", "Reload"][i]}>
-              <I size={17} />
-            </button>
-          ))}
-          <div className="ml-2 flex h-9 flex-1 items-center gap-2 rounded-full bg-white/55 px-4 text-[14px] text-ink shadow-[inset_0_1px_2px_rgba(20,40,80,.08)]">
-            <LockSimple size={14} weight="bold" className="text-ink-2" />
-            <span>https://{url}</span>
-            <Star size={16} className="ml-auto text-ink-3" />
+        {/* the address of the site Jagora is on, only while it is on one */}
+        {showPage && (
+          <div className="flex h-12 shrink-0 items-center gap-1 border-b border-white/50 px-4">
+            {[CaretLeft, CaretRight, ArrowClockwise].map((I, i) => (
+              <button key={i} className="grid h-9 w-9 place-items-center rounded-full text-ink-2 hover:bg-white/40" aria-label={["Back", "Forward", "Reload"][i]}>
+                <I size={17} />
+              </button>
+            ))}
+            <div className="ml-2 flex h-9 flex-1 items-center gap-2 rounded-full bg-white/55 px-4 text-[14px] text-ink shadow-[inset_0_1px_2px_rgba(20,40,80,.08)]">
+              <LockSimple size={14} weight="bold" className="text-ok" />
+              <span className="truncate">{url}</span>
+              <span className="ml-auto shrink-0 text-[12px] font-medium text-ink-3">Jagora is browsing</span>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex min-h-0 flex-1 gap-3 p-3">
           {/* tasks */}
@@ -250,31 +261,38 @@ function Hello({ lang }: { lang: Lang }) {
   );
 }
 
+/* Desktop new tab, laid out like a real browser's: a compact header with the orb and the word, a wide ask bar,
+   one row of small shortcuts, then a wide Discover feed in columns (Jagora's suggestions and real news). */
 function StartPage() {
   const lang = useApp((s) => s.lang);
   const orb = useApp((s) => s.orb);
   const pulse = useSpeakingPulse(orb === "speaking");
   const [text, setText] = useState("");
+  const news = useNews(lang);
   const send = () => text.trim() && (ask(text.trim()), setText(""));
+  const run = (id: "register" | "scam" | "paper") => (id === "register" ? ask(lang === "yo" ? "Forúkọ mi sílẹ̀ fún Skills Fair" : "Register me for the Skills Fair") : quick(id));
   return (
-    <div className="relative flex h-full flex-col items-center overflow-y-auto">
-      <div className="flex w-full max-w-[700px] flex-1 flex-col items-center justify-center px-8 py-4">
-        <Orb size={250} state={orb} levelRef={pulse} />
-        <CloudWordmark width={420} levelRef={pulse} className="-mt-16" />
-        <p className="-mt-1 text-[17px] font-medium text-ink-2">{TAGLINE[lang]}</p>
-        <form onSubmit={(e) => (e.preventDefault(), send())} className="mt-7 w-full">
-          <Glass radius={32} bezel={20} refraction={50} blur={6} tint="rgba(255,255,255,.55)">
-            <span className="flex h-[62px] items-center gap-3 pl-6 pr-2">
+    <div className="no-scrollbar relative h-full overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-[980px] flex-col items-center px-10 pb-12 pt-10">
+        <div className="flex items-center gap-1">
+          <Orb size={150} state={orb} levelRef={pulse} />
+          <CloudWordmark width={330} levelRef={pulse} className="-ml-4" />
+        </div>
+        <p className="-mt-3 text-[16px] font-medium text-ink-2">{TAGLINE[lang]}</p>
+
+        <form onSubmit={(e) => (e.preventDefault(), send())} className="mt-6 w-full max-w-[720px]">
+          <Glass radius={30} bezel={20} refraction={50} blur={6} tint="rgba(255,255,255,.6)">
+            <span className="flex h-[58px] items-center gap-3 pl-6 pr-2">
               <VoiceBars />
               <input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder={PLACEHOLDER[lang]}
-                className="h-full min-w-0 flex-1 bg-transparent text-[17px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-3"
+                className="h-full min-w-0 flex-1 bg-transparent text-[16.5px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-3"
               />
               {text.trim() ? (
-                <button type="submit" aria-label="Go" className="grid h-[46px] w-[46px] place-items-center rounded-full bg-ink text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-90">
-                  <ArrowRight size={19} weight="bold" />
+                <button type="submit" aria-label="Go" className="grid h-[44px] w-[44px] place-items-center rounded-full bg-ink text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-90">
+                  <ArrowRight size={18} weight="bold" />
                 </button>
               ) : (
                 <LiveButton />
@@ -282,16 +300,59 @@ function StartPage() {
             </span>
           </Glass>
         </form>
-        <div className="mt-6 grid grid-cols-4 gap-3">
-          {SITES.slice(0, 8).map((s) => (
-            <Glass key={s.goal} radius={22} bezel={14} refraction={34} pressable className="w-[104px] cursor-pointer" onClick={() => ask(s.goal)}>
-              <span className="flex flex-col items-center gap-2 pb-3 pt-3.5">
-                <AppIcon site={s} size={44} />
-                <span className="text-[13px] font-medium text-ink-2">{s.name[lang]}</span>
-              </span>
-            </Glass>
+
+        {/* one row of shortcuts, like a browser's top sites */}
+        <div className="mt-7 grid w-full max-w-[640px] grid-cols-6 gap-x-2 gap-y-3">
+          {SITES.map((s) => (
+            <button key={s.goal} onClick={() => ask(s.goal)} className="group flex flex-col items-center gap-1.5 rounded-[18px] py-2 transition hover:bg-white/45 active:scale-95" title={s.name[lang]}>
+              <AppIcon site={s} size={46} />
+              <span className="w-full truncate px-1 text-center text-[12.5px] font-medium text-ink-2">{s.name[lang]}</span>
+            </button>
           ))}
         </div>
+
+        {/* Discover: a wide feed in columns */}
+        <section className="mt-10 w-full">
+          <h2 className="px-1 text-[30px] leading-none text-ink">{DISCOVER[lang]}</h2>
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            {CARDS.map((c) => (
+              <Glass key={c.id} radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.6)" pressable className="cursor-pointer overflow-hidden" onClick={() => run(c.id)}>
+                <span className="block">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={c.thumb} alt="" className="aspect-[16/9] w-full object-cover object-left-top" />
+                  <span className="block p-4">
+                    <span className="line-clamp-2 text-[15.5px] font-semibold leading-snug text-ink">{c.title[lang]}</span>
+                    <span className="mt-2 block text-[12.5px] text-ink-3">
+                      {c.source}, {c.when[lang]}
+                    </span>
+                  </span>
+                </span>
+              </Glass>
+            ))}
+            {news.slice(0, 6).map((n) => (
+              <Glass key={n.link} radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.6)" pressable className="cursor-pointer overflow-hidden" onClick={() => ask(`Read this news story to me: ${n.title} ${n.link}`)}>
+                <span className="block">
+                  {n.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={n.image} alt="" loading="lazy" className="aspect-[16/9] w-full object-cover" />
+                  ) : (
+                    <span className="grid aspect-[16/9] w-full place-items-center bg-ink text-white">BBC</span>
+                  )}
+                  <span className="block p-4">
+                    <span className="line-clamp-2 text-[15.5px] font-semibold leading-snug text-ink">{n.title}</span>
+                    <span className="mt-2 flex items-center justify-between text-[12.5px] text-ink-3">
+                      <span>
+                        {n.source}
+                        {n.date ? `, ${ago(Date.parse(n.date))}` : ""}
+                      </span>
+                      <SpeakerHigh size={16} className="text-accent" />
+                    </span>
+                  </span>
+                </span>
+              </Glass>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

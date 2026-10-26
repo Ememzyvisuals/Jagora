@@ -40,7 +40,7 @@ import { Orb } from "../Orb";
 
 type L = Record<Lang, string>;
 
-const TAGLINE: L = {
+export const TAGLINE: L = {
   en: "Say it in your language. Jagora does the rest.",
   pcm: "Talk am for your language. Jagora go do the rest.",
   yo: "Ẹ sọ ọ́ ní èdè yín. Jagora á ṣe ìyókù.",
@@ -54,7 +54,7 @@ const PLACEHOLDER: L = {
   ha: "Tambayi Jagora ko rubuta adireshi",
   ig: "Jụọ Jagora ma ọ bụ dee adreesị",
 };
-const DISCOVER: L = { en: "Discover", pcm: "Discover", yo: "Ṣàwárí", ha: "Gano", ig: "Chọpụta" };
+export const DISCOVER: L = { en: "Discover", pcm: "Discover", yo: "Ṣàwárí", ha: "Gano", ig: "Chọpụta" };
 const NAV: Record<"back" | "fwd" | "tabs" | "home", L> = {
   back: { en: "Back", pcm: "Back", yo: "Ẹ̀yìn", ha: "Baya", ig: "Azụ" },
   fwd: { en: "Forward", pcm: "Front", yo: "Iwájú", ha: "Gaba", ig: "N'ihu" },
@@ -82,7 +82,7 @@ export const SITES: Site[] = [
   { name: l("Jumia", "Jumia", "Jumia", "Jumia"), domain: "jumia.com.ng", goal: "Open jumia.com.ng", Icon: ShoppingBag, from: "#ffae4d", to: "#f08a12" },
 ];
 
-const CARDS: { id: "register" | "scam" | "paper"; thumb: string; source: string; when: L; title: L }[] = [
+export const CARDS: { id: "register" | "scam" | "paper"; thumb: string; source: string; when: L; title: L }[] = [
   {
     id: "register",
     thumb: "/thumbs/skills-fair.webp",
@@ -124,7 +124,25 @@ const CARDS: { id: "register" | "scam" | "paper"; thumb: string; source: string;
   },
 ];
 
-function Flag({ size = 22 }: { size?: number }) {
+export type NewsItem = { title: string; link: string; image: string | null; date: string | null; source: string };
+
+/** Real headlines in her language (BBC Yorùbá / Hausa / Igbo / Pidgin / Africa), via /api/news. */
+export function useNews(lang: Lang) {
+  const [news, setNews] = useState<NewsItem[]>([]);
+  useEffect(() => {
+    let on = true;
+    fetch(`/api/news?lang=${lang}`)
+      .then((r) => r.json())
+      .then((d) => on && setNews(d.items ?? []))
+      .catch(() => undefined);
+    return () => {
+      on = false;
+    };
+  }, [lang]);
+  return news;
+}
+
+export function Flag({ size = 22 }: { size?: number }) {
   return (
     <svg viewBox="0 0 30 30" width={size} height={size} aria-hidden="true" className="shrink-0 rounded-full shadow-[0_0_0_1px_rgba(0,0,0,.08)]">
       <clipPath id="ngflag">
@@ -456,8 +474,8 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
           <Glass radius={30} bezel={16} refraction={36} blur={10} tint="rgba(255,255,255,.66)" pressable>
             {small ? (
               <button onClick={() => setSmall(false)} className="flex h-9 items-center gap-1.5 px-4 text-[13px] font-semibold text-ink">
-                <LockSimple size={12} weight="bold" className="text-ink-2" />
-                {onPage ? "skillsfair.ng" : "jagora.ng"}
+                {onPage && <LockSimple size={12} weight="bold" className="text-ink-2" />}
+                {onPage ? "skillsfair.ng" : "Jagora"}
               </button>
             ) : (
               <div className="flex h-[52px] items-center gap-2 pl-1.5 pr-1.5">
