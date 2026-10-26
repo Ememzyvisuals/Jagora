@@ -148,7 +148,7 @@ export function DesktopApp() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14px] font-medium text-ink">{x.title}</span>
                     <span className="block truncate text-[12px] text-ink-3">
-                      {STATUS[x.status][lang]} · {ago(x.createdAt)}
+                      {STATUS[x.status][lang]}, {ago(x.createdAt)}
                     </span>
                   </span>
                   <StatusMark s={x.status} />

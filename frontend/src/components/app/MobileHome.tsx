@@ -7,7 +7,7 @@ import {
   CaretDown,
   CaretLeft,
   CaretRight,
-  DotsThree,
+  SlidersHorizontal,
   GraduationCap,
   House,
   IdentificationCard,
@@ -370,11 +370,9 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
                   <img src={c.thumb} alt="" className="h-[80px] w-[96px] shrink-0 rounded-[14px] object-cover shadow-[0_4px_10px_-6px_rgba(0,0,0,.35)]" />
                   <span className="flex min-w-0 flex-1 flex-col py-0.5">
                     <span className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{c.title[lang]}</span>
-                    <span className="mt-auto flex items-center gap-1.5 text-[12.5px] text-ink-3">
+                    <span className="mt-auto flex items-center gap-3 text-[12.5px] text-ink-3">
                       <span className="truncate">{c.source}</span>
-                      <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-ink-3/60" />
-                      <span className="shrink-0">{c.when[lang]}</span>
-                      <DotsThree size={20} weight="bold" className="ml-auto shrink-0 text-ink-2" />
+                      <span className="shrink-0 text-ink-3/80">{c.when[lang]}</span>
                     </span>
                   </span>
                 </span>
@@ -393,10 +391,9 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
                   )}
                   <span className="flex min-w-0 flex-1 flex-col py-0.5">
                     <span className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{n.title}</span>
-                    <span className="mt-auto flex items-center gap-1.5 text-[12.5px] text-ink-3">
+                    <span className="mt-auto flex items-center gap-3 text-[12.5px] text-ink-3">
                       <span className="truncate">{n.source}</span>
-                      {n.date && <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-ink-3/60" />}
-                      {n.date && <span className="shrink-0">{ago(Date.parse(n.date))}</span>}
+                      {n.date && <span className="shrink-0 text-ink-3/80">{ago(Date.parse(n.date))}</span>}
                       <SpeakerHigh size={17} className="ml-auto shrink-0 text-accent" aria-label="Listen" />
                     </span>
                   </span>
@@ -485,7 +482,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
               <div className="relative">
                 <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable>
                   <button className="grid h-[52px] w-[52px] place-items-center text-ink" onClick={() => setMenu((v) => !v)} aria-label="More" aria-expanded={menu}>
-                    <DotsThree size={24} weight="bold" />
+                    <SlidersHorizontal size={22} />
                   </button>
                 </Glass>
                 <AnimatePresence>

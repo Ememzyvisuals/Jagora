@@ -83,7 +83,6 @@ export function PageView({ compact = false, onClose }: { compact?: boolean; onCl
         <div className="glass-2 flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full px-4 text-[13.5px] text-ink-2">
           <LockSimple size={14} weight="bold" className="shrink-0 text-ok" />
           <span className="truncate">{host || "Ready"}</span>
-          {task?.status === "working" && <span className="ml-auto h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" />}
         </div>
         {onClose && (
           <button onClick={onClose} className="btn btn-glass h-10 w-10 shrink-0" aria-label="Close page">
