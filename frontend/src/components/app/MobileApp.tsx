@@ -14,6 +14,7 @@ import { BottomBar, EdgeBlur, Home } from "./MobileHome";
 import { Backdrop } from "../glass/Backdrop";
 import { Glass } from "../glass/Glass";
 import { Tour } from "../Tour";
+import { LiveMode } from "../LiveMode";
 
 type Screen = "home" | "page" | "tabs";
 
@@ -89,6 +90,7 @@ export function MobileApp() {
       {!(screen === "tabs" && tabsFull) && <BottomBar screen={screen} setScreen={go} />}
       <Sheet open={sheet} onClose={() => setSheet(false)} />
       {screen === "home" && !sheet && <Tour />}
+      <LiveMode />
     </div>
   );
 }

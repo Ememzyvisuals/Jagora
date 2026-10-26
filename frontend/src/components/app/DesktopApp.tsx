@@ -30,6 +30,7 @@ import { Composer } from "../Composer";
 import { Conversation } from "../Conversation";
 import { CloudWordmark } from "../glass/CloudWordmark";
 import { Backdrop } from "../glass/Backdrop";
+import { LiveButton, LiveMode } from "../LiveMode";
 import { Glass } from "../glass/Glass";
 import { Orb } from "../Orb";
 import { PageView } from "../PageView";
@@ -207,6 +208,7 @@ export function DesktopApp() {
           </section>
         </div>
       </Glass>
+      <LiveMode />
     </div>
   );
 }
@@ -250,9 +252,13 @@ function StartPage() {
                 placeholder={PLACEHOLDER[lang]}
                 className="h-full min-w-0 flex-1 bg-transparent text-[17px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-3"
               />
-              <button type="submit" aria-label="Go" className="grid h-[46px] w-[46px] place-items-center rounded-full bg-[#5b6472] text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.35)] transition active:scale-90">
-                <ArrowRight size={19} weight="bold" />
-              </button>
+              {text.trim() ? (
+                <button type="submit" aria-label="Go" className="grid h-[46px] w-[46px] place-items-center rounded-full bg-ink text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-90">
+                  <ArrowRight size={19} weight="bold" />
+                </button>
+              ) : (
+                <LiveButton />
+              )}
             </span>
           </Glass>
         </form>

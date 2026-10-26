@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { ask, live } from "@/lib/engine";
 import { remoteAudio } from "@/lib/engine/remote";
 import { t, type Lang } from "@/lib/i18n";
+import { LiveButton } from "./LiveMode";
 import { useApp } from "@/lib/store";
 
 const SPEECH_LANG: Record<Lang, string> = { en: "en-NG", pcm: "en-NG", yo: "yo-NG", ha: "ha-NG", ig: "ig-NG" };
@@ -77,14 +78,13 @@ export function Composer() {
           <Paperclip size={20} />
         </button>
         <input ref={file} type="file" accept="image/*,application/pdf" capture="environment" hidden onChange={(e) => attach(e.target.files?.[0])} />
-        <button
-          className={`btn h-10 w-10 shrink-0 ${text.trim() ? "btn-ink" : "bg-ink/10 text-ink-3"}`}
-          onClick={send}
-          disabled={!text.trim()}
-          aria-label="Send"
-        >
-          <ArrowUp size={18} weight="bold" />
-        </button>
+        {text.trim() ? (
+          <button className="btn btn-ink h-10 w-10 shrink-0" onClick={send} aria-label="Send">
+            <ArrowUp size={18} weight="bold" />
+          </button>
+        ) : (
+          <LiveButton compact />
+        )}
       </div>
     </div>
   );

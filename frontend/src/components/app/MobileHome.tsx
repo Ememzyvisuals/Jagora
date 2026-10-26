@@ -34,6 +34,7 @@ import { useSpeakingPulse } from "@/lib/voice";
 import { CloudWordmark } from "../glass/CloudWordmark";
 import { siFacebook, siGmail, siGoogle, siInstagram, siTiktok, siWhatsapp, siX, siYoutube } from "simple-icons";
 import { canFullscreen, toggleFullscreen } from "../Pwa";
+import { LiveButton } from "../LiveMode";
 import { Glass } from "../glass/Glass";
 import { Orb } from "../Orb";
 
@@ -312,9 +313,13 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
                 placeholder={PLACEHOLDER[lang]}
                 className="h-full min-w-0 flex-1 bg-transparent text-[16px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-3"
               />
-              <button type="submit" aria-label="Go" className="grid h-[42px] w-[42px] place-items-center rounded-full bg-[#5b6472] text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.35)] transition active:scale-90">
-                <ArrowRight size={18} weight="bold" />
-              </button>
+              {text.trim() ? (
+                <button type="submit" aria-label="Go" className="grid h-[42px] w-[42px] place-items-center rounded-full bg-ink text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-90">
+                  <ArrowRight size={18} weight="bold" />
+                </button>
+              ) : (
+                <LiveButton compact />
+              )}
             </span>
           </Glass>
         </form>
@@ -455,7 +460,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
                 {onPage ? "skillsfair.ng" : "jagora.ng"}
               </button>
             ) : (
-              <div className="flex h-[52px] items-center gap-2 pl-1.5 pr-3">
+              <div className="flex h-[52px] items-center gap-2 pl-1.5 pr-1.5">
                 <button onClick={() => setSheet(!sheet)} aria-label="Talk to Jagora" className="shrink-0 transition active:scale-90" data-tour="orb">
                   <Orb size={42} state={orb} levelRef={pulse} />
                 </button>
@@ -463,6 +468,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
                   {label}
                 </button>
                 {onPage && <ArrowClockwise size={17} className="shrink-0 text-ink-2" />}
+                <LiveButton compact />
               </div>
             )}
           </Glass>

@@ -1,0 +1,231 @@
+"use client";
+
+/* Live mode: talk to Jagora hands-free, turn by turn. It listens, notices when she stops talking, sends what she
+   said, waits while Jagora thinks and answers, then listens again, until she taps End. While Jagora works on a page
+   the session shrinks to a small island at the top so she can watch and keep talking.
+
+   Speech-to-text: with the backend, her audio goes to STORM ASR (Yorùbá, Hausa, Igbo, Pidgin, English). Without it
+   (demo), the browser's own recognizer handles English and Pidgin. */
+import { Microphone, MicrophoneSlash, X } from "@phosphor-icons/react";
+import { AnimatePresence, motion } from "motion/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ask, live as backendLive } from "@/lib/engine";
+import { remoteAudio } from "@/lib/engine/remote";
+import type { Lang } from "@/lib/i18n";
+import { activeTask, useApp } from "@/lib/store";
+import { useSpeakingPulse, useVoice } from "@/lib/voice";
+import { browserRecognizer } from "./Composer";
+import { Glass } from "./glass/Glass";
+import { Orb } from "./Orb";
+
+const SAY: Record<"listen" | "think" | "speak" | "paused" | "hint" | "end" | "live", Record<Lang, string>> = {
+  listen: { en: "Listening…", pcm: "I dey hear you…", yo: "Mo ń gbọ́ yín…", ha: "Ina sauraro…", ig: "Ana m ege ntị…" },
+  think: { en: "Thinking…", pcm: "I dey think…", yo: "Mo ń ronú…", ha: "Ina tunani…", ig: "Ana m eche echiche…" },
+  speak: { en: "Jagora is speaking", pcm: "Jagora dey talk", yo: "Jagora ń sọ̀rọ̀", ha: "Jagora tana magana", ig: "Jagora na-ekwu okwu" },
+  paused: { en: "Microphone off", pcm: "Mic don off", yo: "Gbohùngbohùn ti pa", ha: "An kashe makirufo", ig: "Emechiri igwe okwu" },
+  hint: {
+    en: "Say what you need. Jagora will answer, then listen again.",
+    pcm: "Talk wetin you need. Jagora go answer, then hear you again.",
+    yo: "Ẹ sọ ohun tí ẹ nílò. Jagora á dáhùn, á sì tún gbọ́ yín.",
+    ha: "Faɗi abin da kake bukata. Jagora za ta amsa, sannan ta sake saurare.",
+    ig: "Kwuo ihe ị chọrọ. Jagora ga-aza, wee gee ntị ọzọ.",
+  },
+  end: { en: "End", pcm: "Stop", yo: "Parí", ha: "Gama", ig: "Kwụsị" },
+  live: { en: "Live", pcm: "Live", yo: "Láàyè", ha: "Kai tsaye", ig: "Ndụ" },
+};
+
+const SPEECH_ON = 0.09; // level that counts as talking
+const SILENCE_MS = 1100; // pause that ends her turn
+const MAX_TURN_MS = 20000;
+
+/** The black "Live" pill that starts a session. */
+export function LiveButton({ compact = false }: { compact?: boolean }) {
+  const lang = useApp((s) => s.lang);
+  const setLive = useApp((s) => s.setLive);
+  return (
+    <button
+      onClick={() => setLive(true)}
+      className={`flex shrink-0 items-center gap-1.5 rounded-full bg-ink font-semibold text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.22),0_8px_18px_-10px_rgba(10,20,40,.6)] transition active:scale-95 ${compact ? "h-10 px-3 text-[13.5px]" : "h-11 px-4 text-[14.5px]"}`}
+      aria-label="Start live voice"
+    >
+      <svg width={18} height={18} viewBox="0 0 24 24" aria-hidden="true">
+        {[4, 8, 12, 16, 20].map((x, i) => (
+          <rect key={x} x={x - 1.1} y={12 - [6, 12, 16, 11, 7][i] / 2} width="2.2" height={[6, 12, 16, 11, 7][i]} rx="1.1" fill="currentColor" />
+        ))}
+      </svg>
+      {SAY.live[lang]}
+    </button>
+  );
+}
+
+export function LiveMode() {
+  const on = useApp((s) => s.live);
+  const setLive = useApp((s) => s.setLive);
+  const lang = useApp((s) => s.lang);
+  const orb = useApp((s) => s.orb);
+  const setOrb = useApp((s) => s.setOrb);
+  const task = useApp(activeTask);
+  const voice = useVoice();
+  const speaking = useSpeakingPulse(orb === "speaking");
+  const [muted, setMuted] = useState(false);
+  const [heard, setHeard] = useState("");
+  const [phase, setPhase] = useState<"listen" | "think" | "speak">("listen");
+  const busy = useRef(false);
+
+  // Jagora's latest reply, shown as a caption
+  const reply = [...(task?.messages ?? [])].reverse().find((m) => m.kind === "agent" || m.kind === "confirm" || m.kind === "choice");
+  const replyText = reply ? ("text" in reply ? reply.text : "question" in reply ? reply.question : "") : "";
+  // shrink to an island while Jagora works on a page
+  const island = !!task && task.kind === "browse" && !!task.url && task.status === "working";
+
+  const listen = useCallback(async () => {
+    if (busy.current) return;
+    busy.current = true;
+    setPhase("listen");
+    setOrb("listening");
+    await voice.start();
+    const rec = !backendLive ? browserRecognizer(lang) : null;
+    let said = "";
+    if (rec) {
+      rec.onresult = (e) => (said = e.results[0]?.[0]?.transcript?.trim() ?? "");
+      try {
+        rec.start();
+      } catch {}
+    }
+    // turn detection: wait for speech, then for a pause
+    const t0 = performance.now();
+    let spoke = false;
+    let quietSince = 0;
+    await new Promise<void>((done) => {
+      const id = setInterval(() => {
+        const lvl = voice.level.current;
+        const now = performance.now();
+        if (lvl > SPEECH_ON) {
+          spoke = true;
+          quietSince = 0;
+        } else if (spoke) {
+          quietSince ||= now;
+          if (now - quietSince > SILENCE_MS) (clearInterval(id), done());
+        }
+        if (now - t0 > MAX_TURN_MS || !useApp.getState().live) (clearInterval(id), done());
+      }, 60);
+    });
+    rec?.stop();
+    const blob = await voice.stop();
+    busy.current = false;
+    if (!useApp.getState().live) return;
+    if (!spoke) return void listen();
+    setPhase("think");
+    setOrb("thinking");
+    if (backendLive && blob) {
+      const s = useApp.getState();
+      const id = s.activeId ?? s.newTask({ title: "Voice request", kind: "browse", url: "" });
+      await remoteAudio(id, blob);
+    } else {
+      await new Promise((r) => setTimeout(r, 450)); // let the recognizer deliver its result
+      if (said) {
+        setHeard(said);
+        ask(said);
+      } else setHeard("");
+    }
+  }, [voice, lang, setOrb]);
+
+  // start listening when live mode opens; listen again each time Jagora finishes speaking
+  useEffect(() => {
+    if (!on) return;
+    if (muted) return;
+    if (orb === "speaking") return setPhase("speak");
+    if (orb === "idle" && !busy.current) void listen();
+  }, [on, orb, muted, listen]);
+
+  useEffect(() => {
+    if (!on) {
+      void voice.stop();
+      setHeard("");
+      busy.current = false;
+    }
+  }, [on, voice]);
+
+  const end = () => {
+    setLive(false);
+    void voice.stop();
+    setOrb("idle");
+  };
+  const toggleMute = () => {
+    setMuted((m) => {
+      if (!m) void voice.stop();
+      return !m;
+    });
+  };
+
+  const level = phase === "speak" ? speaking : voice.level;
+  const label = muted ? SAY.paused[lang] : phase === "speak" ? SAY.speak[lang] : phase === "think" ? SAY.think[lang] : SAY.listen[lang];
+
+  return (
+    <AnimatePresence>
+      {on &&
+        (island ? (
+          <motion.div
+            key="island"
+            initial={{ y: -40, opacity: 0, scale: 0.9 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: -40, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 360, damping: 30 }}
+            className="fixed inset-x-0 top-[max(8px,env(safe-area-inset-top))] z-[80] flex justify-center px-4"
+          >
+            <Glass flat radius={28} bezel={14} refraction={30} blur={14} tint="rgba(14,15,18,.82)">
+              <div className="flex h-14 items-center gap-2.5 pl-2 pr-2 text-white">
+                <Orb size={44} state={phase === "speak" ? "speaking" : phase === "think" ? "thinking" : "listening"} levelRef={level} />
+                <span className="min-w-0 max-w-[52vw] truncate text-[14px] font-medium">{label}</span>
+                <button onClick={toggleMute} className="grid h-10 w-10 place-items-center rounded-full bg-white/12" aria-label={muted ? "Turn microphone on" : "Turn microphone off"}>
+                  {muted ? <MicrophoneSlash size={18} /> : <Microphone size={18} />}
+                </button>
+                <button onClick={end} className="grid h-10 w-10 place-items-center rounded-full bg-white text-ink" aria-label={SAY.end[lang]}>
+                  <X size={16} weight="bold" />
+                </button>
+              </div>
+            </Glass>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="full"
+            role="dialog"
+            aria-label="Live voice"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[80] flex flex-col items-center bg-[#dcecfb]/55 px-6 pb-[max(24px,env(safe-area-inset-bottom))] pt-[max(24px,env(safe-area-inset-top))] backdrop-blur-[26px] backdrop-saturate-150"
+          >
+            <div className="flex w-full items-center justify-between">
+              <span className="font-pixel text-[26px] text-ink">Jagora</span>
+              <span className="rounded-full bg-white/70 px-3 py-1 text-[12.5px] font-semibold text-ink-2">{SAY.live[lang]}</span>
+            </div>
+            <div className="flex flex-1 flex-col items-center justify-center">
+              <motion.div animate={{ scale: phase === "listen" ? 1 : 0.94 }} transition={{ type: "spring", stiffness: 200, damping: 20 }}>
+                <Orb size={260} state={phase === "speak" ? "speaking" : phase === "think" ? "thinking" : muted ? "idle" : "listening"} levelRef={level} />
+              </motion.div>
+              <p className="mt-2 text-[17px] font-semibold text-ink" aria-live="polite">
+                {label}
+              </p>
+              <div className="mt-6 min-h-[96px] w-full max-w-[420px] text-center">
+                {heard && <p className="text-[16px] leading-snug text-ink-2">“{heard}”</p>}
+                {replyText ? (
+                  <p className="mt-3 text-[19px] font-medium leading-snug text-ink">{replyText}</p>
+                ) : (
+                  !heard && <p className="text-[15.5px] leading-snug text-ink-2">{SAY.hint[lang]}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <button onClick={toggleMute} className="glass-2 grid h-16 w-16 place-items-center rounded-full text-ink transition active:scale-95" aria-label={muted ? "Turn microphone on" : "Turn microphone off"}>
+                {muted ? <MicrophoneSlash size={26} /> : <Microphone size={26} />}
+              </button>
+              <button onClick={end} className="flex h-16 items-center gap-2 rounded-full bg-ink px-8 text-[17px] font-semibold text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.22),0_12px_24px_-12px_rgba(10,20,40,.7)] transition active:scale-95">
+                <X size={20} weight="bold" /> {SAY.end[lang]}
+              </button>
+            </div>
+          </motion.div>
+        ))}
+    </AnimatePresence>
+  );
+}
