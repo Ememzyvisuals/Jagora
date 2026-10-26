@@ -1,11 +1,29 @@
 @import "tailwindcss";
-@import "@fontsource-variable/mulish";
+@import "@fontsource-variable/outfit";
 @import "@fontsource-variable/inter";
 
-/* Mulish for everything; it writes ẹ ọ ṣ ị ụ ṅ, tone marks and ₦. Inter only fills the Hausa hooked letters ɓ ɗ ƙ. */
+/* Outfit cannot write ẹ ọ ṣ ị ụ ṅ or ₦. "Jagora Fill" (Lexend, scaled to Outfit's x-height) supplies only those
+   letters and the tone marks that sit on them, so a dotted letter and its mark always come from the same font.
+   Inter fills the Hausa hooked letters ɓ ɗ ƙ. */
+@font-face {
+  font-family: "Jagora Fill";
+  src: url("/fonts/fill-vi.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+  size-adjust: 90%;
+  unicode-range: U+0300-0323, U+1EA0-1EF9;
+}
+@font-face {
+  font-family: "Jagora Fill";
+  src: url("/fonts/fill-ext.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+  size-adjust: 90%;
+  unicode-range: U+1E00-1E9F, U+20A6;
+}
 @theme {
-  --font-sans: "Mulish Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Mulish Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Jagora Fill", "Outfit Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Jagora Fill", "Outfit Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 
   --color-ink: #1c1b1f;
   --color-ink-2: #4b4a50;
@@ -139,5 +157,72 @@ h3,
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ---- liquid glass ------------------------------------------------------------------------------------------- */
+.lg {
+  position: relative;
+  isolation: isolate;
+  --mx: 30%;
+  --my: 0%;
+  --ang: 160deg;
+  --sheen: 0;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.85),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.35),
+    inset 0 0 22px rgba(255, 255, 255, 0.22),
+    0 1px 2px rgba(20, 40, 80, 0.06),
+    0 14px 34px -16px rgba(20, 45, 90, 0.32);
+  transition: transform 0.45s cubic-bezier(0.2, 1.4, 0.3, 1), box-shadow 0.3s ease;
+}
+.lg > :not(.lg-rim):not(.lg-sheen):not(svg) {
+  position: relative;
+  z-index: 1;
+}
+/* specular rim: brightest on the side facing the light, follows the pointer */
+.lg-rim {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.2px;
+  background: conic-gradient(
+    from var(--ang),
+    rgba(255, 255, 255, 0.95),
+    rgba(255, 255, 255, 0.25) 22%,
+    rgba(255, 255, 255, 0.08) 45%,
+    rgba(255, 255, 255, 0.55) 62%,
+    rgba(255, 255, 255, 0.18) 80%,
+    rgba(255, 255, 255, 0.95)
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  transition: --ang 0.3s;
+}
+/* soft light pooling under the finger or cursor */
+.lg-sheen {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(120% 90% at 50% -20%, rgba(255, 255, 255, 0.42), transparent 55%),
+    radial-gradient(240px circle at var(--mx) var(--my), rgba(255, 255, 255, calc(0.28 * var(--sheen))), transparent 60%);
+  transition: opacity 0.4s;
+}
+.lg-press:active {
+  transform: scale(0.965);
+}
+@property --ang {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 160deg;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lg,
+  .lg-rim {
+    transition: none;
   }
 }

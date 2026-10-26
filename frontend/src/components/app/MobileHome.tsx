@@ -1,18 +1,43 @@
 "use client";
 
-/* Phone home, laid out like a mobile browser: language flag and profile on top, a curved sky card holding the
-   address bar with the cloud orb sitting in its notch, site shortcuts, then a Discover feed. */
-import { ArrowUp, CaretLeft, CaretRight, DotsThreeVertical, House, SquaresFour, UserCircle } from "@phosphor-icons/react";
+/* Phone home: sky behind everything, liquid glass on top. Orb, the living "Jagora" wordmark, the ask bar,
+   site shortcuts, the Discover feed, and the glass bottom bar with the orb in the middle. */
+import {
+  ArrowRight,
+  CaretDown,
+  CaretLeft,
+  CaretRight,
+  DotsThree,
+  GraduationCap,
+  House,
+  IdentificationCard,
+  MagnifyingGlass,
+  Newspaper,
+  ShoppingBag,
+  Certificate,
+  User,
+  EnvelopeSimple,
+  Briefcase,
+} from "@phosphor-icons/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ComponentType } from "react";
 import { ask, quick } from "@/lib/engine";
 import { LANGS, type Lang } from "@/lib/i18n";
 import { activeTask, useApp } from "@/lib/store";
 import { useSpeakingPulse } from "@/lib/voice";
+import { CloudWordmark } from "../glass/CloudWordmark";
+import { Glass } from "../glass/Glass";
 import { Orb } from "../Orb";
 
 type L = Record<Lang, string>;
 
+const TAGLINE: L = {
+  en: "Say it in your language. Jagora does the rest.",
+  pcm: "Talk am for your language. Jagora go do the rest.",
+  yo: "Ẹ sọ ọ́ ní èdè yín. Jagora á ṣe ìyókù.",
+  ha: "Faɗa da harshenka. Jagora za ta yi sauran.",
+  ig: "Kwuo ya n'asụsụ gị. Jagora ga-eme ndị ọzọ.",
+};
 const PLACEHOLDER: L = {
   en: "Ask Jagora or type a web address",
   pcm: "Ask Jagora or type web address",
@@ -21,104 +46,122 @@ const PLACEHOLDER: L = {
   ig: "Jụọ Jagora ma ọ bụ dee adreesị",
 };
 const DISCOVER: L = { en: "Discover", pcm: "Discover", yo: "Ṣàwárí", ha: "Gano", ig: "Chọpụta" };
-const RECENT: L = { en: "Recent", pcm: "Recent", yo: "Láìpẹ́", ha: "Na kwanan nan", ig: "Nso nso a" };
+const NAV: Record<"back" | "fwd" | "tabs" | "home", L> = {
+  back: { en: "Back", pcm: "Back", yo: "Ẹ̀yìn", ha: "Baya", ig: "Azụ" },
+  fwd: { en: "Forward", pcm: "Front", yo: "Iwájú", ha: "Gaba", ig: "N'ihu" },
+  tabs: { en: "Tabs", pcm: "Tabs", yo: "Táàbù", ha: "Shafuka", ig: "Taabụ" },
+  home: { en: "Home", pcm: "Home", yo: "Ilé", ha: "Gida", ig: "Ụlọ" },
+};
 
-export const SITES = [
-  { name: "Google", domain: "google.com", color: "#4285F4" },
-  { name: "JAMB", domain: "jamb.gov.ng", color: "#1F7A3D" },
-  { name: "NIMC", domain: "nimc.gov.ng", color: "#0E6B4F" },
-  { name: "BBC Yorùbá", domain: "bbc.com/yoruba", color: "#B80000" },
-  { name: "WAEC", domain: "waecdirect.org", color: "#2B5BA8" },
-  { name: "Jumia", domain: "jumia.com.ng", color: "#F68B1E" },
-  { name: "NIPOST", domain: "nipost.gov.ng", color: "#0B7A43" },
-  { name: "YouTube", domain: "youtube.com", color: "#FF0000" },
+type Site = { name: L; goal: string; Icon: ComponentType<{ size?: number; weight?: "fill" }>; from: string; to: string };
+const l = (en: string, yo: string, ha: string, ig: string, pcm = en): L => ({ en, yo, ha, ig, pcm });
+export const SITES: Site[] = [
+  { name: l("Search", "Wá nǹkan", "Bincike", "Chọọ"), goal: "Open google.com", Icon: MagnifyingGlass, from: "#5aa2ff", to: "#2b6fe8" },
+  { name: l("Exams", "Ìdánwò", "Jarrabawa", "Ule"), goal: "Open jamb.gov.ng", Icon: GraduationCap, from: "#3fcf86", to: "#14965a" },
+  { name: l("ID card", "Ìdánimọ̀", "Shaida", "Njirimara"), goal: "Open nimc.gov.ng", Icon: IdentificationCard, from: "#9d8cff", to: "#6a4fe0" },
+  { name: l("News", "Ìròyìn", "Labarai", "Akụkọ"), goal: "Open bbc.com/yoruba", Icon: Newspaper, from: "#ff7a6b", to: "#e2412f" },
+  { name: l("Results", "Èsì", "Sakamako", "Nsonaazụ"), goal: "Open waecdirect.org", Icon: Certificate, from: "#ffb54d", to: "#ef8a12" },
+  { name: l("Shop", "Ọjà", "Kasuwa", "Ahịa"), goal: "Open jumia.com.ng", Icon: ShoppingBag, from: "#ff8fc0", to: "#e2508f" },
+  { name: l("Jobs", "Iṣẹ́", "Ayyuka", "Ọrụ"), goal: "Find jobs in Lagos", Icon: Briefcase, from: "#58c7d8", to: "#1f93a8" },
+  { name: l("Mail", "Lẹ́tà", "Wasiƙa", "Ozi"), goal: "Open gmail.com", Icon: EnvelopeSimple, from: "#7aa8ff", to: "#4a6fe0" },
 ];
 
-const CARDS: { id: "register" | "scam" | "paper"; thumb: string; source: string; time: L; title: L }[] = [
+const CARDS: { id: "register" | "scam" | "paper"; thumb: string; source: string; when: L; title: L }[] = [
   {
     id: "register",
     thumb: "/thumbs/skills-fair.webp",
-    source: "skillsfair.ng",
-    time: { en: "2 min with Jagora", pcm: "2 min with Jagora", yo: "Ìṣẹ́jú 2 pẹ̀lú Jagora", ha: "Minti 2 da Jagora", ig: "Nkeji 2 na Jagora" },
-    title: {
-      en: "Naija Skills Fair 2026: register for free training",
-      pcm: "Naija Skills Fair 2026: register for free training",
-      yo: "Naija Skills Fair 2026: forúkọ sílẹ̀ fún ẹ̀kọ́ ọ̀fẹ́",
-      ha: "Naija Skills Fair 2026: yi rajista don horo kyauta",
-      ig: "Naija Skills Fair 2026: debanye aha maka ọzụzụ n'efu",
-    },
+    source: "Naija Skills Fair",
+    when: l("2 minutes", "Ìṣẹ́jú 2", "Minti 2", "Nkeji 2"),
+    title: l(
+      "Skills Fair 2026: register for free training",
+      "Skills Fair 2026: forúkọ sílẹ̀ fún ẹ̀kọ́ ọ̀fẹ́",
+      "Skills Fair 2026: yi rajista don horo kyauta",
+      "Skills Fair 2026: debanye aha maka ọzụzụ n'efu",
+      "Skills Fair 2026: register for free training",
+    ),
   },
   {
     id: "scam",
     thumb: "/thumbs/sms.webp",
-    source: "SMS",
-    time: { en: "Check in seconds", pcm: "Check am sharp sharp", yo: "Yẹ̀ ẹ́ wò kíákíá", ha: "Duba cikin dakika", ig: "Lelee ya ngwa ngwa" },
-    title: {
-      en: "Got a text saying your bank account is blocked? Check it first",
-      pcm: "Bank text say dem block your account? Check am first",
-      yo: "Ṣé wọ́n ní àkáǹtì yín ti dí? Ẹ jẹ́ kí Jagora yẹ̀ ẹ́ wò",
-      ha: "Saƙo cewa an toshe asusunka? Bari Jagora ta duba",
-      ig: "Ozi na-ekwu na e mechiri akaụntụ gị? Ka Jagora lelee ya",
-    },
+    source: "Bank alerts",
+    when: l("Seconds", "Ìṣẹ́jú àáyá", "Dakiku", "Sekọnd"),
+    title: l(
+      "They say your account is blocked? Let Jagora check it",
+      "Ṣé wọ́n ní àkáǹtì yín ti dí? Ẹ jẹ́ kí Jagora yẹ̀ ẹ́ wò",
+      "Sun ce an toshe asusunka? Bari Jagora ta duba",
+      "Ha sị na e mechiri akaụntụ gị? Ka Jagora lelee ya",
+      "Dem say dem block your account? Make Jagora check am",
+    ),
   },
   {
     id: "paper",
     thumb: "/thumbs/letter.webp",
-    source: "Photo",
-    time: { en: "Snap and listen", pcm: "Snap am, hear am", yo: "Ya fọ́tò, gbọ́ ọ", ha: "Ɗauki hoto, saurara", ig: "See foto, gee ntị" },
-    title: {
-      en: "A bill or letter you can't read? Jagora reads it to you",
-      pcm: "Bill or letter wey you no fit read? Jagora go read am",
-      yo: "Ìwé owó tàbí lẹ́tà tí ẹ kò lè kà? Jagora máa kà á fún yín",
-      ha: "Takardar kuɗi ko wasiƙa? Jagora za ta karanta maka",
-      ig: "Akwụkwọ ụgwọ ma ọ bụ leta? Jagora ga-agụrụ gị ya",
-    },
+    source: "Water bill",
+    when: l("1 minute", "Ìṣẹ́jú 1", "Minti 1", "Nkeji 1"),
+    title: l(
+      "A bill or letter you can't read? Jagora reads it to you",
+      "Ìwé owó tàbí lẹ́tà tí ẹ kò lè kà? Jagora máa kà á fún yín",
+      "Takarda ko wasiƙa da ba ka iya karantawa? Jagora za ta karanta maka",
+      "Akwụkwọ ị na-apụghị ịgụ? Jagora ga-agụrụ gị ya",
+      "Bill or letter wey you no fit read? Jagora go read am for you",
+    ),
   },
 ];
 
-/** Round flag button: Nigeria, with the language code under it. */
-function Flag() {
+function Flag({ size = 22 }: { size?: number }) {
   return (
-    <span className="block h-8 w-8 overflow-hidden rounded-full ring-1 ring-black/10">
-      <svg viewBox="0 0 3 3" className="h-full w-full" aria-hidden="true">
-        <rect width="1" height="3" fill="#008751" />
-        <rect x="1" width="1" height="3" fill="#fff" />
-        <rect x="2" width="1" height="3" fill="#008751" />
-      </svg>
-    </span>
+    <svg viewBox="0 0 30 30" width={size} height={size} aria-hidden="true" className="shrink-0 rounded-full shadow-[0_0_0_1px_rgba(0,0,0,.08)]">
+      <clipPath id="ngflag">
+        <circle cx="15" cy="15" r="15" />
+      </clipPath>
+      <g clipPath="url(#ngflag)">
+        <rect width="10" height="30" fill="#0a8a4f" />
+        <rect x="10" width="10" height="30" fill="#fff" />
+        <rect x="20" width="10" height="30" fill="#0a8a4f" />
+      </g>
+    </svg>
   );
 }
 
-export function SiteIcon({ domain, name, color, size = 36 }: { domain: string; name: string; color: string; size?: number }) {
-  const [failed, setFailed] = useState(false);
-  const host = domain.split("/")[0];
-  if (!failed)
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={`https://www.google.com/s2/favicons?domain=${host}&sz=128`}
-        alt=""
-        width={size}
-        height={size}
-        onError={() => setFailed(true)}
-        onLoad={(e) => e.currentTarget.naturalWidth <= 16 && setFailed(true)}
-        className="rounded-[10px]"
-        style={{ width: size, height: size }}
-      />
-    );
+/** Jagora's voice mark: five soft bars, not a microphone. */
+export function VoiceBars({ size = 22, color = "#E07A1F" }: { size?: number; color?: string }) {
   return (
-    <span className="grid place-items-center rounded-[11px] font-extrabold text-white" style={{ width: size, height: size, background: color, fontSize: size * 0.42 }}>
-      {name.slice(0, 1)}
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      {[4, 8, 12, 16, 20].map((x, i) => {
+        const h = [6, 12, 16, 11, 7][i];
+        return <rect key={x} x={x - 1.1} y={12 - h / 2} width="2.2" height={h} rx="1.1" fill={color} />;
+      })}
+    </svg>
+  );
+}
+
+export function AppIcon({ site, size = 46 }: { site: Site; size?: number }) {
+  const { Icon, from, to } = site;
+  return (
+    <span
+      className="relative grid place-items-center overflow-hidden text-white"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size * 0.3,
+        background: `linear-gradient(160deg, ${from}, ${to})`,
+        boxShadow: `inset 0 1px 1px rgba(255,255,255,.6), inset 0 -2px 4px rgba(0,0,0,.12), 0 6px 14px -6px ${to}`,
+      }}
+    >
+      <span className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
+      <Icon size={size * 0.52} weight="fill" />
     </span>
   );
 }
 
 export function Home({ onOpen }: { onOpen: (id: string) => void }) {
+  void onOpen;
   const lang = useApp((s) => s.lang);
   const setLang = useApp((s) => s.setLang);
-  const tasks = useApp((s) => s.tasks);
   const setSheet = useApp((s) => s.setSheet);
   const setActive = useApp((s) => s.setActive);
+  const orb = useApp((s) => s.orb);
+  const pulse = useSpeakingPulse(orb === "speaking");
   const [page, setPage] = useState(0);
   const [langOpen, setLangOpen] = useState(false);
   const [text, setText] = useState("");
@@ -135,164 +178,179 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
   };
 
   return (
-    <div className="no-scrollbar h-full overflow-y-auto bg-white pb-36">
-      {/* top row */}
-      <div className="flex items-center justify-between px-5 pt-[max(14px,env(safe-area-inset-top))]">
-        <div className="relative">
-          <button onClick={() => setLangOpen((v) => !v)} className="flex items-center gap-2 rounded-full py-1 pr-2" aria-label="Language">
-            <Flag />
-            <span className="text-[13px] font-bold uppercase tracking-wide text-ink-2">{LANGS.find((l) => l.id === lang)?.native}</span>
-          </button>
-          {langOpen && (
-            <ul className="glass-3 absolute left-0 top-11 z-50 w-48 rounded-[18px] p-1.5">
-              {LANGS.map((l) => (
-                <li key={l.id}>
-                  <button
-                    onClick={() => (setLang(l.id), setLangOpen(false))}
-                    className={`w-full rounded-[12px] px-3 py-2.5 text-left text-[15px] font-semibold ${l.id === lang ? "bg-mist text-ink" : "text-ink-2"}`}
-                  >
-                    {l.native}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <Link href="/app/details" aria-label="My details" className="text-ink-2">
-          <UserCircle size={30} weight="light" />
-        </Link>
-      </div>
+    <div className="relative h-full">
+      {/* the sky */}
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: "url(/sky/hero-desktop.webp), linear-gradient(180deg,#5ea9ec 0%,#8cc4f2 38%,#cfe6f8 70%,#eef6fc 100%)",
+          backgroundSize: "cover",
+          backgroundPosition: "center top",
+          backgroundBlendMode: "multiply",
+        }}
+      />
+      <div className="absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-b from-transparent via-white/35 to-white/75" />
 
-      {/* curved sky card with the orb in its notch */}
-      <div className="relative mx-4 mt-9">
-        <div
-          className="h-[176px] rounded-[30px] px-4 pb-6"
-          style={{
-            backgroundImage: "url(/sky/hero-desktop.webp), linear-gradient(180deg, #5fb4f2 0%, #9fd3f7 100%)",
-            backgroundSize: "cover",
-            backgroundPosition: "center 20%",
-            backgroundBlendMode: "multiply",
-            WebkitMaskImage: "radial-gradient(circle 46px at 50% 0, transparent 45px, #000 46px)",
-            maskImage: "radial-gradient(circle 46px at 50% 0, transparent 45px, #000 46px)",
-          }}
-        >
-          <form
-            onSubmit={(e) => (e.preventDefault(), send())}
-            className="absolute inset-x-4 bottom-6 flex h-[52px] items-center gap-2 rounded-full bg-white pl-5 pr-1.5 shadow-[0_10px_30px_-12px_rgba(30,60,100,.45)]"
-          >
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder={PLACEHOLDER[lang]}
-              className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-3"
-            />
-            {text.trim() && (
-              <button type="submit" className="grid h-10 w-10 place-items-center rounded-full bg-ink text-white" aria-label="Go">
-                <ArrowUp size={17} weight="bold" />
-              </button>
+      <div className="no-scrollbar relative h-full overflow-y-auto pb-36">
+        {/* top row */}
+        <div className="flex items-center justify-between px-4 pt-[max(14px,env(safe-area-inset-top))]">
+          <div className="relative">
+            <Glass radius={22} bezel={12} refraction={30} pressable className="cursor-pointer" onClick={() => setLangOpen((v) => !v)}>
+              <span className="flex h-11 items-center gap-2 px-3">
+                <Flag />
+                <span className="text-[15px] font-semibold text-ink">{LANGS.find((x) => x.id === lang)?.native}</span>
+                <CaretDown size={13} weight="bold" className="text-ink-2" />
+              </span>
+            </Glass>
+            {langOpen && (
+              <Glass radius={22} bezel={14} tint="rgba(255,255,255,.55)" className="absolute left-0 top-[52px] z-50 w-52 p-1.5">
+                <ul>
+                  {LANGS.map((x) => (
+                    <li key={x.id}>
+                      <button
+                        onClick={() => (setLang(x.id), setLangOpen(false))}
+                        className={`w-full rounded-[16px] px-3 py-2.5 text-left text-[15.5px] font-medium transition ${x.id === lang ? "bg-white/80 text-ink" : "text-ink-2 hover:bg-white/50"}`}
+                      >
+                        {x.native}
+                        <span className="ml-2 text-[13px] text-ink-3">{x.hello}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </Glass>
             )}
-          </form>
+          </div>
+          <Link href="/app/details" aria-label="My details">
+            <Glass radius={22} bezel={12} refraction={30} pressable>
+              <span className="grid h-11 w-11 place-items-center text-ink">
+                <User size={20} />
+              </span>
+            </Glass>
+          </Link>
         </div>
-        <button onClick={() => (setActive(null), setSheet(true))} className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2" aria-label="Talk to Jagora">
-          <Orb size={78} />
-        </button>
-      </div>
 
-      {/* site shortcuts */}
-      <div className="mt-6 overflow-hidden">
-        <div className="flex transition-transform duration-300" style={{ transform: `translateX(-${page * 100}%)` }}>
-          {[0, 1].map((p) => (
-            <div key={p} className="grid w-full shrink-0 grid-cols-4 px-3">
-              {SITES.slice(p * 4, p * 4 + 4).map((s) => (
-                <button key={s.domain} onClick={() => ask(`Open ${s.domain}`)} className="flex flex-col items-center gap-2 rounded-[16px] py-2 active:bg-mist">
-                  <SiteIcon {...s} />
-                  <span className="text-[12.5px] font-semibold text-ink-2">{s.name}</span>
-                </button>
-              ))}
-            </div>
-          ))}
+        {/* orb and wordmark */}
+        <div className="mt-2 flex flex-col items-center">
+          <button onClick={() => (setActive(null), setSheet(true))} aria-label="Talk to Jagora" className="transition active:scale-95">
+            <Orb size={96} state={orb} levelRef={pulse} />
+          </button>
+          <CloudWordmark width={278} levelRef={pulse} className="-mt-3" />
+          <p className="-mt-1 px-8 text-center text-[15px] font-medium text-ink-2">{TAGLINE[lang]}</p>
         </div>
-        <div className="mt-2 flex justify-center gap-1.5">
-          {[0, 1].map((p) => (
-            <button key={p} onClick={() => setPage(p)} aria-label={`Shortcuts page ${p + 1}`} className={`h-1.5 rounded-full transition-all ${page === p ? "w-4 bg-accent" : "w-1.5 bg-mist-2"}`} />
-          ))}
-        </div>
-      </div>
 
-      {/* recent tasks */}
-      {tasks.length > 0 && (
-        <section className="mt-6 px-4">
-          <h2 className="px-1 text-[16px] font-extrabold text-ink">{RECENT[lang]}</h2>
-          <div className="mt-2 flex flex-col">
-            {tasks.slice(0, 3).map((t) => (
-              <button key={t.id} onClick={() => onOpen(t.id)} className="flex items-center gap-3 rounded-[14px] px-1 py-2.5 text-left active:bg-mist">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-mist text-[13px] font-extrabold text-ink-2">{t.title.slice(0, 1)}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14.5px] font-bold text-ink">{t.title}</span>
-                  <span className="block truncate text-[12.5px] text-ink-3">{t.status === "waiting" ? "Needs you" : t.status === "done" ? "Done" : t.status === "working" ? "Working" : "Stopped"}</span>
-                </span>
+        {/* ask bar */}
+        <form onSubmit={(e) => (e.preventDefault(), send())} className="mx-4 mt-5">
+          <Glass radius={30} bezel={18} refraction={40} tint="rgba(255,255,255,.5)">
+            <span className="flex h-[58px] items-center gap-3 pl-5 pr-2">
+              <VoiceBars />
+              <input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onFocus={() => setLangOpen(false)}
+                placeholder={PLACEHOLDER[lang]}
+                className="h-full min-w-0 flex-1 bg-transparent text-[16px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-3"
+              />
+              <button type="submit" aria-label="Go" className="grid h-[42px] w-[42px] place-items-center rounded-full bg-[#5b6472] text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.35)] transition active:scale-90">
+                <ArrowRight size={18} weight="bold" />
               </button>
+            </span>
+          </Glass>
+        </form>
+
+        {/* shortcuts */}
+        <div className="mt-5 overflow-hidden">
+          <div className="flex transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)]" style={{ transform: `translateX(-${page * 100}%)` }}>
+            {[0, 1].map((p) => (
+              <div key={p} className="grid w-full shrink-0 grid-cols-4 gap-2.5 px-4">
+                {SITES.slice(p * 4, p * 4 + 4).map((s) => (
+                  <Glass key={s.goal} radius={22} bezel={14} refraction={28} pressable className="cursor-pointer" onClick={() => ask(s.goal)}>
+                    <span className="flex flex-col items-center gap-1.5 pb-2.5 pt-3">
+                      <AppIcon site={s} />
+                      <span className="max-w-full truncate px-1 text-[12px] font-medium text-ink-2">{s.name[lang]}</span>
+                    </span>
+                  </Glass>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex justify-center gap-1.5">
+            {[0, 1].map((p) => (
+              <button key={p} onClick={() => setPage(p)} aria-label={`Shortcuts ${p + 1}`} className={`h-[7px] rounded-full transition-all duration-300 ${page === p ? "w-[7px] bg-accent" : "w-[7px] bg-ink/20"}`} />
+            ))}
+          </div>
+        </div>
+
+        {/* discover */}
+        <section className="mt-5 px-4">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-[20px] font-bold text-ink">{DISCOVER[lang]}</h2>
+            <CaretRight size={18} weight="bold" className="text-ink-2" />
+          </div>
+          <div className="mt-3 flex flex-col gap-2.5">
+            {CARDS.map((c) => (
+              <Glass key={c.id} radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.55)" pressable className="cursor-pointer" onClick={() => run(c.id)}>
+                <span className="flex gap-3 p-2.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={c.thumb} alt="" className="h-[80px] w-[96px] shrink-0 rounded-[14px] object-cover shadow-[0_4px_10px_-6px_rgba(0,0,0,.35)]" />
+                  <span className="flex min-w-0 flex-1 flex-col py-0.5">
+                    <span className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{c.title[lang]}</span>
+                    <span className="mt-auto flex items-center gap-1.5 text-[12.5px] text-ink-3">
+                      <span className="truncate">{c.source}</span>
+                      <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-ink-3/60" />
+                      <span className="shrink-0">{c.when[lang]}</span>
+                      <DotsThree size={20} weight="bold" className="ml-auto shrink-0 text-ink-2" />
+                    </span>
+                  </span>
+                </span>
+              </Glass>
             ))}
           </div>
         </section>
-      )}
-
-      {/* discover */}
-      <section className="mt-6 px-4">
-        <div className="flex items-center justify-between px-1">
-          <h2 className="text-[16px] font-extrabold text-ink">{DISCOVER[lang]}</h2>
-          <DotsThreeVertical size={20} weight="bold" className="text-ink-3" />
-        </div>
-        <div className="mt-3 flex flex-col gap-3">
-          {CARDS.map((c) => (
-            <button key={c.id} onClick={() => run(c.id)} className="rounded-[20px] border border-mist-2 bg-white p-3 text-left shadow-[0_8px_24px_-20px_rgba(0,0,0,.35)] active:bg-mist">
-              <div className="flex gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={c.thumb} alt="" className="h-[78px] w-[92px] shrink-0 rounded-[14px] object-cover" />
-                <p className="line-clamp-3 text-[14.5px] font-bold leading-snug text-ink">{c.title[lang]}</p>
-              </div>
-              <div className="mt-2.5 flex items-center gap-2 text-[12px] text-ink-3">
-                <span className="font-semibold text-ink-2">{c.source}</span>
-                <span>·</span>
-                <span className="truncate">{c.time[lang]}</span>
-                <DotsThreeVertical size={18} weight="bold" className="ml-auto shrink-0" />
-              </div>
-            </button>
-          ))}
-        </div>
-      </section>
+      </div>
     </div>
   );
 }
 
+function TabsGlyph({ count }: { count: number }) {
+  return (
+    <span className="grid h-[22px] w-[22px] place-items-center rounded-[6px] border-[1.8px] border-current text-[11px] font-bold leading-none">{count}</span>
+  );
+}
+
 export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "tabs"; setScreen: (s: "home" | "page" | "tabs") => void }) {
+  const lang = useApp((s) => s.lang);
   const sheet = useApp((s) => s.sheetOpen);
   const setSheet = useApp((s) => s.setSheet);
   const orb = useApp((s) => s.orb);
   const count = useApp((s) => s.tasks.length);
   const task = useApp(activeTask);
   const pulse = useSpeakingPulse(orb === "speaking");
-  const icon = "grid h-11 w-11 place-items-center rounded-full text-ink-2 active:bg-mist disabled:opacity-30";
+  const item = "flex w-[58px] flex-col items-center gap-1 text-ink-2 transition active:scale-90 disabled:opacity-35";
   return (
-    <nav className="absolute inset-x-0 bottom-0 z-40 border-t border-mist-2 bg-white/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
-      <div className="flex h-[64px] items-center justify-around px-2">
-        <button className={icon} disabled={screen === "home"} onClick={() => setScreen("home")} aria-label="Back">
-          <CaretLeft size={23} />
-        </button>
-        <button className={icon} disabled={!task || task.kind !== "browse" || screen === "page"} onClick={() => setScreen("page")} aria-label="Forward">
-          <CaretRight size={23} />
-        </button>
-        <button onClick={() => setSheet(!sheet)} className={`-mt-6 transition ${sheet ? "opacity-0" : ""}`} aria-label="Talk to Jagora">
-          <Orb size={64} state={orb} levelRef={pulse} />
-        </button>
-        <button className={`${icon} relative`} onClick={() => setScreen("tabs")} aria-label={`Tabs, ${count} open`}>
-          <SquaresFour size={23} />
-          {count > 0 && <span className="absolute right-1 top-1 grid h-[17px] min-w-[17px] place-items-center rounded-full bg-accent px-1 text-[10px] font-extrabold text-white">{count}</span>}
-        </button>
-        <button className={icon} onClick={() => setScreen("home")} aria-label="Home">
-          <House size={23} />
-        </button>
-      </div>
-    </nav>
+    <div className="absolute inset-x-3 bottom-[max(10px,env(safe-area-inset-bottom))] z-40">
+      <Glass radius={32} bezel={20} refraction={44} blur={14} tint="rgba(255,255,255,.74)">
+        <nav className="flex h-[70px] items-center justify-around px-1">
+          <button className={item} disabled={screen === "home"} onClick={() => setScreen("home")}>
+            <CaretLeft size={22} />
+            <span className="text-[11px] font-medium">{NAV.back[lang]}</span>
+          </button>
+          <button className={item} disabled={!task || task.kind !== "browse" || screen === "page"} onClick={() => setScreen("page")}>
+            <CaretRight size={22} />
+            <span className="text-[11px] font-medium">{NAV.fwd[lang]}</span>
+          </button>
+          <button onClick={() => setSheet(!sheet)} className={`-mt-1 transition active:scale-90 ${sheet ? "opacity-0" : ""}`} aria-label="Talk to Jagora">
+            <Orb size={62} state={orb} levelRef={pulse} />
+          </button>
+          <button className={item} onClick={() => setScreen("tabs")} aria-label={`Tabs, ${count} open`}>
+            <TabsGlyph count={count} />
+            <span className="text-[11px] font-medium">{NAV.tabs[lang]}</span>
+          </button>
+          <button className={item} onClick={() => setScreen("home")}>
+            <House size={22} />
+            <span className="text-[11px] font-medium">{NAV.home[lang]}</span>
+          </button>
+        </nav>
+      </Glass>
+    </div>
   );
 }
