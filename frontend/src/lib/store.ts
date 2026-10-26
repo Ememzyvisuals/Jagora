@@ -56,6 +56,7 @@ type State = {
   // live, not saved
   sheetOpen: boolean;
   live: boolean;
+  showPage: boolean;
   orb: OrbMode;
   pointer: Pointer;
   highlight: Highlight;
@@ -74,6 +75,7 @@ type State = {
   setMeta: (taskId: string, meta: Partial<Pick<Task, "title" | "kind">>) => void;
   setSheet: (v: boolean) => void;
   setLive: (v: boolean) => void;
+  setShowPage: (v: boolean) => void;
   setOrb: (o: OrbMode) => void;
   setPointer: (p: Partial<Pointer>) => void;
   setHighlight: (h: Highlight) => void;
@@ -97,6 +99,7 @@ export const useApp = create<State>()(
       activeId: null,
       sheetOpen: false,
       live: false,
+      showPage: false,
       orb: "idle",
       pointer: { x: 0, y: 0, visible: false, clicking: false },
       highlight: null,
@@ -126,7 +129,8 @@ export const useApp = create<State>()(
       setUrl: (taskId, url) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, url } : t)) })),
       setMeta: (taskId, meta) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, ...meta } : t)) })),
       setSheet: (sheetOpen) => set({ sheetOpen }),
-      setLive: (live) => set({ live }),
+      setLive: (live) => set({ live, showPage: false }),
+      setShowPage: (showPage) => set({ showPage }),
       setOrb: (orb) => set({ orb }),
       setPointer: (p) => set((s) => ({ pointer: { ...s.pointer, ...p } })),
       setHighlight: (highlight) => set({ highlight }),

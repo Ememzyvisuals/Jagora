@@ -144,9 +144,9 @@ function TabCard({ task, index, count, full, onOpen, onClose }: { task: Task; in
             // eslint-disable-next-line @next/next/no-img-element
             <img src={thumb} alt="" className="h-full w-full object-cover object-left-top" draggable={false} />
           ) : (
-            <span className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-b from-[#6fb2f2] to-[#dcecfb] p-6">
-              <Orb size={84} />
-              <span className="line-clamp-2 text-center text-[15px] font-medium leading-snug text-ink">{lastLine(task)}</span>
+            <span className="flex h-full w-full flex-col justify-end gap-1 bg-gradient-to-b from-[#6fb2f2] to-[#dcecfb] p-5">
+              <span className="text-[13px] font-semibold text-ink-2">{task.title}</span>
+              <span className="line-clamp-3 text-[16px] font-medium leading-snug text-ink">{lastLine(task)}</span>
             </span>
           )}
         </button>
@@ -197,8 +197,7 @@ function Tabs({ full, setFull, onOpen, onNew, onDone }: { full: boolean; setFull
           )}
           {tasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center text-white">
-              <Orb size={96} />
-              <p className="mt-3 text-[17px] font-semibold">No tabs open</p>
+              <p className="text-[17px] font-semibold">No tabs open</p>
               <p className="mt-1 text-[14.5px] text-white/80">Add a tab and tell Jagora what you need.</p>
             </div>
           ) : (

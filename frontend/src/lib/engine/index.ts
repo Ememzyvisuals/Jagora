@@ -23,6 +23,7 @@ export function ask(text: string, attachment?: Attachment) {
   const s = useApp.getState();
   if (!attachment && SHOW_PAGE.test(text) && s.tasks.some((t) => t.id === s.activeId && t.kind === "browse")) {
     s.setSheet(false);
+    s.setShowPage(true);
     return s.activeId!;
   }
   const current = s.tasks.find((t) => t.id === s.activeId);

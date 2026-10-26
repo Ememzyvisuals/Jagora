@@ -75,8 +75,12 @@ export function LiveMode() {
   // Jagora's latest reply, shown as a caption
   const reply = [...(task?.messages ?? [])].reverse().find((m) => m.kind === "agent" || m.kind === "confirm" || m.kind === "choice");
   const replyText = reply ? ("text" in reply ? reply.text : "question" in reply ? reply.question : "") : "";
-  // shrink to an island while Jagora works on a page
-  const island = !!task && task.kind === "browse" && !!task.url && task.status === "working";
+  // the page comes into view only when she asks to see it, or when Jagora needs her to type on it (password, code)
+  const showPage = useApp((s) => s.showPage);
+  const setShowPage = useApp((s) => s.setShowPage);
+  const last = task?.messages.at(-1);
+  const mustType = last?.kind === "handoff" && last.status === "waiting";
+  const island = !!task && task.kind === "browse" && !!task.url && (showPage || mustType);
 
   const listen = useCallback(async () => {
     if (busy.current) return;
@@ -176,7 +180,9 @@ export function LiveMode() {
             <Glass flat radius={28} bezel={14} refraction={30} blur={14} tint="rgba(14,15,18,.82)">
               <div className="flex h-14 items-center gap-2.5 pl-2 pr-2 text-white">
                 <Orb size={44} state={phase === "speak" ? "speaking" : phase === "think" ? "thinking" : "listening"} levelRef={level} />
-                <span className="min-w-0 max-w-[52vw] truncate text-[14px] font-medium">{label}</span>
+                <button onClick={() => setShowPage(false)} className="min-w-0 max-w-[48vw] truncate text-left text-[14px] font-medium" aria-label="Back to live view">
+                  {label}
+                </button>
                 <button onClick={toggleMute} className="grid h-10 w-10 place-items-center rounded-full bg-white/12" aria-label={muted ? "Turn microphone on" : "Turn microphone off"}>
                   {muted ? <MicrophoneSlash size={18} /> : <Microphone size={18} />}
                 </button>

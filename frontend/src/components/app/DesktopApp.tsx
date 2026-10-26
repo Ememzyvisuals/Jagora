@@ -33,6 +33,7 @@ import { Backdrop } from "../glass/Backdrop";
 import { LiveButton, LiveMode } from "../LiveMode";
 import { Glass } from "../glass/Glass";
 import { Orb } from "../Orb";
+import { Mark } from "../Brand";
 import { PageView } from "../PageView";
 import { AppIcon, SITES, VoiceBars } from "./MobileHome";
 
@@ -98,7 +99,7 @@ export function DesktopApp() {
             <span className="h-3 w-3 rounded-full bg-[#28c840] shadow-[inset_0_0_0_.5px_rgba(0,0,0,.15)]" />
           </span>
           <div className="ml-3 flex h-9 items-center gap-2 rounded-t-[14px] bg-white/55 px-3.5 text-[13.5px] font-medium text-ink shadow-[inset_0_1px_1px_rgba(255,255,255,.9)]">
-            <Orb size={18} />
+            <Mark size={16} />
             {showPage ? task!.title : "Jagora"}
             <X size={12} className="ml-6 text-ink-3" />
           </div>
@@ -124,7 +125,7 @@ export function DesktopApp() {
           {/* tasks */}
           <aside className="flex w-[252px] shrink-0 flex-col rounded-[24px] bg-white/30 p-3 shadow-[inset_0_1px_1px_rgba(255,255,255,.8)]">
             <div className="flex items-center gap-2.5 px-1.5 pt-1">
-              <Orb size={40} />
+              <Mark size={32} />
               <span className="font-pixel text-[30px] leading-none text-ink">Jagora</span>
             </div>
             <button
@@ -148,7 +149,7 @@ export function DesktopApp() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14px] font-medium text-ink">{x.title}</span>
                     <span className="block truncate text-[12px] text-ink-3">
-                      {STATUS[x.status][lang]}, {ago(x.createdAt)}
+                      {STATUS[x.status][lang]} · {ago(x.createdAt)}
                     </span>
                   </span>
                   <StatusMark s={x.status} />
