@@ -16,8 +16,15 @@ const TITLES: Record<demo.Intent, string> = {
 const KIND: Record<demo.Intent, Task["kind"]> = { register: "browse", scam: "scam", paper: "paper", help: "chat" };
 
 /** She asked for something: start a new task (or continue the active one if Jagora is waiting for her words). */
+/** "Show me the browser": she wants to watch, not talk. Five languages, loose on purpose. */
+const SHOW_PAGE = /\b(show|see|let me see|i want to see)\b.*\b(browser|page|screen|site)\b|make i see|fi (í|i) hàn mí|jẹ́ kí n rí|je ki n ri|bari in gani|nuna mini|ka m hụ|ka m hu/i;
+
 export function ask(text: string, attachment?: Attachment) {
   const s = useApp.getState();
+  if (!attachment && SHOW_PAGE.test(text) && s.tasks.some((t) => t.id === s.activeId && t.kind === "browse")) {
+    s.setSheet(false);
+    return s.activeId!;
+  }
   const current = s.tasks.find((t) => t.id === s.activeId);
   // Jagora asked her a question and she answered by typing or speaking
   const open = current?.messages.findLast((m) => m.kind === "choice" && !m.picked);

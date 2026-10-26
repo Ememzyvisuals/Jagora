@@ -41,6 +41,15 @@ export function MobileApp() {
     if (task?.kind === "browse" && task.url) setScreen("page");
   }, [task?.id, task?.kind, task?.url]);
 
+  // while Jagora works on a page the sheet steps aside so she can watch; it comes back when Jagora needs her
+  const last = task?.messages.at(-1);
+  const needsHer = !!last && ((last.kind === "confirm" && last.status === "waiting") || (last.kind === "choice" && !last.picked) || (last.kind === "handoff" && last.status === "waiting"));
+  useEffect(() => {
+    if (!task || task.kind !== "browse" || !task.url) return;
+    if (needsHer) setSheet(true);
+    else if (task.status === "working") setSheet(false);
+  }, [task?.id, task?.kind, task?.url, task?.status, last?.id, needsHer, setSheet]);
+
   return (
     <div className="relative h-dvh overflow-hidden">
       <Backdrop />
@@ -76,6 +85,7 @@ export function MobileApp() {
       </AnimatePresence>
 
       {screen !== "tabs" && <EdgeBlur />}
+      {screen === "page" && !sheet && task && <LiveStatus onOpen={() => setSheet(true)} />}
       {!(screen === "tabs" && tabsFull) && <BottomBar screen={screen} setScreen={go} />}
       <Sheet open={sheet} onClose={() => setSheet(false)} />
       {screen === "home" && !sheet && <Tour />}
@@ -91,6 +101,36 @@ function thumbFor(task: Task) {
   if (task.kind === "paper") return "/thumbs/letter.webp";
   if (task.kind === "browse" && task.url) return "/thumbs/skills-fair.webp";
   return null;
+}
+
+/** While Jagora works and the sheet is down: one glass pill above the bar with what it is doing right now. */
+function LiveStatus({ onOpen }: { onOpen: () => void }) {
+  const task = useApp(activeTask);
+  const orb = useApp((s) => s.orb);
+  if (!task) return null;
+  const step = [...task.messages].reverse().find((m) => m.kind === "step" || m.kind === "agent");
+  const text = step && (step.kind === "step" || step.kind === "agent") ? step.text : lastLine(task);
+  if (!text) return null;
+  const working = task.status === "working";
+  return (
+    <motion.button
+      key={text}
+      onClick={onOpen}
+      initial={{ opacity: 0, y: 12, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: "spring", stiffness: 340, damping: 28 }}
+      className="absolute inset-x-6 bottom-[calc(max(10px,env(safe-area-inset-bottom))+70px)] z-40"
+      aria-live="polite"
+    >
+      <Glass flat radius={24} bezel={14} refraction={30} blur={12} tint="rgba(255,255,255,.8)">
+        <span className="flex items-center gap-2.5 py-2 pl-2 pr-4 text-left">
+          <Orb size={34} state={working ? "thinking" : orb} />
+          <span className="line-clamp-2 flex-1 text-[14px] font-medium leading-snug text-ink">{text}</span>
+          {working && <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-accent" />}
+        </span>
+      </Glass>
+    </motion.button>
+  );
 }
 
 function StatusChip({ s }: { s: Task["status"] }) {
