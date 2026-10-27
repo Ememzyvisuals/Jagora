@@ -16,6 +16,8 @@ import {
   Plus,
   SpeakerHigh,
   SidebarSimple,
+  CornersIn,
+  CornersOut,
   Info,
   GameController,
   CaretUp,
@@ -24,10 +26,12 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { fly } from "../Effects";
+import { setAutoFullscreen, toggleFullscreen, useAutoFullscreen } from "../Pwa";
+import { Starters, openSite, useTopSites } from "./NewTabBits";
 import { startPageWars } from "../PageWars";
 import { motion } from "motion/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ask, quick } from "@/lib/engine";
 import { ago } from "@/lib/hooks";
 import { LANGS, type Lang } from "@/lib/i18n";
@@ -97,6 +101,15 @@ export function DesktopApp() {
   const profile = useApp((s) => s.profile);
   const [langOpen, setLangOpen] = useState(false);
   const [side, setSide] = useState(false);
+  // desktop: full screen from the first click, so the demo looks like an app, not a page in a browser
+  useAutoFullscreen(true);
+  const [fs, setFs] = useState(false);
+  useEffect(() => {
+    const on = () => setFs(!!document.fullscreenElement);
+    on();
+    document.addEventListener("fullscreenchange", on);
+    return () => document.removeEventListener("fullscreenchange", on);
+  }, []);
   const theme = useTheme();
   const showPage = task?.kind === "browse" && !!task.url;
   const url = showPage ? (task!.url.startsWith("/practice/") ? "skillsfair.ng/register (practice site)" : task!.url.replace(/^https?:\/\//, "")) : "";
@@ -139,8 +152,22 @@ export function DesktopApp() {
             <Plus size={15} />
           </button>
           <button
-            onClick={toggleTheme}
+            data-no-autofs
+            onClick={() => {
+              const entering = !document.fullscreenElement;
+              setAutoFullscreen(entering);
+              void toggleFullscreen();
+              setFs(entering);
+            }}
             className="ml-auto grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-white/40"
+            aria-label={fs ? "Exit full screen" : "Full screen"}
+            title={fs ? "Exit full screen" : "Full screen (Jagora opens full screen on desktop)"}
+          >
+            {fs ? <CornersIn size={18} /> : <CornersOut size={18} />}
+          </button>
+          <button
+            onClick={toggleTheme}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-white/40"
             aria-label={theme === "dark" ? THEME_L.light[lang] : THEME_L.dark[lang]}
             title={theme === "dark" ? THEME_L.light[lang] : THEME_L.dark[lang]}
           >
@@ -276,18 +303,25 @@ export function DesktopApp() {
   );
 }
 
+/* the panel on a new tab: her recent conversations to pick up again (BrowserOS keeps history the same way) */
 function Hello({ lang }: { lang: Lang }) {
-  const tries: L[] = [
-    { en: "Register me for the Skills Fair", pcm: "Register me for Skills Fair", yo: "Forúkọ mi sílẹ̀ fún Skills Fair", ha: "Yi mini rajista don Skills Fair", ig: "Debanye m aha maka Skills Fair" },
-    { en: "Is this bank message real?", pcm: "This bank message na real?", yo: "Ṣé ọ̀rọ̀ báǹkì yìí jẹ́ òótọ́?", ha: "Shin wannan saƙon banki gaskiya ne?", ig: "Ozi ụlọ akụ a ọ bụ eziokwu?" },
-    { en: "Check my JAMB result", pcm: "Check my JAMB result", yo: "Ẹ wo èsì JAMB mi", ha: "Duba sakamakon JAMB dina", ig: "Lelee nsonaazụ JAMB m" },
-    { en: "Find free courses with certificates and write it up", pcm: "Find free courses wey get certificate, write am down", yo: "Wá àwọn ẹ̀kọ́ ọ̀fẹ́ tó ní ìwé-ẹ̀rí kí o kọ ọ́ sílẹ̀", ha: "Nemo kwasa-kwasai kyauta masu takardar shaida ka rubuta", ig: "Chọta ọmụmụ ihe n'efu nwere asambodo ma dee ya" },
-  ];
+  const tasks = useApp((s) => s.tasks);
+  const setActive = useApp((s) => s.setActive);
+  const T: Record<"recent" | "none", L> = {
+    recent: { en: "Pick up where you left off", pcm: "Continue where you stop", yo: "Tẹ̀síwájú níbi tí o dé", ha: "Ci gaba daga inda ka tsaya", ig: "Gaa n'ihu ebe ị kwụsịrị" },
+    none: { en: "Talk to Jagora or pick a suggestion. Your tasks will be kept here.", pcm: "Talk to Jagora or pick suggestion. Your work go dey here.", yo: "Bá Jagora sọ̀rọ̀ tàbí yan àbá kan. Iṣẹ́ yín á wà níbí.", ha: "Yi magana da Jagora ko zaɓi shawara. Ayyukanka za su kasance a nan.", ig: "Gwa Jagora okwu ma ọ bụ họrọ ntụnye. Ọrụ gị ga-anọ ebe a." },
+  };
+  if (!tasks.length) return <p className="px-2 pt-4 text-center text-[14.5px] leading-relaxed text-ink-2">{T.none[lang]}</p>;
   return (
-    <div className="flex flex-col gap-2 pb-2 pt-3">
-      {tries.map((x) => (
-        <button key={x.en} onClick={() => ask(x[lang])} className="rounded-[18px] bg-white/60 px-4 py-3 text-left text-[14.5px] font-medium text-ink shadow-[inset_0_1px_1px_rgba(255,255,255,1)] transition hover:bg-white/85 active:scale-[.98]">
-          {x[lang]}
+    <div className="flex flex-col gap-1.5 pb-2 pt-3">
+      <p className="px-2 pb-1 font-head text-[16px] text-ink">{T.recent[lang]}</p>
+      {tasks.slice(0, 6).map((x) => (
+        <button key={x.id} onClick={() => setActive(x.id)} className="flex items-center gap-3 rounded-[18px] bg-white/60 px-3.5 py-3 text-left shadow-[inset_0_1px_1px_rgba(255,255,255,1)] transition hover:bg-white/85 active:scale-[.98] dark:bg-white/10">
+          <TaskGlyph task={x} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14.5px] font-medium text-ink">{x.title}</span>
+            <span className="block text-[12.5px] text-ink-3">{ago(x.createdAt)}</span>
+          </span>
         </button>
       ))}
     </div>
@@ -297,6 +331,7 @@ function Hello({ lang }: { lang: Lang }) {
 /* Desktop new tab, laid out like a real browser's: a compact header with the orb and the word, a wide ask bar,
    one row of small shortcuts, then a wide Discover feed in columns (Jagora's suggestions and real news). */
 function StartPage() {
+  const top = useTopSites();
   const lang = useApp((s) => s.lang);
   const orb = useApp((s) => s.orb);
   const pulse = useSpeakingPulse(orb === "speaking");
@@ -336,11 +371,14 @@ function StartPage() {
             </span>
           </Glass>
         </form>
+        <div className="mt-3 w-full max-w-[720px]">
+          <Starters lang={lang} />
+        </div>
 
         {/* one row of shortcuts, like a browser's top sites */}
         <div className="mt-7 grid w-full max-w-[640px] grid-cols-6 gap-x-2 gap-y-3">
-          {SITES.map((s) => (
-            <button key={s.goal} onClick={() => ask(s.goal)} className="group flex flex-col items-center gap-1.5 rounded-[18px] py-2 transition hover:bg-white/45 active:scale-95" title={s.name[lang]}>
+          {top.map((s) => (
+            <button key={s.goal} onClick={() => openSite(s)} className="group flex flex-col items-center gap-1.5 rounded-[18px] py-2 transition hover:bg-white/45 active:scale-95" title={s.name[lang]}>
               <AppIcon site={s} size={46} />
               <span className="w-full truncate px-1 text-center text-[12.5px] font-medium text-ink-2">{s.name[lang]}</span>
             </button>

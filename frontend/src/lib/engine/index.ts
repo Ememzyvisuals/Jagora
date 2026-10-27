@@ -20,8 +20,15 @@ const KIND: Record<demo.Intent, Task["kind"]> = { register: "browse", scam: "sca
 /** "Show me the browser": she wants to watch, not talk. Five languages, loose on purpose. */
 const SHOW_PAGE = /\b(show|see|let me see|i want to see)\b.*\b(browser|page|screen|site)\b|make i see|fi (í|i) hàn mí|jẹ́ kí n rí|je ki n ri|bari in gani|nuna mini|ka m hụ|ka m hu/i;
 
+/** remember sites she opens, for her own top sites on the new tab */
+function noteVisit(text: string) {
+  const m = text.match(/\b((?:[a-z0-9-]+\.)+(?:com|ng|org|net|gov\.ng|edu\.ng|com\.ng|app|io|co))\b/i);
+  if (m) useApp.getState().visit(m[1].toLowerCase().replace(/^www\./, ""));
+}
+
 export function ask(text: string, attachment?: Attachment) {
   const s = useApp.getState();
+  noteVisit(text);
   if (!attachment && SHOW_PAGE.test(text) && s.tasks.some((t) => t.id === s.activeId && t.kind === "browse")) {
     s.setSheet(false);
     s.setShowPage(true);

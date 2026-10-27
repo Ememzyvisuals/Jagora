@@ -21,3 +21,37 @@ export async function toggleFullscreen() {
     else await document.documentElement.requestFullscreen({ navigationUI: "hide" });
   } catch {}
 }
+
+/** Desktop: Jagora goes full screen on the first click (browsers only allow it after a click or key press), and
+    remembers if she turns it off. */
+export const AUTO_FS = "jagora:autofs";
+export function autoFullscreenOn() {
+  try {
+    return localStorage.getItem(AUTO_FS) !== "0";
+  } catch {
+    return true;
+  }
+}
+export function setAutoFullscreen(on: boolean) {
+  try {
+    localStorage.setItem(AUTO_FS, on ? "1" : "0");
+  } catch {}
+}
+export function useAutoFullscreen(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled || !canFullscreen()) return;
+    const go = (e: Event) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.("[data-no-autofs]")) return;
+      if (autoFullscreenOn() && !document.fullscreenElement) void document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => undefined);
+      removeEventListener("pointerdown", go, true);
+      removeEventListener("keydown", go, true);
+    };
+    addEventListener("pointerdown", go, true);
+    addEventListener("keydown", go, true);
+    return () => {
+      removeEventListener("pointerdown", go, true);
+      removeEventListener("keydown", go, true);
+    };
+  }, [enabled]);
+}

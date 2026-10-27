@@ -66,6 +66,10 @@ type State = {
   onboarded: boolean;
   tasks: Task[];
   activeId: string | null;
+  /** how often she opened each shortcut or site, so the new tab shows her own top sites first */
+  visits: Record<string, { n: number; last: number; title?: string }>;
+  /** her own suggestion buttons under the ask bar, per mode; empty slots fall back to the defaults */
+  starters: { guide: string[]; do: string[] };
   // live, not saved
   sheetOpen: boolean;
   live: boolean;
@@ -93,6 +97,8 @@ type State = {
   setPointer: (p: Partial<Pointer>) => void;
   setHighlight: (h: Highlight) => void;
   setPageTitle: (t: string) => void;
+  visit: (key: string, title?: string) => void;
+  setStarter: (mode: "guide" | "do", i: number, text: string) => void;
 };
 
 // photos are kept as data URLs while the app is open; big ones are left out of saved storage so it never fills up
@@ -110,6 +116,8 @@ export const useApp = create<State>()(
       onboarded: false,
       tasks: [],
       activeId: null,
+      visits: {},
+      starters: { guide: ["", "", ""], do: ["", "", ""] },
       sheetOpen: false,
       live: false,
       showPage: false,
@@ -148,6 +156,14 @@ export const useApp = create<State>()(
       setPointer: (p) => set((s) => ({ pointer: { ...s.pointer, ...p } })),
       setHighlight: (highlight) => set({ highlight }),
       setPageTitle: (pageTitle) => set({ pageTitle }),
+      visit: (key, title) =>
+        set((s) => ({ visits: { ...s.visits, [key]: { n: (s.visits[key]?.n ?? 0) + 1, last: Date.now(), title: title ?? s.visits[key]?.title } } })),
+      setStarter: (mode, i, text) =>
+        set((s) => {
+          const list = [...(s.starters?.[mode] ?? ["", "", ""])];
+          list[i] = text;
+          return { starters: { ...(s.starters ?? { guide: ["", "", ""], do: ["", "", ""] }), [mode]: list } };
+        }),
     }),
     {
       name: "jagora",
@@ -158,7 +174,7 @@ export const useApp = create<State>()(
           return sessionStorage;
         }
       }),
-      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, tasks: s.tasks.slice(0, 12).map(lean) }),
+      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, starters: s.starters }),
     },
   ),
 );

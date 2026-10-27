@@ -29,6 +29,7 @@ import {
   LockSimple,
 } from "@phosphor-icons/react";
 import { fly } from "../Effects";
+import { Starters, openSite, useTopSites } from "./NewTabBits";
 import { startPageWars } from "../PageWars";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
@@ -231,6 +232,7 @@ export function AppIcon({ site, size = 46 }: { site: Site; size?: number }) {
 }
 
 export function Home({ onOpen }: { onOpen: (id: string) => void }) {
+  const top = useTopSites();
   void onOpen;
   const lang = useApp((s) => s.lang);
   const setLang = useApp((s) => s.setLang);
@@ -358,6 +360,9 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
             </span>
           </Glass>
         </form>
+        <div className="mx-4 mt-3">
+          <Starters lang={lang} />
+        </div>
 
         {/* shortcuts */}
         <div className="mt-5 overflow-hidden">
@@ -373,8 +378,8 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
           >
             {[0, 1, 2].map((p) => (
               <div key={p} className="grid w-full shrink-0 grid-cols-4 gap-2.5 px-4">
-                {SITES.slice(p * 4, p * 4 + 4).map((s) => (
-                  <button key={s.goal} onClick={() => ask(s.goal)} className="flex flex-col items-center gap-1.5 rounded-[18px] py-1.5 transition active:scale-95" title={s.name[lang]}>
+                {top.slice(p * 4, p * 4 + 4).map((s) => (
+                  <button key={s.goal} onClick={() => openSite(s)} className="flex flex-col items-center gap-1.5 rounded-[18px] py-1.5 transition active:scale-95" title={s.name[lang]}>
                     <AppIcon site={s} size={54} />
                     <span className="max-w-full truncate px-1 text-[12.5px] font-medium text-ink [text-shadow:0_1px_6px_rgba(255,255,255,.7)] dark:[text-shadow:0_1px_6px_rgba(0,0,0,.6)]">{s.name[lang]}</span>
                   </button>

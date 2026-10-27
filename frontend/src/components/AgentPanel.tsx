@@ -1,4 +1,5 @@
 "use client";
+import { motion } from "motion/react";
 
 import { useCallback, useState } from "react";
 import { ask, stop } from "@/lib/engine";
@@ -115,7 +116,10 @@ export function AgentPanel({ orbSize = 96 }: { orbSize?: number }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-col items-center gap-3 px-4 pb-2 pt-3">
-        <TalkOrb size={orbSize} />
+        {/* the cloud drops in from the home screen as the sheet opens */}
+        <motion.div initial={{ y: -150, scale: 1.3, opacity: 0.4 }} animate={{ y: 0, scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 210, damping: 22 }}>
+          <TalkOrb size={orbSize} />
+        </motion.div>
         <div className="flex items-center gap-2">
           <ModeSwitch />
           {task?.status === "working" && <StopButton onStop={() => stop(task.id)} />}
