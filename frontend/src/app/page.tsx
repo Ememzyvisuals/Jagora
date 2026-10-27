@@ -245,13 +245,13 @@ export default function Landing() {
           </motion.p>
           <div data-amina="languages" className="mt-6 flex flex-col">
             {[
-              ["Ẹ n lẹ́, kí ni kí n bá yín ṣe?", "Yorùbá", "Ẹ n lẹ́! Mo wà níbí."],
-              ["Sannu, me kake so in yi maka?", "Hausa", "Sannu! Ina nan."],
-              ["Ndeewo, gịnị ka m ga-emere gị?", "Igbo", "Ndeewo! Anọ m ebe a."],
-              ["How you dey, wetin I fit do for you?", "Naijá", "How far! I dey here."],
-              ["Good day, what can I do for you?", "English", "Hello! I'm right here."],
-            ].map(([line, name, hello], i) => (
-              <motion.div key={name} data-amina-say={hello} data-amina-lang={{ Yorùbá: "yo", Hausa: "ha", Igbo: "ig", Naijá: "pcm", English: "en" }[name]} {...rise} transition={{ ...rise.transition, delay: i * 0.05 }} className="flex flex-wrap items-baseline gap-x-5 border-b border-ink/10 py-5">
+              ["Ẹ n lẹ́, kí ni kí n bá yín ṣe?", "Yorùbá"],
+              ["Sannu, me kake so in yi maka?", "Hausa"],
+              ["Ndeewo, gịnị ka m ga-emere gị?", "Igbo"],
+              ["How you dey, wetin I fit do for you?", "Naijá"],
+              ["Good day, what can I do for you?", "English"],
+            ].map(([line, name], i) => (
+              <motion.div key={name} data-amina-say={line} data-amina-lang={{ Yorùbá: "yo", Hausa: "ha", Igbo: "ig", Naijá: "pcm", English: "en" }[name]} {...rise} transition={{ ...rise.transition, delay: i * 0.05 }} className="flex flex-wrap items-baseline gap-x-5 border-b border-ink/10 py-5">
                 <span className="font-head text-[26px] leading-tight sm:text-[40px]">{line}</span>
                 <span className="text-[15px] font-semibold text-ink-3">{name}</span>
               </motion.div>

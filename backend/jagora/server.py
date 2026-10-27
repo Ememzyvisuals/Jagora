@@ -170,12 +170,12 @@ async def me(request: Request):
 
 
 # Amina's hello in each language, for the landing page (a fixed set of lines, so nobody can use this to make speech)
-HELLO = {
-    "yo": "Ẹ n lẹ́! Mo wà níbí.",
-    "ha": "Sannu! Ina nan.",
-    "ig": "Ndeewo! Anọ m ebe a.",
-    "pcm": "How far! I dey here.",
-    "en": "Hello! I'm right here.",
+HELLO = {  # exactly the lines shown in the languages section of the landing page
+    "yo": "Ẹ n lẹ́, kí ni kí n bá yín ṣe?",
+    "ha": "Sannu, me kake so in yi maka?",
+    "ig": "Ndeewo, gịnị ka m ga-emere gị?",
+    "pcm": "How you dey, wetin I fit do for you?",
+    "en": "Good day, what can I do for you?",
 }
 
 
@@ -184,7 +184,10 @@ async def voice_hello(lang: str):
     """Jagora's own STORM voice saying hello, as a small MP3, made once and then served from disk."""
     if lang not in HELLO or not speech.enabled():
         raise HTTPException(404, "no such line")
-    out = speech.TTS_CACHE / f"hello-{settings.voice}-{lang}.mp3"
+    import hashlib
+
+    tag = hashlib.sha256(HELLO[lang].encode()).hexdigest()[:10]  # a new line makes a new file
+    out = speech.TTS_CACHE / f"hello-{settings.voice}-{lang}-{tag}.mp3"
     if not out.exists():
         clips = [w async for w in speech.speak(HELLO[lang], lang)]
         if not clips:
