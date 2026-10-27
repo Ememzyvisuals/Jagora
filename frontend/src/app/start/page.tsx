@@ -1,5 +1,7 @@
 "use client";
 
+import { API, authenticate } from "@/lib/account";
+
 /* Getting in, on one page: Jagora on the sky, her five languages to tap, and a glass card with email and password.
    No email check and no puzzle (the bot check runs on its own in the background). An access code gives a bigger
    allowance. Personal details are not asked here: Jagora asks for what a task needs, when it needs it. */
@@ -79,23 +81,13 @@ export default function Start() {
     if (pw.length < 8) return setErr(T.badPw[lang]);
     setErr(null);
     setBusy(true);
-    const api = process.env.NEXT_PUBLIC_BACKEND_HTTP;
-    if (api) {
+    if (API) {
       try {
-        const r = await fetch(`${api}/auth/${mode === "create" ? "signup" : "signin"}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ email: email.trim(), password: pw, code: code.trim() || undefined, lang }),
-        });
-        const d = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          setBusy(false);
-          return setErr(d.message?.[lang] ?? d.message?.en ?? d.detail ?? "Something went wrong. Try again.");
-        }
-      } catch {
+        await authenticate(mode === "create" ? "signup" : "signin", email.trim(), pw, code.trim());
+      } catch (e) {
         setBusy(false);
-        return setErr("Can't reach Jagora right now. Check your network.");
+        const m = e instanceof Error ? e.message : "";
+        return setErr(m && m !== "Failed to fetch" && m !== "puzzle" ? m : "Can't reach Jagora right now. Check your network.");
       }
     }
     setProfile({ email: email.trim() });

@@ -15,6 +15,7 @@ import {
   LockSimple,
   Plus,
   SpeakerHigh,
+  SpeakerSlash,
   SidebarSimple,
   CornersIn,
   CornersOut,
@@ -25,6 +26,7 @@ import {
   Sun,
   X,
 } from "@phosphor-icons/react";
+import { hush } from "@/lib/engine/remote";
 import { fly } from "../Effects";
 import { setAutoFullscreen, toggleFullscreen, useAutoFullscreen } from "../Pwa";
 import { Starters, openSite, useTopSites } from "./NewTabBits";
@@ -284,9 +286,7 @@ export function DesktopApp() {
           {/* Jagora */}
           <section className="flex w-[372px] shrink-0 flex-col overflow-hidden rounded-[24px] bg-white/45 shadow-[inset_0_1px_1px_rgba(255,255,255,1)]">
             <div className="flex justify-end gap-1 px-3 pt-3 text-ink-2">
-              <button className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/60" aria-label="Read aloud">
-                <SpeakerHigh size={17} />
-              </button>
+              <VoiceToggle />
             </div>
             <div className="-mt-8 flex flex-col items-center">
               <TalkOrb size={170} />
@@ -447,5 +447,29 @@ function StartPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+/** Jagora's voice on or off. Off, she still writes every word in the chat. */
+function VoiceToggle() {
+  const muted = useApp((s) => s.muted);
+  const setMuted = useApp((s) => s.setMuted);
+  return (
+    <button
+      onClick={() => {
+        setMuted(!muted);
+        if (!muted) {
+          hush();
+          try {
+            speechSynthesis.cancel();
+          } catch {}
+        }
+      }}
+      className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/60"
+      aria-label={muted ? "Turn Jagora's voice on" : "Turn Jagora's voice off"}
+      title={muted ? "Voice off" : "Voice on"}
+    >
+      {muted ? <SpeakerSlash size={17} /> : <SpeakerHigh size={17} />}
+    </button>
   );
 }

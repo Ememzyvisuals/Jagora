@@ -2,12 +2,12 @@
 import { motion } from "motion/react";
 
 import { useCallback, useState } from "react";
-import { ask, stop } from "@/lib/engine";
+import { ask, live, stop, voiceNote } from "@/lib/engine";
 import { SAMPLE_SCAM } from "@/lib/engine";
 import { t } from "@/lib/i18n";
 import { activeTask, useApp } from "@/lib/store";
-import { useSpeakingPulse, useVoice } from "@/lib/voice";
-import { Composer, StopButton, browserRecognizer, sendVoice } from "./Composer";
+import { blobToDataUrl, useSpeakingPulse, useVoice } from "@/lib/voice";
+import { Composer, StopButton, browserRecognizer } from "./Composer";
 import { Conversation } from "./Conversation";
 import { IconPasteMessage, IconRegister, IconSnapPaper } from "./icons";
 import { Orb } from "./Orb";
@@ -42,23 +42,25 @@ export function TalkOrb({ size = 96 }: { size?: number }) {
   const speaking = useSpeakingPulse(orb === "speaking");
   const [hint, setHint] = useState("");
   const [rec, setRec] = useState<ReturnType<typeof browserRecognizer>>(null);
+  const [t0, setT0] = useState(0);
 
   const toggle = useCallback(async () => {
     if (voice.listening) {
       setOrb("thinking");
       rec?.stop();
       const blob = await voice.stop();
-      await sendVoice(blob);
-      setTimeout(() => useApp.getState().orb === "thinking" && setOrb("idle"), 2500);
+      if (live && blob) voiceNote(blob, await blobToDataUrl(blob), (performance.now() - t0) / 1000, { chat: useApp.getState().activeId ?? undefined });
+      setTimeout(() => useApp.getState().orb === "thinking" && !live && setOrb("idle"), 2500);
       return;
     }
     setHint("");
     await voice.start();
-    const r = browserRecognizer(lang);
+    setT0(performance.now());
+    const r = live ? null : browserRecognizer(lang);
     if (r) {
       r.onresult = (e) => {
         const said = e.results[0]?.[0]?.transcript?.trim();
-        if (said) ask(said);
+        if (said) ask(said, undefined, { chat: useApp.getState().activeId ?? undefined });
       };
       try {
         r.start();
@@ -66,11 +68,11 @@ export function TalkOrb({ size = 96 }: { size?: number }) {
         /* already running */
       }
       setRec(r);
-    } else if (lang !== "en") {
+    } else if (!live && lang !== "en") {
       setHint("Speaking in this language needs Jagora's server. Type for now.");
     }
     setOrb("listening");
-  }, [voice, rec, lang, setOrb]);
+  }, [voice, rec, lang, setOrb, t0]);
 
   const level = orb === "speaking" ? speaking : voice.level;
   const label = voice.error ? "Allow the microphone to talk to Jagora" : hint || t(orb === "idle" ? "idle" : orb, lang);

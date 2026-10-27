@@ -89,3 +89,13 @@ export function useSpeakingPulse(active: boolean) {
   }, [active]);
   return level;
 }
+
+/** A recording as a data URL, so it can sit in the chat and be played back later. */
+export function blobToDataUrl(b: Blob): Promise<string> {
+  return new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => resolve("");
+    r.readAsDataURL(b);
+  });
+}

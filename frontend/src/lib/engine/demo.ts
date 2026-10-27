@@ -61,7 +61,7 @@ async function say(taskId: string, text: string, my: number) {
   const lang = S().lang;
   const ms = Math.min(4200, 900 + text.length * 45);
   try {
-    if (lang === "en" && "speechSynthesis" in window) {
+    if (lang === "en" && "speechSynthesis" in window && !S().muted) {
       const u = new SpeechSynthesisUtterance(text);
       u.lang = "en-NG";
       u.rate = 0.98;

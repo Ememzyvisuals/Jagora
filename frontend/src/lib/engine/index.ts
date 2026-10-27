@@ -3,7 +3,7 @@
 /* What the screens call. Uses the real backend when NEXT_PUBLIC_BACKEND_WS is set, otherwise the demo engine. */
 import { useApp, uid, type Attachment, type Task } from "../store";
 import * as demo from "./demo";
-import { BACKEND, remoteAnswer, remoteSecret, remoteStart, remoteStop } from "./remote";
+import { BACKEND, remoteAnswer, remoteAudio, remoteSecret, remoteStart, remoteStop } from "./remote";
 
 export const live = Boolean(BACKEND);
 
@@ -26,7 +26,9 @@ function noteVisit(text: string) {
   if (m) useApp.getState().visit(m[1].toLowerCase().replace(/^www\./, ""));
 }
 
-export function ask(text: string, attachment?: Attachment) {
+/** She asked for something. With `chat`, it continues that conversation (Jagora remembers what was said there);
+    without, it starts a new one. */
+export function ask(text: string, attachment?: Attachment, opts?: { chat?: string }) {
   const s = useApp.getState();
   noteVisit(text);
   if (!attachment && SHOW_PAGE.test(text) && s.tasks.some((t) => t.id === s.activeId && t.kind === "browse")) {
@@ -43,6 +45,15 @@ export function ask(text: string, attachment?: Attachment) {
     return current.id;
   }
   const msg = { id: uid(), kind: "user" as const, text: text || attachment?.name || "", attachment };
+  const chat = opts?.chat && s.tasks.find((t) => t.id === opts.chat);
+  if (chat) {
+    s.push(chat.id, msg);
+    s.setStatus(chat.id, "working");
+    s.setActive(chat.id);
+    if (live) void remoteStart(chat.id, text, attachment && { kind: attachment.kind, name: attachment.name, data: attachment.url });
+    else void demo.run(chat.id, demo.intentOf(text, attachment?.kind === "image" || attachment?.kind === "doc"), attachment?.name === "sample" ? "sample" : text);
+    return chat.id;
+  }
   if (live) {
     // the real agent decides what this is: open a link, search, fill a form, check a message, read a paper
     const id = s.newTask({ title: titleFrom(text, attachment), kind: attachment ? "paper" : "browse", url: "" });
@@ -58,6 +69,41 @@ export function ask(text: string, attachment?: Attachment) {
   void demo.run(id, intent, attachment?.name === "sample" ? "sample" : text);
   return id;
 }
+
+/** A voice note: her recording goes in the chat (she can play it back) and Jagora fills in the words it heard.
+    `heard` is what the device's own recognizer caught, used when there is no server. */
+export function voiceNote(blob: Blob, audio: string, secs: number, opts?: { chat?: string; heard?: string }) {
+  const s = useApp.getState();
+  const chat = opts?.chat && s.tasks.find((t) => t.id === opts.chat);
+  const id = chat ? chat.id : s.newTask({ title: VOICE_TITLE[s.lang], kind: "browse", url: "" });
+  const msgId = uid();
+  s.push(id, { id: msgId, kind: "user", text: opts?.heard ?? "", voice: true, audio, secs });
+  s.setActive(id);
+  if (!s.live) s.setSheet(true);
+  if (live) {
+    s.setStatus(id, "working");
+    void remoteAudio(id, blob, msgId);
+    return id;
+  }
+  const said = opts?.heard?.trim();
+  if (!said) {
+    s.update(id, msgId, { heard: false } as never);
+    s.push(id, { id: uid(), kind: "agent", text: NO_EARS[s.lang] });
+    s.setStatus(id, "waiting");
+    return id;
+  }
+  if (!chat) s.setMeta(id, { title: titleFrom(said) });
+  void demo.run(id, demo.intentOf(said, false), said);
+  return id;
+}
+const VOICE_TITLE: Record<string, string> = { en: "Voice note", pcm: "Voice note", yo: "Ohùn", ha: "Saƙon murya", ig: "Ozi olu" };
+const NO_EARS: Record<string, string> = {
+  en: "I couldn't make out that voice note on this device. Please type it, or try again.",
+  pcm: "I no fit hear that voice note for this phone. Abeg type am, or try again.",
+  yo: "Mi ò lè gbọ́ ohùn yìí lórí ẹ̀rọ yìí. Ẹ jọ̀ọ́ ẹ tẹ̀ ẹ́, tàbí kí ẹ tún gbìyànjú.",
+  ha: "Ban iya jin wannan saƙon murya a wannan na'urar ba. Don Allah ka rubuta, ko ka sake gwadawa.",
+  ig: "Enweghị m ike ịnụ ozi olu a na ngwaọrụ a. Biko dee ya, ma ọ bụ nwaa ọzọ.",
+};
 
 function titleFrom(text: string, a?: Attachment) {
   const t = text.trim().replace(/\s+/g, " ");

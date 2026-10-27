@@ -463,7 +463,7 @@ class Browser:
         return body, ctype, name
 
     async def open_pdf(self, url: str) -> None:
-        import fitz
+        import pymupdf as fitz
 
         data, ctype, name = await self.fetch(url)
         if not data.startswith(b"%PDF"):
@@ -660,7 +660,7 @@ def pdf_find(doc, q: str, limit: int = 8) -> list[dict]:
 
 
 def render_pdf_page(doc, n: int, mark: list | None = None, zoom: float = 1.6) -> bytes:
-    import fitz
+    import pymupdf as fitz
 
     pg = doc[n - 1]
     shapes = []
@@ -681,7 +681,7 @@ def render_pdf_page(doc, n: int, mark: list | None = None, zoom: float = 1.6) ->
 
 def crop_pdf_evidence(doc, n: int, rects: list) -> bytes:
     """The highlighted lines with some of the page around them, as JPEG."""
-    import fitz
+    import pymupdf as fitz
 
     pg = doc[n - 1]
     u = _union(rects)

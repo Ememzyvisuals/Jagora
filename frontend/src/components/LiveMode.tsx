@@ -9,11 +9,10 @@
 import { Microphone, MicrophoneSlash, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ask, live as backendLive } from "@/lib/engine";
-import { remoteAudio } from "@/lib/engine/remote";
+import { ask, live as backendLive, voiceNote } from "@/lib/engine";
 import type { Lang } from "@/lib/i18n";
 import { activeTask, useApp } from "@/lib/store";
-import { useSpeakingPulse, useVoice } from "@/lib/voice";
+import { blobToDataUrl, useSpeakingPulse, useVoice } from "@/lib/voice";
 import { browserRecognizer } from "./Composer";
 import { Glass } from "./glass/Glass";
 import { Orb } from "./Orb";
@@ -121,15 +120,15 @@ export function LiveMode() {
     if (!spoke) return void listen();
     setPhase("think");
     setOrb("thinking");
+    const chat = useApp.getState().activeId ?? undefined;
     if (backendLive && blob) {
-      const s = useApp.getState();
-      const id = s.activeId ?? s.newTask({ title: "Voice request", kind: "browse", url: "" });
-      await remoteAudio(id, blob);
+      // her words go in the chat as a voice message; the server fills in what it heard and answers in text and voice
+      voiceNote(blob, await blobToDataUrl(blob), (performance.now() - t0) / 1000, { chat });
     } else {
       await new Promise((r) => setTimeout(r, 450)); // let the recognizer deliver its result
       if (said) {
         setHeard(said);
-        ask(said);
+        ask(said, undefined, { chat });
       } else setHeard("");
     }
   }, [voice, lang, setOrb]);

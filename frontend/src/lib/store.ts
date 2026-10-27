@@ -28,9 +28,11 @@ export type SecretField = "account" | "nin" | "bvn" | "otp" | "pin" | "password"
 export type Attachment = { kind: "image" | "doc" | "link"; name: string; url?: string };
 
 export type Msg =
-  | { id: string; kind: "user"; text: string; attachment?: Attachment }
+  /** voice: she spoke it (a voice note or a live turn); audio: the recording (data URL) so she can play it back;
+      heard: false when Jagora could not make out the words */
+  | { id: string; kind: "user"; text: string; attachment?: Attachment; voice?: boolean; audio?: string; secs?: number; heard?: boolean }
   | { id: string; kind: "agent"; text: string }
-  | { id: string; kind: "step"; text: string; status: "doing" | "done" | "stopped" }
+  | { id: string; kind: "step"; text: string; status: "doing" | "done" | "stopped"; guard?: boolean }
   | { id: string; kind: "confirm"; question: string; detail?: string; value?: string; status: "waiting" | "yes" | "no" }
   | { id: string; kind: "choice"; question: string; choices: string[]; picked?: string }
   | { id: string; kind: "handoff"; text: string; status: "waiting" | "done" }
@@ -40,6 +42,10 @@ export type Msg =
   | { id: string; kind: "verdict"; verdict: "scam" | "safe" | "unsure"; title: string; reasons: string[]; link?: string }
   | { id: string; kind: "explain"; title: string; image: string; sections: { label: string; text: string; box: [number, number, number, number] }[] }
   | { id: string; kind: "doc"; doc: JDoc }
+  /** proof for a fact: the highlighted part of the official page or PDF, with where it came from */
+  | { id: string; kind: "evidence"; claim: string; quote: string; url: string; site: string; title: string; official: boolean; owner?: string; page?: number | null; date?: string; image: string }
+  /** a file Jagora downloaded for her */
+  | { id: string; kind: "file"; name: string; url: string; size: number; type: string; source?: string }
   | { id: string; kind: "result"; title: string; reference?: string; lines: [string, string][] };
 
 export type TaskStatus = "working" | "waiting" | "done" | "stopped";
@@ -70,6 +76,8 @@ type State = {
   visits: Record<string, { n: number; last: number; title?: string }>;
   /** her own suggestion buttons under the ask bar, per mode; empty slots fall back to the defaults */
   starters: { guide: string[]; do: string[] };
+  /** Jagora's voice off: she still gets every word as text */
+  muted: boolean;
   // live, not saved
   sheetOpen: boolean;
   live: boolean;
@@ -99,12 +107,18 @@ type State = {
   setPageTitle: (t: string) => void;
   visit: (key: string, title?: string) => void;
   setStarter: (mode: "guide" | "do", i: number, text: string) => void;
+  setMuted: (v: boolean) => void;
 };
 
 // photos are kept as data URLs while the app is open; big ones are left out of saved storage so it never fills up
 const lean = (t: Task): Task => ({
   ...t,
-  messages: t.messages.map((m) => (m.kind === "user" && m.attachment?.url && m.attachment.url.length > 4000 ? { ...m, attachment: { ...m.attachment, url: undefined } } : m)),
+  messages: t.messages.map((m) => {
+    if (m.kind === "user" && m.attachment?.url && m.attachment.url.length > 4000) m = { ...m, attachment: { ...m.attachment, url: undefined } };
+    if (m.kind === "user" && m.audio && m.audio.length > 400_000) m = { ...m, audio: undefined };
+    if (m.kind === "evidence" && m.image.length > 160_000) m = { ...m, image: "" };
+    return m;
+  }),
 });
 
 export const useApp = create<State>()(
@@ -118,6 +132,7 @@ export const useApp = create<State>()(
       activeId: null,
       visits: {},
       starters: { guide: ["", "", ""], do: ["", "", ""] },
+      muted: false,
       sheetOpen: false,
       live: false,
       showPage: false,
@@ -158,6 +173,7 @@ export const useApp = create<State>()(
       setPageTitle: (pageTitle) => set({ pageTitle }),
       visit: (key, title) =>
         set((s) => ({ visits: { ...s.visits, [key]: { n: (s.visits[key]?.n ?? 0) + 1, last: Date.now(), title: title ?? s.visits[key]?.title } } })),
+      setMuted: (muted) => set({ muted }),
       setStarter: (mode, i, text) =>
         set((s) => {
           const list = [...(s.starters?.[mode] ?? ["", "", ""])];
@@ -174,7 +190,7 @@ export const useApp = create<State>()(
           return sessionStorage;
         }
       }),
-      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, starters: s.starters }),
+      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, starters: s.starters, muted: s.muted }),
     },
   ),
 );

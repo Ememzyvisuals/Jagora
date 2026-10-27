@@ -22,7 +22,7 @@ ADMISSIONS = """<!doctype html><title>Admissions | Sample University</title>
 
 
 def make_pdf(path: Path):
-    import fitz
+    import pymupdf as fitz
 
     doc = fitz.open()
     p1 = doc.new_page()

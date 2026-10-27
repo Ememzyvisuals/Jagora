@@ -10,6 +10,7 @@ import type { Lang } from "@/lib/i18n";
 import { t } from "@/lib/i18n";
 import { useApp, type Msg, type Task } from "@/lib/store";
 import { IconLock, IconScam, IconShield } from "./icons";
+import { Evidence, FileCard, VoiceBubble } from "./ChatCards";
 
 const enter = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as const } };
 
@@ -33,6 +34,7 @@ export function Conversation({ task }: { task: Task }) {
 function Item({ m, task }: { m: Msg; task: Task }) {
   switch (m.kind) {
     case "user":
+      if (m.voice) return <VoiceBubble m={m} />;
       return (
         <div className="flex justify-end">
           <div className="max-w-[85%] rounded-[20px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[15.5px] leading-snug text-paper">
@@ -58,6 +60,7 @@ function Item({ m, task }: { m: Msg; task: Task }) {
           ) : (
             <XCircle size={15} weight="fill" className="text-danger" />
           )}
+          {m.guard ? <ShieldCheck size={14} weight="fill" className="-ml-1 shrink-0 text-accent" /> : null}
           <span className="truncate">{m.text}</span>
         </div>
       );
@@ -77,6 +80,10 @@ function Item({ m, task }: { m: Msg; task: Task }) {
       return <Result m={m} />;
     case "doc":
       return <DocCard d={m.doc} />;
+    case "evidence":
+      return <Evidence m={m} />;
+    case "file":
+      return <FileCard m={m} />;
   }
 }
 
