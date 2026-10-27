@@ -187,10 +187,13 @@ h3,
   background: rgba(29, 99, 237, 0.2);
 }
 
-:focus-visible {
-  outline: 2.5px solid var(--color-accent);
-  outline-offset: 3px;
-  border-radius: 10px;
+/* in the base layer, so a field that draws its own focus ring (focus-visible:outline-none) gets only that one */
+@layer base {
+  :focus-visible {
+    outline: 2.5px solid var(--color-accent);
+    outline-offset: 3px;
+    border-radius: 10px;
+  }
 }
 
 @layer components {
