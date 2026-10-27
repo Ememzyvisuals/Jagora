@@ -96,3 +96,70 @@ def test_signup_and_research_run(client, site):  # noqa: F811
     # chat memory kept on the server
     hist = c.get("/chats/t1", headers={"Authorization": f"Bearer {token}"}).json()
     assert hist[0]["role"] == "user" and any("evidence" in h["text"] for h in hist)
+
+
+class Organiser(Model):
+    """A phone user: reads a page, its tables and files, plans, sets a reminder a second from now, saves a moment."""
+
+    def __init__(self, base):
+        self.base, self.turn, self.usage = base, 0, Usage()
+
+    async def chat(self, messages, tools=None, effort="low", max_tokens=4000, kind="agent"):
+        import datetime as dt
+
+        soon = (dt.datetime.now(dt.timezone(dt.timedelta(hours=1))) + dt.timedelta(seconds=1)).isoformat()
+        plan = [
+            [("update_plan", {"steps": [{"text": "Open the admissions page", "status": "doing"}, {"text": "Set a reminder", "status": "todo"}]}),
+             ("go_to", {"url": self.base + "/admissions.html"})],
+            [("read_page", {}), ("page_tables", {}), ("find_media", {})],
+            [("update_plan", {"steps": [{"text": "Open the admissions page", "status": "done"}, {"text": "Set a reminder", "status": "doing"}]}),
+             ("set_reminder", {"when": soon, "text": "Check the UNILAG cut-off"}),
+             ("save_moment", {"title": "UNILAG cut-off 270", "tags": ["unilag", "#jamb"], "note": "Computer Science"})],
+            [("find_moments", {"query": "#unilag"}), ("list_reminders", {})],
+            [("finish", {"summary": "All set.", "success": True})],
+        ]
+        calls = plan[min(self.turn, len(plan) - 1)]
+        self.turn += 1
+        self.last = messages[1]["content"][0]["text"]
+        r = Reply("", [ToolCall(str(i), n, a) for i, (n, a) in enumerate(calls)], "tool_calls", 100, 10)
+        self.usage.add(r, kind)
+        return r
+
+
+def test_phone_view_plan_reminders_moments_and_take_over(client, site):  # noqa: F811
+    import asyncio
+    import time as _t
+
+    c, server = client
+    token = c.post("/auth/signup", json={"email": "p@b.co", "password": "longenough", "altcha": solve(c.get("/altcha").json())}).json()["token"]
+    model = Organiser(site)
+    server._model = lambda: model
+    got = []
+    with c.websocket_connect(f"/ws?token={token}") as ws:
+        ws.send_text(json.dumps({"type": "start", "task": "t2", "goal": "plan it", "lang": "en", "mode": "do", "profile": {},
+                                 "device": {"mobile": True, "w": 390, "h": 844}}))
+        while True:
+            ev = json.loads(ws.receive_text())
+            got.append(ev)
+            if ev["type"] == "status" and ev["status"] in ("done", "stopped"):
+                break
+        vp = next(e for e in got if e["type"] == "viewport")
+        assert vp["mobile"] and vp["w"] == 412
+        msgs = [e["msg"] for e in got if e["type"] == "msg"]
+        assert any(m["kind"] == "plan" for m in msgs) and any(e["type"] == "update" and "steps" in e["patch"] for e in got)
+        assert any(m["kind"] == "reminder" for m in msgs) and any(m["kind"] == "moment" for m in msgs)
+        # the agent read the page, its table and its files, and found what it saved
+        assert "Undergraduate admissions" in model.last and "Computer Science | 270" in model.last
+        assert "brochure-2026.pdf" in model.last and "UNILAG cut-off 270" in model.last and "#unilag #jamb" in model.last
+        # take over: tap on the live page while nothing runs
+        ws.send_text(json.dumps({"type": "input", "task": "t2", "action": "tap", "x": 100, "y": 100}))
+        ev = json.loads(ws.receive_text())
+        while ev["type"] != "url":
+            ev = json.loads(ws.receive_text())
+        assert "admissions" in ev["url"]
+        _t.sleep(1.2)
+        c.portal.call(server.fire_reminders)
+        ev = json.loads(ws.receive_text())
+        while ev["type"] != "notify":
+            ev = json.loads(ws.receive_text())
+        assert "Check the UNILAG cut-off" in ev["text"]

@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
         log.info("secrets.txt merged into .env: %s", ", ".join(INGESTED))  # names only
     await db.start()
     guard.load_cached()
-    tasks = [asyncio.create_task(_lists_daily()), asyncio.create_task(_watch_loop())]
+    tasks = [asyncio.create_task(_lists_daily()), asyncio.create_task(_watch_loop()), asyncio.create_task(_reminder_loop())]
     yield
     for t in tasks:
         t.cancel()
@@ -191,7 +191,10 @@ class Run:
         self.waiting: dict[str, tuple[str, asyncio.Future]] = {}  # msg id -> (kind, future)
         self.steer: asyncio.Queue = asyncio.Queue()
         self.step_id = ""
+        self.plan_id = ""
         self.titled = False
+        self.free = asyncio.Event()  # cleared while she has taken over the page
+        self.free.set()
 
     @property
     def busy(self) -> bool:
@@ -202,6 +205,7 @@ class Session:
     def __init__(self, ws: WebSocket, user_id: str) -> None:
         self.ws, self.user_id = ws, user_id
         self.lang, self.mode, self.profile = "en", "do", {}
+        self.device: dict = {}
         self.runs: dict[str, Run] = {}
         self.browser: Browser | None = None
         self.active_task = ""
@@ -228,8 +232,10 @@ class Session:
 
     async def get_browser(self) -> Browser:
         if self.browser is None:
-            self.browser = await Browser().start()
+            self.browser = await Browser(self.device).start()
             await self.browser.start_screencast(self._frame)
+            await self.send({"type": "viewport", "w": self.browser.viewport["width"], "h": self.browser.viewport["height"],
+                             "mobile": self.browser.mobile})
         return self.browser
 
     def _frame(self, jpeg: str) -> None:
@@ -268,17 +274,65 @@ class Session:
             self.lang = ev.get("lang") or self.lang
             self.mode = ev.get("mode") or self.mode
             self.profile = {k: v for k, v in (ev.get("profile") or {}).items() if isinstance(v, str)}
+            if isinstance(ev.get("device"), dict) and self.browser is None:
+                self.device = ev["device"]
             await self.on_words(task, str(ev.get("goal") or ""), ev.get("attachment"), ev.get("history"))
         elif kind in ("answer", "secret"):
             self._resolve(task, str(ev.get("id")), str(ev.get("value") or ""))
         elif kind == "audio":
             await self.on_audio(task, ev)
+        elif kind == "input":
+            await self.on_input(task, ev)
+        elif kind == "takeover":
+            await self.on_takeover(task, bool(ev.get("on")))
         elif kind == "stop":
             r = self.runs.get(task)
             if r and r.busy:
                 r.job.cancel()
             await self.send({"type": "status", "task": task, "status": "stopped"})
             await self.send({"type": "orb", "state": "idle"})
+
+    # ---- her hands on the live page ----------------------------------------------------------------------------------
+
+    async def on_takeover(self, task: str, on: bool) -> None:
+        r = self.runs.setdefault(task, Run(task))
+        if on:
+            r.free.clear()
+            await self.send({"type": "takeover", "task": task, "on": True})
+        else:
+            r.free.set()
+            if r.busy:
+                await r.steer.put("(she used the page herself and handed it back; look at the page again before acting)")
+            await self.send({"type": "takeover", "task": task, "on": False})
+
+    async def on_input(self, task: str, ev: dict) -> None:
+        """A tap, typing, a key or scrolling on the live picture. Allowed when Jagora is not acting: she took over,
+        Jagora is waiting for her, or nothing is running. What she types goes to the page only; it is not logged."""
+        r = self.runs.get(task)
+        if r and r.busy and r.free.is_set() and not r.waiting:
+            await self.send({"type": "hint", "task": task, "text": "Tap Take over first, so Jagora waits for you."})
+            return
+        if not self.browser:
+            return
+        b = self.browser
+        try:
+            act = ev.get("action")
+            if act == "tap":
+                await b.tap(float(ev.get("x", 0)), float(ev.get("y", 0)))
+            elif act == "type":
+                await b.type_raw(str(ev.get("text", ""))[:500])
+            elif act == "key":
+                await b.key(str(ev.get("key", "")))
+            elif act == "scroll":
+                await b.wheel(float(ev.get("dy", 0)))
+            elif act == "back":
+                await b.back()
+        except Exception as e:  # noqa: BLE001
+            log.info("input failed: %s", e)
+        try:
+            await self.send({"type": "url", "task": task, "url": b.pdf.url if b.pdf else b.page.url})
+        except Exception:  # noqa: BLE001
+            pass
 
     async def on_audio(self, task: str, ev: dict) -> None:
         lang = ev.get("lang") or self.lang
@@ -357,7 +411,8 @@ class Session:
         try:
             agent = Agent(_model(), self.browser, io, lang=self.lang, mode=self.mode, profile=self.profile,
                           conversation=convo[-14:], attachment=attachment, browser_factory=self.get_browser,
-                          steering=r.steer, user_id=self.user_id, on_watch=io.watch)
+                          steering=r.steer, user_id=self.user_id, on_watch=io.watch,
+                          memory=DbMemory(self.user_id, task, self.lang), pause_gate=r.free.wait)
             result = await agent.run(goal)
             await db.add_spend(agent.model.usage.dollars)
             await self.send({"type": "status", "task": task, "status": "done" if result.success else "stopped"})
@@ -452,7 +507,18 @@ class WsIO:
         s, t = self.s, self.task
         if kind == "page":
             await s.send({"type": "url", "task": t, "url": data.get("url", "")})
+        elif kind == "plan":
+            if self.r.plan_id:
+                await s.send({"type": "update", "task": t, "id": self.r.plan_id, "patch": {"steps": data["steps"]}})
+            else:
+                self.r.plan_id = mid()
+                await s.send({"type": "msg", "task": t, "msg": {"id": self.r.plan_id, "kind": "plan", "steps": data["steps"]}})
+        elif kind == "reminder":
+            await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "reminder", **data}})
+        elif kind == "moment":
+            await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "moment", **data}})
         elif kind == "step":
+            await s.send({"type": "highlight", "task": t, "box": None})
             await self.close_step()
             self.r.step_id = mid()
             await s.send({"type": "msg", "task": t, "msg": {"id": self.r.step_id, "kind": "step", "text": data["text"], "status": "doing"}})
@@ -484,6 +550,32 @@ class WsIO:
         wid = uuid.uuid4().hex[:12]
         await db.exec("insert into watches (id, user_id, url, what, last_hash, every_min, next_at, lang) values (?,?,?,?,?,?,?,?)",
                       (wid, self.s.user_id, url, what, None, max(60, every_hours * 60), time.time(), self.s.lang))
+
+
+class DbMemory:
+    """Her reminders and saved moments, for the agent."""
+
+    def __init__(self, user_id: str, chat_id: str, lang: str) -> None:
+        self.u, self.c, self.lang = user_id, chat_id, lang
+
+    async def add_reminder(self, at: float, text: str, repeat: str) -> str:
+        rid = uuid.uuid4().hex[:8]
+        await db.add_reminder(rid, self.u, self.c, at, text, repeat, self.lang)
+        return rid
+
+    async def reminders(self) -> list[dict]:
+        return await db.reminders(self.u)
+
+    async def cancel_reminder(self, rid: str) -> bool:
+        return await db.cancel_reminder(self.u, rid)
+
+    async def save_moment(self, title: str, tags: list[str], note: str, url: str) -> str:
+        m = uuid.uuid4().hex[:8]
+        await db.save_moment(m, self.u, title, tags, note, url, self.c)
+        return m
+
+    async def find_moments(self, query: str) -> list[dict]:
+        return await db.find_moments(self.u, query)
 
 
 def _box(rect: dict) -> dict:
@@ -520,6 +612,10 @@ async def ws_route(ws: WebSocket):
     acc = await auth.account(db, uid) if not uid.startswith("guest-") else None
     if acc:
         await s.send({"type": "account", "credits": acc["credits"]})
+        # reminders that came due while she was away
+        for n in await db.exec("select * from notices where user_id=? and delivered=0 order by t", (uid,)):
+            await s.send({"type": "notify", "task": n["chat_id"], "title": n["title"], "text": n["text"], "kind": "reminder"})
+            await db.exec("update notices set delivered=1 where id=?", (n["id"],))
     try:
         while True:
             raw = await ws.receive_text()
@@ -569,3 +665,48 @@ async def _watch_loop():
                 except Exception as e:  # noqa: BLE001
                     log.warning("watch %s failed: %s", w.get("id"), e)
                     await db.exec("update watches set next_at=? where id=?", (time.time() + 3600, w["id"]))
+
+
+# ---- reminders ---------------------------------------------------------------------------------------------------------
+
+REPEAT = {"daily": 86400, "weekly": 7 * 86400}
+
+
+async def _reminder_loop():
+    while True:
+        await asyncio.sleep(20)
+        await fire_reminders()
+
+
+async def fire_reminders() -> None:
+    try:
+        due = await db.exec("select * from reminders where done=0 and at <= ? limit 50", (time.time(),))
+    except Exception:  # noqa: BLE001
+        return
+    if True:
+        for r in due:
+            try:
+                head = {"en": "Reminder", "pcm": "Reminder", "yo": "Ìrántí", "ha": "Tunatarwa", "ig": "Ncheta"}.get(r["lang"], "Reminder")
+                text = f"{head}: {r['text']}"
+                await db.remember(r["user_id"], r["chat_id"], "agent", text)
+                s = SESSIONS.get(r["user_id"])
+                if s:
+                    await s.send({"type": "notify", "task": r["chat_id"], "title": head, "text": text, "kind": "reminder"})
+                    s.speak(r["chat_id"], text)
+                else:
+                    await db.exec("insert into notices (id, user_id, t, chat_id, title, text, delivered) values (?,?,?,?,?,?,0)",
+                                  (uuid.uuid4().hex[:12], r["user_id"], time.time(), r["chat_id"], head, text))
+                if r["repeat"] in REPEAT:
+                    await db.exec("update reminders set at=? where id=?", (r["at"] + REPEAT[r["repeat"]], r["id"]))
+                elif r["repeat"] == "monthly":
+                    import datetime as _dt
+
+                    d = _dt.datetime.fromtimestamp(r["at"], _dt.timezone(_dt.timedelta(hours=1)))
+                    m = d.month % 12 + 1
+                    y = d.year + (d.month == 12)
+                    nxt = d.replace(year=y, month=m, day=min(d.day, 28))
+                    await db.exec("update reminders set at=? where id=?", (nxt.timestamp(), r["id"]))
+                else:
+                    await db.exec("update reminders set done=1 where id=?", (r["id"],))
+            except Exception as e:  # noqa: BLE001
+                log.warning("reminder %s failed: %s", r.get("id"), e)

@@ -148,10 +148,26 @@ class Notice:
     reason: str
 
 
-class Browser:
-    """One browser (several tabs) per user session."""
+MOBILE_UA = ("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) "
+             "Chrome/129.0.0.0 Mobile Safari/537.36")
+DESKTOP_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+              "Chrome/129.0.0.0 Safari/537.36")
 
-    def __init__(self) -> None:
+
+class Browser:
+    """One browser (several tabs) per user session. `device` makes pages look the way they would on her screen:
+    {"mobile": true, "w": 390, "h": 844} gives the site's phone layout, otherwise a desktop window."""
+
+    def __init__(self, device: dict | None = None) -> None:
+        d = device or {}
+        self.mobile = bool(d.get("mobile"))
+        if self.mobile:
+            w = 412
+            h = int(max(640, min(960, (d.get("h") or 860) * w / max(320, d.get("w") or 390))))
+        else:
+            w = int(max(1024, min(1440, d.get("w") or settings.viewport_width)))
+            h = int(max(640, min(1000, d.get("h") or settings.viewport_height)))
+        self.viewport = {"width": w, "height": h}
         self._pw = None
         self._browser: PWBrowser | None = None
         self._ctx: BrowserContext | None = None
@@ -170,10 +186,9 @@ class Browser:
         self._pw = await async_playwright().start()
         self._browser = await self._pw.chromium.launch(headless=settings.headless, args=["--disable-notifications"])
         self._ctx = await self._browser.new_context(
-            viewport={"width": settings.viewport_width, "height": settings.viewport_height},
-            locale="en-NG", timezone_id="Africa/Lagos", accept_downloads=True, permissions=[],
-            user_agent=("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/129.0.0.0 Safari/537.36"))
+            viewport=self.viewport, locale="en-NG", timezone_id="Africa/Lagos", accept_downloads=True, permissions=[],
+            is_mobile=self.mobile, has_touch=self.mobile, device_scale_factor=2 if self.mobile else 1,
+            user_agent=MOBILE_UA if self.mobile else DESKTOP_UA)
         await guardmod.install(self._ctx, self)
         self.page = await self._own_page()
         self._wire(self.page)
@@ -401,7 +416,7 @@ class Browser:
         if self.pdf:
             await self.pdf_page(self.pdf.page + (1 if direction == "down" else -1))
             return
-        dy = {"down": 0.8, "up": -0.8}.get(direction, 0.8) * settings.viewport_height
+        dy = {"down": 0.8, "up": -0.8}.get(direction, 0.8) * self.viewport["height"]
         await self._need_page().mouse.wheel(0, dy)
         await asyncio.sleep(0.3)
 
@@ -538,8 +553,8 @@ class Browser:
                                 "return {x:x1, y:y1, w:x2-x1, h:y2-y1}; }")
         if not r:
             return None
-        vw, vh = settings.viewport_width, settings.viewport_height
-        pad_x, pad_y = 220, 130
+        vw, vh = self.viewport["width"], self.viewport["height"]
+        pad_x, pad_y = (40, 110) if self.mobile else (220, 130)
         clip = {"x": max(0, r["x"] - pad_x), "y": max(0, r["y"] - pad_y)}
         clip["width"] = min(vw - clip["x"], r["w"] + 2 * pad_x)
         clip["height"] = min(vh - clip["y"], r["h"] + 2 * pad_y)
@@ -581,6 +596,63 @@ class Browser:
             return await self._need_page().evaluate(DATE_JS)
         except Exception:  # noqa: BLE001
             return ""
+
+    async def read_page(self, part: int = 1, size: int = 6000) -> dict:
+        """The page's main text (article, notice, results), in parts, for reading, summarising and translating."""
+        pv = self.pdf
+        if pv:
+            pages_per = 3
+            start = (part - 1) * pages_per
+            text = "\n\n".join(f"[page {i + 1}]\n" + pv.text(i + 1) for i in range(start, min(pv.pages, start + pages_per)))
+            return {"text": re.sub(r"[ \t]+", " ", text)[:size * 2], "part": part, "parts": -(-pv.pages // pages_per)}
+        full: str = await self._need_page().evaluate(READ_JS)
+        parts = max(1, -(-len(full) // size))
+        part = max(1, min(parts, part))
+        return {"text": full[(part - 1) * size: part * size], "part": part, "parts": parts}
+
+    async def tables(self, limit: int = 4) -> list[dict]:
+        """Tables on the page (prices, timetables, results, cut-off lists) as rows."""
+        if self.pdf:
+            out = []
+            for i in range(self.pdf.pages):
+                try:
+                    for t in self.pdf.doc[i].find_tables().tables[:2]:
+                        rows = [[(c or "").strip() for c in r] for r in t.extract()]
+                        out.append({"caption": f"page {i + 1}", "rows": rows[:60]})
+                except Exception:  # noqa: BLE001
+                    break
+                if len(out) >= limit:
+                    break
+            return out
+        return (await self._need_page().evaluate(TABLES_JS))[:limit]
+
+    async def media(self) -> list[dict]:
+        """Audio, video and downloadable files on the page, with their addresses."""
+        if self.pdf:
+            return []
+        return await self._need_page().evaluate(MEDIA_JS)
+
+    # ---- her hands on the live page (take over) ---------------------------------------------------------------------
+
+    async def tap(self, x: float, y: float) -> None:
+        p = self._need_page()
+        if self.mobile:
+            await p.touchscreen.tap(x, y)
+        else:
+            await p.mouse.click(x, y)
+
+    async def type_raw(self, text: str) -> None:
+        await self._need_page().keyboard.type(text, delay=20)
+
+    async def key(self, key: str) -> None:
+        if key in ("Enter", "Backspace", "Tab", "Escape", "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Delete"):
+            await self._need_page().keyboard.press(key)
+
+    async def wheel(self, dy: float) -> None:
+        if self.pdf:
+            await self.pdf_page(self.pdf.page + (1 if dy > 0 else -1))
+            return
+        await self._need_page().mouse.wheel(0, max(-3000, min(3000, dy)))
 
     # ---- helpers --------------------------------------------------------------------------------------------------
 
@@ -807,6 +879,47 @@ DATE_JS = r"""
   const t = document.body.innerText;
   const r = t.match(/(last updated|updated|published|posted)[:\s]+([0-9]{1,2}[a-z]{0,2}\s+[A-Z][a-z]+,?\s+[0-9]{4}|[A-Z][a-z]+\s+[0-9]{1,2},?\s+[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i);
   return r ? r[2] : '';
+}
+"""
+
+
+READ_JS = r"""
+() => {
+  const pick = document.querySelector('article, main, [role=main], #content, .content, .post, .entry-content') || document.body;
+  const clone = pick.cloneNode(true);
+  clone.querySelectorAll('script,style,noscript,nav,footer,header,aside,form,iframe,svg,[aria-hidden=true],.ad,.ads,.advert,.share,.social,.related,.comments').forEach(e => e.remove());
+  const blocks = [];
+  for (const e of clone.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,td,th,pre,figcaption,dd,dt')) {
+    const t = (e.innerText || e.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!t || t.length < 2) continue;
+    const tag = e.tagName;
+    blocks.push(/^H[1-4]$/.test(tag) ? '\n## ' + t : tag === 'LI' ? '- ' + t : t);
+  }
+  let text = blocks.join('\n');
+  if (text.length < 400) text = (pick.innerText || '').replace(/\n{3,}/g, '\n\n');
+  return text.trim();
+}
+"""
+
+TABLES_JS = r"""
+() => [...document.querySelectorAll('table')].filter(t => t.offsetParent !== null && t.rows.length > 1).map(t => ({
+  caption: (t.caption?.innerText || t.previousElementSibling?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 120),
+  rows: [...t.rows].slice(0, 60).map(r => [...r.cells].map(c => c.innerText.replace(/\s+/g, ' ').trim().slice(0, 120))),
+}))
+"""
+
+MEDIA_JS = r"""
+() => {
+  const out = [];
+  for (const m of document.querySelectorAll('audio, video, audio source, video source')) {
+    const src = m.currentSrc || m.src; if (src && /^https?:/.test(src)) out.push({kind: m.tagName.toLowerCase().replace('source', 'media'), url: src, text: m.title || ''});
+  }
+  for (const a of document.querySelectorAll('a[href]')) {
+    const u = a.href, t = (a.innerText || a.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim();
+    if (/\.(mp3|m4a|wav|ogg|flac|mp4|webm|mkv|zip|ttf|otf|woff2?|pdf|epub|docx?)(\?|#|$)/i.test(u) || /download/i.test(t) || a.hasAttribute('download'))
+      out.push({kind: 'link', url: u, text: t.slice(0, 120)});
+  }
+  return out.filter((x, i, all) => all.findIndex(y => y.url === x.url) === i).slice(0, 40);
 }
 """
 

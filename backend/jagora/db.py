@@ -30,6 +30,16 @@ SCHEMA = [
     """create table if not exists watches (
          id text primary key, user_id text not null, url text not null, what text not null, last_hash text,
          every_min integer not null, next_at real not null, lang text not null default 'en')""",
+    """create table if not exists reminders (
+         id text primary key, user_id text not null, chat_id text not null, at real not null, text text not null,
+         repeat text not null default 'none', done integer not null default 0, lang text not null default 'en')""",
+    "create index if not exists reminders_due on reminders(done, at)",
+    """create table if not exists notices (
+         id text primary key, user_id text not null, t real not null, chat_id text not null, title text not null,
+         text text not null, delivered integer not null default 0)""",
+    """create table if not exists moments (
+         id text primary key, user_id text not null, t real not null, title text not null, tags text not null,
+         note text not null, url text not null default '', chat_id text not null default '')""",
 ]
 
 
@@ -133,3 +143,30 @@ class DB:
     async def spent_today(self) -> float:
         row = await self.one("select usd from spend where day=?", (time.strftime("%Y-%m-%d", time.gmtime()),))
         return float(row["usd"]) if row else 0.0
+
+    # ---- reminders and moments ------------------------------------------------------------------------------------
+
+    async def add_reminder(self, rid: str, user_id: str, chat_id: str, at: float, text: str, repeat: str, lang: str) -> None:
+        await self.exec("insert into reminders (id, user_id, chat_id, at, text, repeat, done, lang) values (?,?,?,?,?,?,0,?)",
+                        (rid, user_id, chat_id, at, text[:500], repeat, lang))
+
+    async def reminders(self, user_id: str) -> list[dict]:
+        return await self.exec("select id, at, text, repeat from reminders where user_id=? and done=0 order by at", (user_id,))
+
+    async def cancel_reminder(self, user_id: str, rid: str) -> bool:
+        row = await self.one("select id from reminders where user_id=? and id=? and done=0", (user_id, rid))
+        if row:
+            await self.exec("update reminders set done=1 where id=?", (rid,))
+        return bool(row)
+
+    async def save_moment(self, mid: str, user_id: str, title: str, tags: list[str], note: str, url: str, chat_id: str) -> None:
+        await self.exec("insert into moments (id, user_id, t, title, tags, note, url, chat_id) values (?,?,?,?,?,?,?,?)",
+                        (mid, user_id, time.time(), title[:200], " ".join(f"#{t.strip('#').lower()}" for t in tags if t.strip('#')),
+                         note[:4000], url[:1000], chat_id))
+
+    async def find_moments(self, user_id: str, query: str = "", limit: int = 12) -> list[dict]:
+        rows = await self.exec("select id, t, title, tags, note, url from moments where user_id=? order by t desc limit 300", (user_id,))
+        words = [w.strip("#").lower() for w in query.split() if w.strip("#")]
+        if words:
+            rows = [r for r in rows if all(w in f"{r['title']} {r['tags']} {r['note']} {r['url']}".lower() for w in words)]
+        return rows[:limit]

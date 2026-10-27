@@ -74,12 +74,17 @@ OFFICIAL: dict[str, str] = {
     "jumia.com.ng": "Jumia", "konga.com": "Konga", "mtn.ng": "MTN Nigeria", "airtel.com.ng": "Airtel Nigeria", "gloworld.com": "Glo",
     "9mobile.com.ng": "9mobile", "ekedp.com": "Eko Electricity", "ikejaelectric.com": "Ikeja Electric",
 }
+from jagora.services import EXTRA_OFFICIAL  # noqa: E402
+
+OFFICIAL.update(EXTRA_OFFICIAL)
 # Words that, inside some other domain, suggest it is pretending to be one of the above.
 BRAND_WORDS = {"jamb": "jamb.gov.ng", "waec": "waec.org.ng", "neco": "neco.gov.ng", "nimc": "nimc.gov.ng", "nysc": "nysc.gov.ng",
                "unilag": "unilag.edu.ng", "gtbank": "gtbank.com", "gtco": "gtco.com", "firstbank": "firstbanknigeria.com",
                "zenithbank": "zenithbank.com", "accessbank": "accessbankplc.com", "remita": "remita.net", "opay": "opayweb.com",
                "palmpay": "palmpay.com", "moniepoint": "moniepoint.com", "kuda": "kudabank.com", "cbn": "cbn.gov.ng",
-               "immigration": "immigration.gov.ng", "frsc": "frsc.gov.ng", "inec": "inec.gov.ng", "airpeace": "flyairpeace.com"}
+               "immigration": "immigration.gov.ng", "frsc": "frsc.gov.ng", "inec": "inec.gov.ng", "airpeace": "flyairpeace.com",
+               "ikejaelectric": "ikejaelectric.com", "ekedp": "ekedp.com", "ibedc": "ibedc.com", "nipost": "nipost.gov.ng",
+               "nimc": "nimc.gov.ng", "efacility": "jamb.gov.ng", "waecdirect": "waecdirect.org"}
 OFFICIAL_TLDS = (".gov.ng", ".edu.ng", ".mil.ng", ".gov", ".gov.uk", ".edu", ".int", ".ac.uk")
 # Not a lookalike even though they contain a brand word: news, encyclopaedias, the big search and social sites.
 NEUTRAL = {"wikipedia.org", "google.com", "bing.com", "duckduckgo.com", "youtube.com", "facebook.com", "x.com", "twitter.com",
