@@ -206,3 +206,30 @@ def test_admin_sees_who_used_it_and_tests_without_limits(client, site):  # noqa:
 
     left = [asyncio.run(server.auth.spend_credit(server.db, me["user"]["id"])) for _ in range(3)]
     assert left[0] == left[2] >= 1_000_000
+
+
+def test_phone_notifications_when_jagora_is_closed(client, monkeypatch):
+    """She turns notifications on; a reminder that comes due while the app is closed reaches her phone."""
+    import asyncio
+    import time
+
+    c, server = client
+    key = c.get("/push/key").json()["key"]
+    assert len(key) == 87  # the server's public key, made once and kept
+    tok = c.post("/auth/signup", json={"email": "n@b.co", "password": "longenough", "altcha": solve(c.get("/altcha").json())}).json()["token"]
+    sub = {"endpoint": "https://fcm.googleapis.com/fcm/send/abc", "keys": {"p256dh": "BPk" + "a" * 84, "auth": "x" * 22}}
+    assert c.post("/push/subscribe", json={"subscription": sub}).status_code == 401
+    assert c.post("/push/subscribe", json={"subscription": sub}, headers={"Authorization": f"Bearer {tok}"}).json()["ok"]
+    sent = []
+
+    def fake_webpush(info, data, **kw):
+        sent.append((info["endpoint"], json.loads(data), kw["vapid_claims"]["sub"]))
+
+    import pywebpush
+
+    monkeypatch.setattr(pywebpush, "webpush", fake_webpush)
+    uid = server.auth.read_token(tok)
+    asyncio.run(server.db.add_reminder("r1", uid, "c1", time.time() - 1, "Pay NEPA bill", "none", "en"))
+    asyncio.run(server.fire_reminders())
+    assert sent and sent[0][0] == sub["endpoint"] and sent[0][1]["body"] == "Pay NEPA bill" and sent[0][1]["url"] == "/app?chat=c1"
+    assert sent[0][2].startswith("mailto:")

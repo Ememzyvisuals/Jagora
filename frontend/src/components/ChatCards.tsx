@@ -4,12 +4,14 @@
    - Evidence: the highlighted part of the official page or PDF that proves a fact, with where it came from
    - FileCard: a file Jagora downloaded for her
    - VoiceBubble: her voice note (or live turn), playable, with the words Jagora heard */
-import { ArrowSquareOut, DownloadSimple, FileText, FilePdf, Pause, Play, SealCheck, Warning, X } from "@phosphor-icons/react";
+import { ArrowSquareOut, Bell, BellRinging, DownloadSimple, FileText, FilePdf, Pause, Play, SealCheck, Warning, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApp, type Msg } from "@/lib/store";
 import type { Lang } from "@/lib/i18n";
+import { live } from "@/lib/engine";
+import { enablePush, pushState, type PushState } from "@/lib/push";
 
 type L = Record<Lang, string>;
 const W: Record<string, L> = {
@@ -202,14 +204,44 @@ export function PlanCard({ m }: { m: Extract<Msg, { kind: "plan" }> }) {
   );
 }
 
+const NOTIFY: L = { en: "Notify me on this phone", pcm: "Alert me for this phone", yo: "Fi ìkìlọ̀ ránṣẹ́ sí fóònù yìí", ha: "Sanar da ni a wannan wayar", ig: "Zitere m ozi na ekwentị a" };
+const NOTIFY_ON: L = { en: "Notifications are on", pcm: "Alert don on", yo: "Ìkìlọ̀ ti tàn", ha: "Sanarwa a kunne take", ig: "Ozi agbanyela" };
+const NOTIFY_IOS: L = {
+  en: "To get alerts on iPhone, add Jagora to your Home Screen first (Share, then Add to Home Screen).",
+  pcm: "For iPhone, add Jagora to Home Screen first (Share, then Add to Home Screen).",
+  yo: "Lórí iPhone, kọ́kọ́ fi Jagora sí Home Screen (Share, lẹ́yìn náà Add to Home Screen).",
+  ha: "A iPhone, fara saka Jagora a Home Screen (Share, sannan Add to Home Screen).",
+  ig: "Na iPhone, buru ụzọ tinye Jagora na Home Screen (Share, mgbe ahụ Add to Home Screen).",
+};
+const NOTIFY_BLOCKED: L = { en: "Notifications are blocked for Jagora in this browser's settings.", pcm: "Alert dey blocked for this browser settings.", yo: "Ìkìlọ̀ ti di dídí nínú ètò ẹ̀rọ aṣàwákiri yìí.", ha: "An toshe sanarwa a saitunan wannan burauza.", ig: "Egbochiri ozi na ntọala ihe nchọgharị a." };
+
+/** "Notify me on this phone": reminders and results reach her lock screen even when Jagora is closed. */
+export function NotifyButton({ dark = false }: { dark?: boolean }) {
+  const lang = useApp((s) => s.lang);
+  const [st, setSt] = useState<PushState | "busy" | null>(null);
+  useEffect(() => {
+    if (!live) return;
+    void pushState().then(setSt);
+  }, []);
+  if (!live || !st || st === "unsupported") return null;
+  if (st === "on") return <p className={`mt-2 flex items-center gap-1.5 text-[12.5px] font-semibold ${dark ? "text-paper/70" : "text-ok"}`}><BellRinging size={14} weight="fill" /> {NOTIFY_ON[lang]}</p>;
+  if (st === "needs-install" || st === "blocked") return <p className={`mt-2 text-[12.5px] leading-snug ${dark ? "text-paper/70" : "text-ink-3"}`}>{st === "blocked" ? NOTIFY_BLOCKED[lang] : NOTIFY_IOS[lang]}</p>;
+  return (
+    <button
+      onClick={async () => {
+        setSt("busy");
+        setSt(await enablePush().catch(() => "off" as const));
+      }}
+      disabled={st === "busy"}
+      className={`mt-2.5 flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13.5px] font-semibold ${dark ? "bg-paper text-ink" : "bg-ink text-paper"}`}
+    >
+      <Bell size={15} weight="bold" /> {NOTIFY[lang]}
+    </button>
+  );
+}
+
 export function ReminderCard({ m }: { m: Extract<Msg, { kind: "reminder" }> }) {
   const lang = useApp((s) => s.lang);
-  useEffect(() => {
-    // reminders reach her through notifications too, when she allows them
-    try {
-      if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission();
-    } catch {}
-  }, []);
   const d = new Date(m.at);
   const when = d.toLocaleString(LOCALE[lang], { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   return (
@@ -222,6 +254,7 @@ export function ReminderCard({ m }: { m: Extract<Msg, { kind: "reminder" }> }) {
         <p className="text-[12.5px] font-semibold text-accent">{REMIND[lang]}{m.repeat && m.repeat !== "none" && EVERY[m.repeat] ? ` · ${EVERY[m.repeat][lang]}` : ""}</p>
         <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{m.text}</p>
         <p className="text-[12.5px] text-ink-3">{when}</p>
+        <NotifyButton />
       </div>
     </div>
   );
@@ -277,6 +310,7 @@ export function ScheduledCard({ m }: { m: Extract<Msg, { kind: "scheduled" }> })
       <p className="mt-0.5 text-[20px] leading-tight">{when}</p>
       <p className="mt-1.5 line-clamp-3 text-[14.5px] leading-snug text-paper/90">{m.goal}</p>
       {m.allow?.length > 0 && <p className="mt-2 text-[12.5px] text-paper/70">{MAY[lang]} {m.allow.join(", ")}</p>}
+      <NotifyButton dark />
     </div>
   );
 }

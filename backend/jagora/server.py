@@ -942,6 +942,8 @@ async def _watch_loop():
                         s = SESSIONS.get(w["user_id"])
                         if s:
                             await s.send({"type": "notify", "task": chat_id, "title": w["what"][:60], "text": note, "url": w["url"]})
+                        else:
+                            await push.send(w["user_id"], w["what"][:60], "The page you asked me to watch has changed.", f"/app?chat={chat_id}", tag=chat_id)
                     await db.exec("update watches set last_hash=?, next_at=? where id=?", (h, time.time() + w["every_min"] * 60, w["id"]))
                 except Exception as e:  # noqa: BLE001
                     log.warning("watch %s failed: %s", w.get("id"), e)

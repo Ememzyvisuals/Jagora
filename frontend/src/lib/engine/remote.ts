@@ -285,6 +285,13 @@ export async function remoteTakeover(task: string, on: boolean) {
   (await connect()).send(JSON.stringify({ type: "takeover", task, on }));
 }
 
+/** Open the line when the app opens, so reminders and results that came while she was away arrive at once. */
+export async function remoteWake() {
+  try {
+    await connect();
+  } catch {}
+}
+
 export async function remoteStop(task: string) {
   hush();
   ws?.send(JSON.stringify({ type: "stop", task }));

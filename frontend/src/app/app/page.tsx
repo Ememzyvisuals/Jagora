@@ -6,7 +6,9 @@ import { DesktopApp } from "@/components/app/DesktopApp";
 import { MobileApp } from "@/components/app/MobileApp";
 import { useHydrated, useMedia } from "@/lib/hooks";
 import { useApp } from "@/lib/store";
-import { ask } from "@/lib/engine";
+import { ask, live } from "@/lib/engine";
+import { remoteWake } from "@/lib/engine/remote";
+import { refreshPush } from "@/lib/push";
 
 export default function AppPage() {
   const ready = useHydrated();
@@ -17,6 +19,26 @@ export default function AppPage() {
   useEffect(() => {
     if (ready && !onboarded) router.replace("/start");
     if (!ready || !onboarded) return;
+    // opened from a notification: go to that chat
+    const openChat = (url: string) => {
+      const id = new URL(url, location.href).searchParams.get("chat");
+      if (!id) return;
+      const st = useApp.getState();
+      st.ensureTask(id, "Jagora");
+      st.setActive(id);
+    };
+    try {
+      if (new URLSearchParams(location.search).get("chat")) {
+        openChat(location.href);
+        history.replaceState(null, "", "/app");
+      }
+    } catch {}
+    const onSw = (e: MessageEvent) => e.data?.type === "open-chat" && openChat(e.data.url);
+    navigator.serviceWorker?.addEventListener("message", onSw);
+    if (live) {
+      void remoteWake(); // what came while she was away arrives now
+      void refreshPush();
+    }
     // shared from another app ("Share to Jagora"): check the message or open the link
     try {
       const q = new URLSearchParams(location.search);
@@ -24,7 +46,7 @@ export default function AppPage() {
       if (shared) {
         history.replaceState(null, "", "/app");
         setTimeout(() => ask(shared), 400);
-        return;
+        return () => navigator.serviceWorker?.removeEventListener("message", onSw);
       }
     } catch {}
     // a request typed on the landing page before she signed up
@@ -35,6 +57,7 @@ export default function AppPage() {
         setTimeout(() => ask(pending), 400);
       }
     } catch {}
+    return () => navigator.serviceWorker?.removeEventListener("message", onSw);
   }, [ready, onboarded, router]);
 
   if (!ready || desktop === null || !onboarded) return <div className="h-dvh bg-mist" />;
