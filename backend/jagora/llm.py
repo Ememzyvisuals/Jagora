@@ -100,7 +100,7 @@ class MuseSpark(Model):
             body["reasoning_effort"] = effort  # Muse Spark and Wonder think; open-weight servers may not take this
         if tools:
             body["tools"] = tools
-            body["tool_choice"] = "required"
+            body["tool_choice"] = "auto"  # Muse Spark only accepts "auto"; replies without a tool are handled by the agent
         last: Exception | None = None
         for attempt in range(3):
             t0 = time.monotonic()
