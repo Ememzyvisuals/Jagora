@@ -37,7 +37,6 @@ import { TalkOrb } from "../AgentPanel";
 import { Composer } from "../Composer";
 import { Conversation } from "../Conversation";
 import { CloudWordmark } from "../glass/CloudWordmark";
-import { useHomeMark } from "@/lib/fontTrial";
 import { Backdrop } from "../glass/Backdrop";
 import { LiveButton, LiveMode } from "../LiveMode";
 import { Glass } from "../glass/Glass";
@@ -298,7 +297,6 @@ function Hello({ lang }: { lang: Lang }) {
 /* Desktop new tab, laid out like a real browser's: a compact header with the orb and the word, a wide ask bar,
    one row of small shortcuts, then a wide Discover feed in columns (Jagora's suggestions and real news). */
 function StartPage() {
-  const hm = useHomeMark();
   const lang = useApp((s) => s.lang);
   const orb = useApp((s) => s.orb);
   const pulse = useSpeakingPulse(orb === "speaking");
@@ -313,7 +311,7 @@ function StartPage() {
         <HeroFloat>
           <div className="flex items-center gap-1">
             <Orb size={150} state={orb} levelRef={pulse} />
-            <CloudWordmark key={hm.family} family={hm.family} weight={hm.weight} width={330} levelRef={pulse} className="-ml-4" />
+            <CloudWordmark width={330} levelRef={pulse} className="-ml-4" />
           </div>
           <p className="-mt-3 text-[16px] font-medium text-ink-2 dark:text-ink dark:[text-shadow:0_1px_10px_rgba(0,0,0,.55)]">{TAGLINE[lang]}</p>
         </HeroFloat>

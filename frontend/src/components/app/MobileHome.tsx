@@ -39,7 +39,6 @@ import { activeTask, useApp } from "@/lib/store";
 import { ago } from "@/lib/hooks";
 import { useSpeakingPulse } from "@/lib/voice";
 import { CloudWordmark } from "../glass/CloudWordmark";
-import { useHomeMark } from "@/lib/fontTrial";
 import { siFacebook, siGmail, siGoogle, siInstagram, siTiktok, siWhatsapp, siX, siYoutube } from "simple-icons";
 import { canFullscreen, toggleFullscreen } from "../Pwa";
 import { LiveButton } from "../LiveMode";
@@ -232,7 +231,6 @@ export function AppIcon({ site, size = 46 }: { site: Site; size?: number }) {
 }
 
 export function Home({ onOpen }: { onOpen: (id: string) => void }) {
-  const hm = useHomeMark();
   void onOpen;
   const lang = useApp((s) => s.lang);
   const setLang = useApp((s) => s.setLang);
@@ -334,7 +332,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
           <button onClick={() => (setActive(null), setSheet(true))} aria-label="Talk to Jagora" className="-mt-1 transition active:scale-95">
             <Orb size={168} state={orb} levelRef={pulse} />
           </button>
-          <CloudWordmark key={hm.family} family={hm.family} weight={hm.weight} width={270} levelRef={pulse} className="-mt-7" />
+          <CloudWordmark width={270} levelRef={pulse} className="-mt-7" />
           <p className="-mt-1 px-8 text-center text-[15px] font-medium text-ink-2 dark:text-ink dark:[text-shadow:0_1px_10px_rgba(0,0,0,.55)]">{TAGLINE[lang]}</p>
         </div>
 

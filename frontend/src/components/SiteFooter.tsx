@@ -3,8 +3,8 @@
 /* The footer of every public page: what Jagora is, where to go next, who made it and with what, the legal pages,
    and a huge cloud-glass "Jagora" across the bottom, sized to the screen it is on. */
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { siMeta } from "simple-icons";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { siGithub, siMeta, siTiktok, siX } from "simple-icons";
 import { Mark } from "./Brand";
 import { startPageWars } from "./PageWars";
 import { CloudWordmark } from "./glass/CloudWordmark";
@@ -41,9 +41,51 @@ const COLUMNS: { title: string; links: { label: string; href: string; ext?: bool
   },
 ];
 
-function Brand({ path, size = 16 }: { path: string; size?: number }) {
+/** his profiles, each in its own real colours, no chips behind them */
+const SOCIALS: { label: string; href: string; icon: ReactNode }[] = [
+  { label: "X", href: "https://x.com/ememzyvisuals", icon: <span className="text-black dark:text-white"><Brand path={siX.path} size={22} /></span> },
+  {
+    label: "LinkedIn",
+    href: "https://www.linkedin.com/in/ememzyvisuals",
+    icon: (
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+        <rect width="24" height="24" rx="4" fill="#0A66C2" />
+        <path fill="#fff" d="M7.1 9.6H4.7V19h2.4V9.6ZM5.9 5.4a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8Zm13.4 8.3c0-2.5-.5-4.4-3.4-4.4-1.4 0-2.3.8-2.7 1.5V9.6h-2.3V19h2.4v-4.6c0-1.2.2-2.4 1.7-2.4 1.5 0 1.5 1.4 1.5 2.5V19h2.4l.4-5.3Z" />
+      </svg>
+    ),
+  },
+  { label: "GitHub", href: "https://github.com/ememzyvisuals", icon: <span className="text-[#181717] dark:text-white"><Brand path={siGithub.path} size={23} /></span> },
+  {
+    label: "TikTok",
+    href: "https://tiktok.com/@ememzyvisuals",
+    icon: (
+      <svg viewBox="0 0 24 24" width="23" height="23" aria-hidden="true">
+        <path d={siTiktok.path} fill="#25F4EE" transform="translate(-0.9 -0.7)" />
+        <path d={siTiktok.path} fill="#FE2C55" transform="translate(0.9 0.7)" />
+        <path d={siTiktok.path} className="fill-black dark:fill-white" />
+      </svg>
+    ),
+  },
+  { label: "Kaggle", href: "https://www.kaggle.com/ememzyvisuals", icon: (
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <path fill="#20BEFF" d="M7.2 2h3.3v11.1l5.6-6.2h4.2l-6.2 6.5L20.6 22h-4.3l-5.8-7.5V22H7.2z" />
+      </svg>
+    ) },
+  {
+    label: "Website",
+    href: "https://ememzyvisuals.vercel.app",
+    icon: (
+      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="#1d63ed" strokeWidth="1.8" aria-hidden="true">
+        <circle cx="12" cy="12" r="9.2" />
+        <path d="M2.8 12h18.4M12 2.8c2.6 2.6 3.9 5.6 3.9 9.2s-1.3 6.6-3.9 9.2M12 2.8C9.4 5.4 8.1 8.4 8.1 12s1.3 6.6 3.9 9.2" />
+      </svg>
+    ),
+  },
+];
+
+function Brand({ path, size = 16, color = "currentColor" }: { path: string; size?: number; color?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={size} height={size} fill={color} aria-hidden="true">
       <path d={path} />
     </svg>
   );
@@ -140,22 +182,19 @@ export function SiteFooter() {
             </span>
             <span className="text-[14px] leading-snug text-white/80">Muse Spark runs the browsing agent. Muse Wonder reads photos, videos and voice notes. Muse Image draws picture guides.</span>
           </div>
-          <div id="builder" className="flex flex-col gap-3 rounded-[24px] bg-ink p-5 text-paper">
-            <span className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-paper/60">Designed and built by</span>
-            <a href={BUILDER.site} target="_blank" rel="noreferrer" className="font-display text-[18px] font-bold tracking-[-0.03em]">
+          <div id="builder" className="flex flex-col gap-3 rounded-[24px] bg-white p-5 ring-1 ring-black/5 dark:bg-white/10">
+            <span className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-ink-3">Designed and built by</span>
+            <a href={BUILDER.site} target="_blank" rel="noreferrer" className="font-display text-[18px] font-bold tracking-[-0.03em] text-ink">
               {BUILDER.name}
-              <span className="ml-2 font-sans text-[14px] font-normal text-paper/70">{BUILDER.handle}</span>
+              <span className="ml-2 font-sans text-[14px] font-normal text-ink-3">{BUILDER.handle}</span>
             </a>
-            <span className="text-[14px] leading-snug text-paper/75">AI and machine learning engineer. Builder of speech AI for African languages.</span>
-            <div className="mt-auto flex flex-wrap gap-1.5">
-              {BUILDER.socials.map(({ label, href, Icon }) => (
-                <a key={label} href={href} target="_blank" rel="noreferrer" aria-label={label} title={label} className="grid h-9 w-9 place-items-center rounded-full bg-paper/10 transition hover:bg-paper/20">
-                  <Icon size={17} weight="fill" />
+            <span className="text-[14px] leading-snug text-ink-2">AI and machine learning engineer. Builder of speech AI for African languages.</span>
+            <div className="mt-auto flex flex-wrap items-center gap-4 pt-1">
+              {SOCIALS.map(({ label, href, icon }) => (
+                <a key={label} href={href} target="_blank" rel="noreferrer" aria-label={label} title={label} className="transition hover:-translate-y-0.5 hover:opacity-80">
+                  {icon}
                 </a>
               ))}
-              <a href="https://www.kaggle.com/ememzyvisuals" target="_blank" rel="noreferrer" aria-label="Kaggle" title="Kaggle" className="grid h-9 w-9 place-items-center rounded-full bg-paper/10 transition hover:bg-paper/20">
-                <span className="font-display text-[15px] font-bold leading-none">k</span>
-              </a>
             </div>
           </div>
         </div>
