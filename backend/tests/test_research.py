@@ -67,7 +67,7 @@ async def test_find_brochure_open_pdf_and_highlight_evidence(site):
         await b.goto(links[0]["url"])
         assert b.pdf and b.pdf.pages == 2
         found = await b.find_text("UTME subjects")
-        assert found[0]["page"] == 2 and "mathematics" in found[0]["snippet"]
+        assert found[0]["page"] == 2 and "Mathematics" in found[0]["snippet"]
         ev = await b.highlight("English Language, Mathematics, Physics", near=2)
         assert ev["page"] == 2 and ev["image"][:2] == b"\xff\xd8"
         snap = await b.snapshot(marks=False)

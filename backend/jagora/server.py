@@ -37,7 +37,8 @@ from jagora.agent import Agent
 from jagora.browser import Browser
 from jagora.config import FILES_DIR, INGESTED, PORTALS_DIR, settings
 from jagora.db import DB
-from jagora.guard import guard
+from jagora.guard import guard, registrable
+from jagora.vault import Vault
 
 log = logging.getLogger("jagora.server")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -51,6 +52,12 @@ SESSIONS: dict[str, "Session"] = {}  # user id -> live session (one per signed-i
 
 
 def _model():
+    import os
+
+    if os.environ.get("JAGORA_DEV_MODEL") == "1" and not settings.meta_key:
+        from jagora.dev_model import DevModel
+
+        return DevModel()
     from jagora.llm import MuseSpark
 
     return MuseSpark()
@@ -64,7 +71,8 @@ async def lifespan(app: FastAPI):
         log.info("secrets.txt merged into .env: %s", ", ".join(INGESTED))  # names only
     await db.start()
     guard.load_cached()
-    tasks = [asyncio.create_task(_lists_daily()), asyncio.create_task(_watch_loop()), asyncio.create_task(_reminder_loop())]
+    tasks = [asyncio.create_task(_lists_daily()), asyncio.create_task(_watch_loop()), asyncio.create_task(_reminder_loop()),
+             asyncio.create_task(_job_loop())]
     yield
     for t in tasks:
         t.cancel()
@@ -206,6 +214,7 @@ class Session:
         self.ws, self.user_id = ws, user_id
         self.lang, self.mode, self.profile = "en", "do", {}
         self.device: dict = {}
+        self.translate = False
         self.runs: dict[str, Run] = {}
         self.browser: Browser | None = None
         self.active_task = ""
@@ -233,6 +242,7 @@ class Session:
     async def get_browser(self) -> Browser:
         if self.browser is None:
             self.browser = await Browser(self.device).start()
+            self.browser.translate_to = self.lang if self.translate and self.lang != "en" else ""
             await self.browser.start_screencast(self._frame)
             await self.send({"type": "viewport", "w": self.browser.viewport["width"], "h": self.browser.viewport["height"],
                              "mobile": self.browser.mobile})
@@ -276,9 +286,20 @@ class Session:
             self.profile = {k: v for k, v in (ev.get("profile") or {}).items() if isinstance(v, str)}
             if isinstance(ev.get("device"), dict) and self.browser is None:
                 self.device = ev["device"]
+            if "translate" in ev:
+                self.translate = bool(ev.get("translate"))
+                if self.browser:
+                    await self.browser.set_translate(self.lang if self.translate else "")
             await self.on_words(task, str(ev.get("goal") or ""), ev.get("attachment"), ev.get("history"))
-        elif kind in ("answer", "secret"):
+        elif kind == "answer":
             self._resolve(task, str(ev.get("id")), str(ev.get("value") or ""))
+        elif kind == "secret":
+            # straight to the waiting box; never logged. "save" asks to keep it, encrypted, for this one site
+            self._resolve(task, str(ev.get("id")), {"value": str(ev.get("value") or ""), "save": bool(ev.get("save"))})
+        elif kind == "translate":
+            self.translate = bool(ev.get("on"))
+            if self.browser:
+                await self.browser.set_translate(self.lang if self.translate else "")
         elif kind == "audio":
             await self.on_audio(task, ev)
         elif kind == "input":
@@ -378,7 +399,7 @@ class Session:
         r = self.runs.setdefault(task, Run(task))
         r.job = asyncio.create_task(self._run(r, text, attachment, history))
 
-    def _resolve(self, task: str, msg_id: str, value: str) -> None:
+    def _resolve(self, task: str, msg_id: str, value) -> None:
         r = self.runs.get(task)
         if not r or msg_id not in r.waiting:
             return
@@ -412,7 +433,8 @@ class Session:
             agent = Agent(_model(), self.browser, io, lang=self.lang, mode=self.mode, profile=self.profile,
                           conversation=convo[-14:], attachment=attachment, browser_factory=self.get_browser,
                           steering=r.steer, user_id=self.user_id, on_watch=io.watch,
-                          memory=DbMemory(self.user_id, task, self.lang), pause_gate=r.free.wait)
+                          memory=DbMemory(self.user_id, task, self.lang, self.mode, self.profile), pause_gate=r.free.wait,
+                          vault=Vault(db, self.user_id) if not self.user_id.startswith("guest-") else None)
             result = await agent.run(goal)
             await db.add_spend(agent.model.usage.dollars)
             await self.send({"type": "status", "task": task, "status": "done" if result.success else "stopped"})
@@ -489,7 +511,7 @@ class WsIO:
             await self.s.send({"type": "highlight", "task": self.task, "box": _box(rect), "tone": "stop"})
         return await self.point(None, text)
 
-    async def ask_private(self, rect: dict | None, label: str, field: str, digits: int | None) -> str:
+    async def ask_private(self, rect: dict | None, label: str, field: str, digits: int | None) -> dict:
         if rect:
             await self.s.send({"type": "highlight", "task": self.task, "box": _box(rect), "tone": "stop"})
         self.s.speak(self.task, label)
@@ -515,6 +537,12 @@ class WsIO:
                 await s.send({"type": "msg", "task": t, "msg": {"id": self.r.plan_id, "kind": "plan", "steps": data["steps"]}})
         elif kind == "reminder":
             await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "reminder", **data}})
+        elif kind == "media":
+            await self.close_step()
+            url = data["url"] if data["url"].startswith("http") else settings.public_url.rstrip("/") + data["url"]
+            await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "media", **data, "url": url}})
+        elif kind == "scheduled":
+            await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "scheduled", **data}})
         elif kind == "moment":
             await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "moment", **data}})
         elif kind == "step":
@@ -553,10 +581,27 @@ class WsIO:
 
 
 class DbMemory:
-    """Her reminders and saved moments, for the agent."""
+    """Her reminders, saved moments and scheduled tasks, for the agent."""
 
-    def __init__(self, user_id: str, chat_id: str, lang: str) -> None:
-        self.u, self.c, self.lang = user_id, chat_id, lang
+    def __init__(self, user_id: str, chat_id: str, lang: str, mode: str = "do", profile: dict | None = None) -> None:
+        self.u, self.c, self.lang, self.mode, self.profile = user_id, chat_id, lang, mode, profile or {}
+
+    async def schedule(self, at: float, goal: str, allow: list[str], repeat: str, retry_min: int = 0) -> str:
+        jid = uuid.uuid4().hex[:8]
+        await db.exec("insert into jobs (id, user_id, chat_id, at, goal, allow, repeat, lang, mode, profile, status, retry_min) "
+                      "values (?,?,?,?,?,?,?,?,?,?,'waiting',?)",
+                      (jid, self.u, self.c, at, goal, ",".join(allow), repeat, self.lang, self.mode, json.dumps(self.profile),
+                       max(0, min(240, retry_min))))
+        return jid
+
+    async def jobs(self) -> list[dict]:
+        return await db.exec("select id, at, goal, repeat from jobs where user_id=? and status='waiting' order by at", (self.u,))
+
+    async def cancel_job(self, jid: str) -> bool:
+        row = await db.one("select id from jobs where user_id=? and id=? and status='waiting'", (self.u, jid))
+        if row:
+            await db.exec("update jobs set status='cancelled' where id=?", (jid,))
+        return bool(row)
 
     async def add_reminder(self, at: float, text: str, repeat: str) -> str:
         rid = uuid.uuid4().hex[:8]
@@ -614,7 +659,7 @@ async def ws_route(ws: WebSocket):
         await s.send({"type": "account", "credits": acc["credits"]})
         # reminders that came due while she was away
         for n in await db.exec("select * from notices where user_id=? and delivered=0 order by t", (uid,)):
-            await s.send({"type": "notify", "task": n["chat_id"], "title": n["title"], "text": n["text"], "kind": "reminder"})
+            await deliver(s, n["chat_id"], n["title"], n["text"], json.loads(n["payload"]) if n.get("payload") else [])
             await db.exec("update notices set delivered=1 where id=?", (n["id"],))
     try:
         while True:
@@ -710,3 +755,143 @@ async def fire_reminders() -> None:
                     await db.exec("update reminders set done=1 where id=?", (r["id"],))
             except Exception as e:  # noqa: BLE001
                 log.warning("reminder %s failed: %s", r.get("id"), e)
+
+
+# ---- scheduled tasks: the agent works on its own at the time she chose -------------------------------------------------
+
+async def deliver(s: "Session", chat_id: str, title: str, text: str, msgs: list[dict]) -> None:
+    """Into her app: the chat (made if she has no such chat on this device), then the messages."""
+    await s.send({"type": "notify", "task": chat_id, "title": title, "text": text, "kind": "job" if msgs else "reminder"})
+    for m in msgs:
+        await s.send({"type": "msg", "task": chat_id, "msg": m})
+
+
+class JobIO:
+    """The agent's way out during a scheduled run: messages are collected for her; nobody can answer questions, so
+    anything that needs her stops the run with a clear note. Submitting is allowed only on the sites she approved
+    when she scheduled it; payments always wait for her."""
+
+    def __init__(self, job: dict) -> None:
+        self.job, self.msgs = job, []
+        self.allow = {x for x in (job.get("allow") or "").split(",") if x}
+        self.browser: Browser | None = None
+        self.needs = ""
+
+    def _add(self, m: dict) -> None:
+        self.msgs.append({"id": mid(), **m})
+
+    async def say(self, text: str) -> None:
+        if text.strip():
+            self._add({"kind": "agent", "text": text})
+
+    async def ask(self, question: str, choices: list[str]) -> str:
+        self.needs = question
+        raise asyncio.CancelledError("needs her")
+
+    async def confirm(self, question: str, detail: str) -> bool:
+        here = ""
+        if self.browser and self.browser.page:
+            here = registrable(self.browser.pdf.url if self.browser.pdf else self.browser.page.url)
+        money = re.search(r"pay|payment|transfer|buy|purchase|checkout|card", f"{question} {detail}", re.I)
+        if here in self.allow and not money:
+            self._add({"kind": "step", "text": f"Approved earlier: {question}", "status": "done"})
+            return True
+        self.needs = question
+        return False
+
+    async def point(self, rect, text: str) -> str:
+        self.needs = text
+        raise asyncio.CancelledError("needs her")
+
+    async def handoff(self, rect, text: str) -> str:
+        self.needs = text
+        raise asyncio.CancelledError("needs her")
+
+    async def ask_private(self, rect, label: str, field: str, digits) -> dict:
+        self.needs = label
+        return {"value": "", "save": False}
+
+    async def event(self, kind: str, data: dict) -> None:
+        if kind in ("evidence", "verdict", "reminder", "moment", "scheduled"):
+            self._add({"kind": kind, **data})
+        elif kind == "doc":
+            self._add({"kind": "doc", "doc": data})
+        elif kind in ("file", "media"):
+            url = data["url"] if data["url"].startswith("http") else settings.public_url.rstrip("/") + data["url"]
+            self._add({"kind": "file", **data, "url": url})
+        elif kind == "step":
+            self._add({"kind": "step", "text": data["text"], "status": "done"})
+        elif kind == "plan":
+            self.msgs = [m for m in self.msgs if m["kind"] != "plan"]
+            self._add({"kind": "plan", "steps": data["steps"]})
+
+
+async def run_job(job: dict, last_try: bool = True) -> bool:
+    io = JobIO(job)
+    browser = await Browser({"mobile": False}).start()
+    io.browser = browser
+    title = {"en": "Scheduled task", "pcm": "Scheduled work", "yo": "Iṣẹ́ àkókò", "ha": "Aiki na lokaci", "ig": "Ọrụ oge"}.get(job["lang"], "Scheduled task")
+    summary, ok = "", False
+    try:
+        agent = Agent(_model(), browser, io, lang=job["lang"], mode="do", profile=json.loads(job.get("profile") or "{}"),
+                      conversation=(await db.history(job["user_id"], job["chat_id"], 20)), user_id=job["user_id"],
+                      memory=DbMemory(job["user_id"], job["chat_id"], job["lang"]), vault=Vault(db, job["user_id"]),
+                      unattended=True, max_turns=60)
+        result = await asyncio.wait_for(agent.run(job["goal"]), timeout=20 * 60)
+        summary, ok = result.summary, result.success
+        await db.add_spend(agent.model.usage.dollars)
+    except (asyncio.CancelledError, asyncio.TimeoutError):
+        pass
+    except Exception as e:  # noqa: BLE001
+        log.exception("job %s failed", job["id"])
+        summary = f"The scheduled task could not run ({type(e).__name__})."
+    finally:
+        await browser.close()
+    if not ok and not io.needs and not last_try:
+        # the site was down or busy: try again later, quietly
+        await db.exec("update jobs set last=? where id=?", ((summary or "not done yet")[:500], job["id"]))
+        return False
+    if io.needs and not ok:
+        need = {"en": "I need you for this step:", "pcm": "I need you for this one:", "yo": "Mo nílò yín fún èyí:",
+                "ha": "Ina bukatar ka don wannan:", "ig": "Achọrọ m gị maka nke a:"}.get(job["lang"], "I need you for this step:")
+        io._add({"kind": "agent", "text": f"{need} {io.needs}"})
+    text = summary or (io.msgs[-1].get("text", "") if io.msgs else "")
+    await db.remember(job["user_id"], job["chat_id"], "agent", f"[scheduled task] {text}")
+    await db.exec("update jobs set last=? where id=?", (text[:500], job["id"]))
+    s = SESSIONS.get(job["user_id"])
+    if s:
+        await deliver(s, job["chat_id"], title, text, io.msgs)
+        s.speak(job["chat_id"], text)
+    else:
+        await db.exec("insert into notices (id, user_id, t, chat_id, title, text, delivered, payload) values (?,?,?,?,?,?,0,?)",
+                      (uuid.uuid4().hex[:12], job["user_id"], time.time(), job["chat_id"], title, text, json.dumps(io.msgs, ensure_ascii=False)))
+    return ok or bool(io.needs)
+
+
+async def fire_jobs() -> None:
+    try:
+        due = await db.exec("select * from jobs where status='waiting' and at <= ? limit 3", (time.time(),))
+    except Exception:  # noqa: BLE001
+        return
+    for j in due:
+        await db.exec("update jobs set status='running', tries=tries+1 where id=?", (j["id"],))
+        tries = (j.get("tries") or 0) + 1
+        retry = int(j.get("retry_min") or 0)
+        last_try = not retry or tries >= 24
+        finished = False
+        try:
+            finished = await run_job(j, last_try=last_try)
+        except Exception:  # noqa: BLE001
+            log.exception("job %s crashed", j["id"])
+        if not finished and not last_try:
+            await db.exec("update jobs set status='waiting', at=? where id=?", (time.time() + retry * 60, j["id"]))
+        elif j["repeat"] in REPEAT:
+            await db.exec("update jobs set status='waiting', tries=0, at=? where id=?", (j["at"] + REPEAT[j["repeat"]], j["id"]))
+        else:
+            await db.exec("update jobs set status='done' where id=?", (j["id"],))
+
+
+async def _job_loop():
+    while True:
+        await asyncio.sleep(30)
+        await fire_jobs()

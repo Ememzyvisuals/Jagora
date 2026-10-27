@@ -25,6 +25,7 @@ from urllib.parse import urljoin, urlparse
 from playwright.async_api import Browser as PWBrowser, BrowserContext, Page, async_playwright
 
 from jagora import guard as guardmod
+from jagora import translate as tr
 from jagora.config import settings
 from jagora.guard import SiteVerdict, guard, registrable
 
@@ -181,6 +182,10 @@ class Browser:
         self.on_frame: Callable[[str], None] | None = None
         self._cdp = None
         self.opening = 0  # >0 while Jagora opens a tab itself (the guard leaves those alone)
+        # pages in her language: the language to show (empty = as published), and an optional translator for tests
+        self.translate_to = ""
+        self.translator = None
+        self._tr_lock = asyncio.Lock()
 
     async def start(self) -> "Browser":
         self._pw = await async_playwright().start()
@@ -286,6 +291,7 @@ class Browser:
     async def snapshot(self, marks: bool = True) -> Snapshot:
         page = self._need_page()
         await self._settle()
+        await self.show_original()  # the agent always reads the page as published
         data: dict[str, Any] = await page.evaluate(SNAPSHOT_JS, {"marks": marks})
         shot = b""
         if marks:
@@ -306,6 +312,7 @@ class Browser:
             self.notice("blocked", v)
             await page.set_content(guardmod.BLOCK_PAGE.format(reason="This page shows adult content.", site=v.site))
             return await self.snapshot(marks)
+        await self.show_translated()  # and she sees it in her language while the agent thinks
         return Snapshot(url=url, title=title, headings=data["headings"], errors=data["errors"], text=text,
                         scroll=data["scroll"], elements=els, screenshot=shot,
                         pdf={"pages": pdf.pages, "page": pdf.page, "title": pdf.title} if pdf else None, tabs=tabs)
@@ -501,7 +508,8 @@ class Browser:
         b64 = base64.b64encode(png).decode()
         page = self._need_page()
         await page.set_content(
-            f"<!doctype html><title>{html.escape(pv.title)}</title><body style='margin:0;background:#525659'>"
+            f"<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'><title>{html.escape(pv.title)}</title>"
+            f"<body style='margin:0;background:#525659'>"
             f"<div style='color:#e8eaed;font:13px Arial;padding:8px 14px'>{html.escape(pv.title)} · page {n} of {pv.pages}</div>"
             f"<img id=pg src='data:image/png;base64,{b64}' style='display:block;margin:0 auto 24px;width:min(100%,900px);"
             f"box-shadow:0 2px 12px rgba(0,0,0,.4)'></body>")
@@ -516,6 +524,7 @@ class Browser:
 
     async def find_text(self, query: str, limit: int = 8) -> list[dict]:
         """Where the words appear: on the page, or in every page of a PDF. Exact first, then all-words matches."""
+        await self.show_original()
         q = re.sub(r"\s+", " ", query).strip()
         if not q:
             return []
@@ -526,6 +535,7 @@ class Browser:
 
     async def highlight(self, quote: str, near: int | None = None) -> dict | None:
         """Mark the words on the page (or PDF page), bring them into view and return {rect, image(jpeg bytes), page}."""
+        await self.show_original()
         pv = self.pdf
         if pv:
             hits = pdf_find(pv.doc, quote, 20)
@@ -569,6 +579,7 @@ class Browser:
 
     async def links(self, match: str = "", limit: int = 25) -> list[dict]:
         """Links on the page (or in the PDF) whose words or address match, e.g. 'brochure', 'requirement', 'pdf'."""
+        await self.show_original()
         pv = self.pdf
         if pv:
             out = []
@@ -599,6 +610,7 @@ class Browser:
 
     async def read_page(self, part: int = 1, size: int = 6000) -> dict:
         """The page's main text (article, notice, results), in parts, for reading, summarising and translating."""
+        await self.show_original()
         pv = self.pdf
         if pv:
             pages_per = 3
@@ -612,6 +624,7 @@ class Browser:
 
     async def tables(self, limit: int = 4) -> list[dict]:
         """Tables on the page (prices, timetables, results, cut-off lists) as rows."""
+        await self.show_original()
         if self.pdf:
             out = []
             for i in range(self.pdf.pages):
@@ -631,6 +644,129 @@ class Browser:
         if self.pdf:
             return []
         return await self._need_page().evaluate(MEDIA_JS)
+
+    # ---- pages in her language ----------------------------------------------------------------------------------------
+
+    async def set_translate(self, lang: str) -> None:
+        self.translate_to = "" if lang in ("", "en") else lang
+        if self.translate_to:
+            await self.show_translated()
+        else:
+            await self.show_original()
+
+    async def show_original(self) -> None:
+        if not self.page or self.pdf:
+            return
+        try:
+            await self.page.evaluate(tr.RESTORE_JS)
+        except Exception:  # noqa: BLE001
+            pass
+
+    async def show_translated(self) -> None:
+        """Put back what is already translated at once; translate new parts of the page in the background."""
+        if not self.translate_to or not self.page or self.pdf or not (tr.enabled() or self.translator):
+            return
+        try:
+            await self.page.evaluate(tr.REAPPLY_JS)
+        except Exception:  # noqa: BLE001
+            return
+        if not self._tr_lock.locked():
+            asyncio.ensure_future(self._translate_more())
+
+    async def _translate_more(self) -> None:
+        async with self._tr_lock:
+            page, lang = self.page, self.translate_to
+            try:
+                await page.evaluate("l => document.documentElement.dataset.jgLang = l", lang)
+                items = await page.evaluate(tr.COLLECT_JS, {"limit": 80})
+                if not items:
+                    return
+                out = await tr.translate([i["text"] for i in items], lang, self.translator)
+                if page is not self.page or lang != self.translate_to:
+                    return
+                await page.evaluate(tr.APPLY_JS, [{"id": i["id"], "text": t} for i, t in zip(items, out) if t != i["text"]])
+            except Exception as e:  # noqa: BLE001
+                log.info("translate: %s", e)
+
+    # ---- page look, saving pages, codes ------------------------------------------------------------------------------
+
+    async def set_theme(self, mode: str) -> str:
+        """Dark or light: the site's own dark mode when it has one, otherwise a careful invert (pictures kept)."""
+        p = self._need_page()
+        await p.emulate_media(color_scheme="dark" if mode == "dark" else "light")
+        await p.evaluate("() => document.getElementById('__jg_theme')?.remove()")
+        if mode != "dark":
+            return "light"
+        await asyncio.sleep(0.3)
+        lum = await p.evaluate("""() => { const c = getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g) || [255,255,255,1];
+            const a = c.length > 3 ? +c[3] : 1; const v = a < .1 ? 255 : (0.299*c[0] + 0.587*c[1] + 0.114*c[2]); return v; }""")
+        if lum > 120:  # the site has no dark mode of its own
+            await p.evaluate("""() => { const s = document.createElement('style'); s.id = '__jg_theme';
+                s.textContent = 'html{filter:invert(1) hue-rotate(180deg);background:#fff} img,video,picture,canvas,svg image,[style*="background-image"]{filter:invert(1) hue-rotate(180deg)}';
+                document.head.appendChild(s); }""")
+            return "dark (made by Jagora; the site has no dark mode)"
+        return "dark (the site's own)"
+
+    async def print_pdf(self) -> bytes:
+        """This page as a PDF, the way it looks (backgrounds kept)."""
+        if self.pdf:
+            return self.pdf.data
+        await self.show_original()
+        return await self._need_page().pdf(format="A4", print_background=True, margin={"top": "12mm", "bottom": "12mm", "left": "10mm", "right": "10mm"})
+
+    async def full_screenshot(self) -> bytes:
+        return await self._need_page().screenshot(full_page=True, type="png")
+
+    async def site_pdf(self, max_pages: int = 12) -> tuple[bytes, list[str]]:
+        """Every page of this site reachable from here (up to max_pages), printed and joined into one PDF, in order."""
+        import pymupdf
+
+        start = self._need_page().url
+        home = registrable(start)
+        links = [start] + [l["url"].split("#")[0] for l in await self.links()]
+        seen, urls = set(), []
+        for u in links:
+            if registrable(u) == home and u not in seen and not re.search(r"\.(pdf|zip|jpg|png|mp3|mp4)(\?|$)|logout|signout|sign-out", u, re.I):
+                seen.add(u)
+                urls.append(u)
+        urls = urls[:max_pages]
+        out = pymupdf.open()
+        self.opening += 1
+        try:
+            p = await self._ctx.new_page()
+        finally:
+            self.opening -= 1
+        done = []
+        try:
+            for u in urls:
+                try:
+                    await p.goto(u, wait_until="domcontentloaded", timeout=25000)
+                    try:
+                        await p.wait_for_load_state("networkidle", timeout=4000)
+                    except Exception:  # noqa: BLE001
+                        pass
+                    await p.evaluate(guardmod.CLEAN_JS)
+                    data = await p.pdf(format="A4", print_background=True)
+                    out.insert_pdf(pymupdf.open(stream=data, filetype="pdf"))
+                    done.append(u)
+                except Exception as e:  # noqa: BLE001
+                    log.info("site pdf skipped %s: %s", u, e)
+        finally:
+            await p.close()
+        return out.tobytes(), done
+
+    async def code_in_tab(self, i: int) -> str:
+        """The newest one-time code shown in another tab (an email, an SMS page): 4 to 8 digits near words like
+        code, OTP, verification. Found by code; the model never sees it."""
+        if not 0 <= i < len(self.pages):
+            return ""
+        p = self.pages[i]
+        text = await p.evaluate("() => document.body.innerText")
+        best = ""
+        for m in re.finditer(r"(?i)(code|otp|verification|one[- ]time|pin|token)[^\d]{0,60}(\d{4,8})\b|\b(\d{4,8})\b[^\d]{0,40}(is your|code|otp)", text):
+            best = m.group(2) or m.group(3) or best
+            break
+        return best
 
     # ---- her hands on the live page (take over) ---------------------------------------------------------------------
 
@@ -709,9 +845,9 @@ def pdf_find(doc, q: str, limit: int = 8) -> list[dict]:
         pg = doc[i]
         rects = pg.search_for(q, quads=False)
         if rects:
-            text = pg.get_text()
-            pos = _norm(text).find(_norm(q))
-            snippet = _norm(text)[max(0, pos - 160): pos + len(q) + 220] if pos >= 0 else q
+            flat = re.sub(r"\s+", " ", pg.get_text()).strip()
+            pos = flat.lower().find(_norm(q))
+            snippet = flat[max(0, pos - 160): pos + len(q) + 220] if pos >= 0 else q
             out.append({"page": i + 1, "snippet": snippet, "rects": [[r.x0, r.y0, r.x1, r.y1] for r in rects[:6]]})
             if len(out) >= limit:
                 return out
@@ -725,7 +861,7 @@ def pdf_find(doc, q: str, limit: int = 8) -> list[dict]:
         for b in pg.get_text("blocks"):
             t = _norm(b[4])
             if sum(w in t for w in words) >= max(2, int(len(words) * 0.75)):
-                out.append({"page": i + 1, "snippet": t[:420], "rects": [[b[0], b[1], b[2], b[3]]]})
+                out.append({"page": i + 1, "snippet": re.sub(r"\s+", " ", b[4]).strip()[:420], "rects": [[b[0], b[1], b[2], b[3]]]})
                 if len(out) >= limit:
                     return out
     return out

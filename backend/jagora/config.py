@@ -54,6 +54,7 @@ def ingest_secrets() -> list[str]:
     made = {
         "SESSION_SECRET": lambda: _secrets.token_urlsafe(48),
         "ALTCHA_HMAC_KEY": lambda: _secrets.token_urlsafe(32),
+        "VAULT_KEY": lambda: _secrets.token_urlsafe(32),
         "ACCESS_CODES": lambda: ",".join(f"JAGORA-{_secrets.token_hex(3).upper()}" for _ in range(5)),
     }
     for k, make in made.items():
@@ -119,6 +120,7 @@ class Settings:
     # accounts
     session_secret: str = field(default_factory=lambda: env("SESSION_SECRET", "dev-only-secret"))
     altcha_key: str = field(default_factory=lambda: env("ALTCHA_HMAC_KEY", "dev-only-altcha"))
+    vault_key: str = field(default_factory=lambda: env("VAULT_KEY"))
     access_codes: tuple[str, ...] = field(default_factory=lambda: tuple(c.strip().upper() for c in env("ACCESS_CODES").split(",") if c.strip()))
     require_account: bool = field(default_factory=lambda: env("REQUIRE_ACCOUNT", "true").lower() != "false")
     credits_free: int = field(default_factory=lambda: env_int("CREDITS_FREE", 30))

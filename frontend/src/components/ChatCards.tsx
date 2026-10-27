@@ -163,3 +163,87 @@ export function VoiceBubble({ m }: { m: Extract<Msg, { kind: "user" }> }) {
     </div>
   );
 }
+
+const PLAN: L = { en: "Plan", pcm: "Plan", yo: "Ètò", ha: "Shiri", ig: "Atụmatụ" };
+const REMIND: L = { en: "Reminder set", pcm: "Reminder don set", yo: "Ìrántí ti wà", ha: "An saita tunatarwa", ig: "Edoziela ncheta" };
+const SAVED: L = { en: "Saved", pcm: "Saved", yo: "Ti fipamọ́", ha: "An adana", ig: "Echekwara" };
+const EVERY: Record<string, L> = {
+  daily: { en: "every day", pcm: "every day", yo: "lójoojúmọ́", ha: "kowace rana", ig: "kwa ụbọchị" },
+  weekly: { en: "every week", pcm: "every week", yo: "lọ́ọ̀sẹ̀ọ̀sẹ̀", ha: "kowane mako", ig: "kwa izu" },
+  monthly: { en: "every month", pcm: "every month", yo: "lóṣooṣù", ha: "kowane wata", ig: "kwa ọnwa" },
+};
+const LOCALE: Record<Lang, string> = { en: "en-NG", pcm: "en-NG", yo: "yo-NG", ha: "ha-NG", ig: "ig-NG" };
+
+/** Jagora's plan for a longer task: a checklist it ticks off as it goes. */
+export function PlanCard({ m }: { m: Extract<Msg, { kind: "plan" }> }) {
+  const lang = useApp((s) => s.lang);
+  const done = m.steps.filter((x) => x.status === "done").length;
+  return (
+    <div className="rounded-[22px] bg-white/80 p-4 shadow-[0_10px_30px_-20px_rgba(10,30,70,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
+      <div className="mb-2.5 flex items-center justify-between">
+        <p className="font-head text-[17px] text-ink">{PLAN[lang]}</p>
+        <span className="text-[12.5px] tabular-nums text-ink-3">{done}/{m.steps.length}</span>
+      </div>
+      <div className="mb-3 h-1 overflow-hidden rounded-full bg-black/5">
+        <motion.div className="h-full rounded-full bg-accent" initial={false} animate={{ width: `${(done / Math.max(1, m.steps.length)) * 100}%` }} />
+      </div>
+      <ol className="flex flex-col gap-2">
+        {m.steps.map((x, i) => (
+          <li key={i} className="flex items-start gap-2.5 text-[14.5px] leading-snug">
+            <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${
+              x.status === "done" ? "bg-ok text-snow" : x.status === "doing" ? "bg-accent text-snow" : x.status === "skipped" ? "bg-black/10 text-ink-3" : "ring-1 ring-ink/20 text-ink-3"}`}>
+              {x.status === "done" ? "✓" : x.status === "doing" ? <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-snow" /> : i + 1}
+            </span>
+            <span className={x.status === "done" ? "text-ink-3 line-through decoration-ink/20" : x.status === "skipped" ? "text-ink-3" : x.status === "doing" ? "font-semibold text-ink" : "text-ink-2"}>{x.text}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+export function ReminderCard({ m }: { m: Extract<Msg, { kind: "reminder" }> }) {
+  const lang = useApp((s) => s.lang);
+  useEffect(() => {
+    // reminders reach her through notifications too, when she allows them
+    try {
+      if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission();
+    } catch {}
+  }, []);
+  const d = new Date(m.at);
+  const when = d.toLocaleString(LOCALE[lang], { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return (
+    <div className="flex items-center gap-3 rounded-[20px] bg-white/80 p-3 shadow-[0_10px_30px_-20px_rgba(10,30,70,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
+      <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center overflow-hidden rounded-[14px] bg-white shadow-[inset_0_0_0_1px_rgba(0,0,0,.06)] dark:bg-black/30">
+        <span className="w-full bg-danger py-0.5 text-center text-[10px] font-bold uppercase text-snow">{d.toLocaleString("en-NG", { month: "short" })}</span>
+        <span className="text-[21px] font-semibold leading-tight text-ink">{d.getDate()}</span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[12.5px] font-semibold text-accent">{REMIND[lang]}{m.repeat && m.repeat !== "none" && EVERY[m.repeat] ? ` · ${EVERY[m.repeat][lang]}` : ""}</p>
+        <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{m.text}</p>
+        <p className="text-[12.5px] text-ink-3">{when}</p>
+      </div>
+    </div>
+  );
+}
+
+export function MomentCard({ m }: { m: Extract<Msg, { kind: "moment" }> }) {
+  const lang = useApp((s) => s.lang);
+  return (
+    <div className="rounded-[20px] bg-white/80 p-3.5 shadow-[0_10px_30px_-20px_rgba(10,30,70,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
+      <p className="text-[12.5px] font-semibold text-ok">{SAVED[lang]}</p>
+      <p className="text-[15px] font-semibold leading-snug text-ink">{m.title}</p>
+      {m.note && <p className="mt-0.5 line-clamp-3 text-[14px] leading-snug text-ink-2">{m.note}</p>}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {m.tags.map((t) => (
+          <span key={t} className="rounded-full bg-accent-soft px-2.5 py-0.5 text-[12.5px] font-semibold text-accent">#{t.replace(/^#/, "")}</span>
+        ))}
+        {m.url && (
+          <a href={m.url} target="_blank" rel="noopener noreferrer" className="ml-auto truncate text-[12.5px] text-ink-3 hover:underline">
+            {m.url.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}

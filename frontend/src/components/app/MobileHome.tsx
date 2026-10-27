@@ -495,7 +495,8 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
     return () => removeEventListener("jagora:scroll", on);
   }, []);
   const onPage = screen === "page" && task?.kind === "browse" && !!task.url;
-  const label = onPage ? "skillsfair.ng" : sheet ? "Jagora" : PLACEHOLDER[lang];
+  const host = task?.url ? (task.url.startsWith("/practice/") ? "skillsfair.ng" : task.url.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]) : "";
+  const label = onPage ? host : sheet ? "Jagora" : PLACEHOLDER[lang];
   const spring = { type: "spring", stiffness: 380, damping: 32 } as const;
 
   return (

@@ -34,9 +34,18 @@ SCHEMA = [
          id text primary key, user_id text not null, chat_id text not null, at real not null, text text not null,
          repeat text not null default 'none', done integer not null default 0, lang text not null default 'en')""",
     "create index if not exists reminders_due on reminders(done, at)",
+    """create table if not exists vault (
+         id text primary key, user_id text not null, name text not null, site text not null, field text not null,
+         nonce text not null, ct text not null, created real not null, used real not null default 0)""",
+    """create table if not exists jobs (
+         id text primary key, user_id text not null, chat_id text not null, at real not null, goal text not null,
+         allow text not null default '', repeat text not null default 'none', lang text not null default 'en',
+         mode text not null default 'do', profile text not null default '{}', status text not null default 'waiting',
+         last text not null default '', retry_min integer not null default 0, tries integer not null default 0)""",
+    "create index if not exists jobs_due on jobs(status, at)",
     """create table if not exists notices (
          id text primary key, user_id text not null, t real not null, chat_id text not null, title text not null,
-         text text not null, delivered integer not null default 0)""",
+         text text not null, delivered integer not null default 0, payload text not null default '')""",
     """create table if not exists moments (
          id text primary key, user_id text not null, t real not null, title text not null, tags text not null,
          note text not null, url text not null default '', chat_id text not null default '')""",

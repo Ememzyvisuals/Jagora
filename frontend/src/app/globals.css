@@ -577,3 +577,23 @@ h3,
   color: #1d63ed;
   text-decoration: none;
 }
+
+/* Jagora at work: a soft moving light around the edge of the page (Siri style). The colour spins; the mask keeps it to
+   a band that fades inwards from every edge, and a thin crisp line sits on the very edge. */
+@property --glow-a { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.agent-glow {
+  --band: 34px;
+  background: conic-gradient(from var(--glow-a), #3b82f6, #8b5cf6, #ec4899, #f59e0b, #22d3ee, #3b82f6);
+  -webkit-mask-image: linear-gradient(to right, #000, transparent var(--band), transparent calc(100% - var(--band)), #000),
+    linear-gradient(to bottom, #000, transparent var(--band), transparent calc(100% - var(--band)), #000);
+  mask-image: linear-gradient(to right, #000, transparent var(--band), transparent calc(100% - var(--band)), #000),
+    linear-gradient(to bottom, #000, transparent var(--band), transparent calc(100% - var(--band)), #000);
+  -webkit-mask-composite: source-over;
+  mask-composite: add;
+  opacity: .9;
+  animation: glow-spin 3.6s linear infinite, glow-breathe 2.4s ease-in-out infinite;
+}
+.agent-glow-screen { --band: 46px; position: fixed; inset: 0; border-radius: 0; z-index: 35; }
+@keyframes glow-spin { to { --glow-a: 360deg; } }
+@keyframes glow-breathe { 50% { --band: 24px; } }
+@media (prefers-reduced-motion: reduce) { .agent-glow { animation: none; } }

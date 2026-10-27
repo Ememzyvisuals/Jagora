@@ -9,6 +9,7 @@ import { activeTask, useApp, type Task } from "@/lib/store";
 import { AgentPanel } from "../AgentPanel";
 import { Orb } from "../Orb";
 import { PageView } from "../PageView";
+import { WorkCaption } from "../WorkCaption";
 import { TaskIcon, lastLine } from "./Shared";
 import { BottomBar, EdgeBlur, Home } from "./MobileHome";
 import { Backdrop } from "../glass/Backdrop";
@@ -87,6 +88,7 @@ export function MobileApp() {
       </AnimatePresence>
 
       {screen !== "tabs" && <EdgeBlur />}
+      {shown === "page" && !sheet && screen !== "tabs" && <WorkCaption onOpen={() => setSheet(true)} />}
       {!(screen === "tabs" && tabsFull) && <BottomBar screen={screen} setScreen={go} />}
       <Sheet open={sheet} onClose={() => setSheet(false)} />
       {screen === "home" && !sheet && <Tour />}

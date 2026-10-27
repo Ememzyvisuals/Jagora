@@ -10,7 +10,7 @@ import type { Lang } from "@/lib/i18n";
 import { t } from "@/lib/i18n";
 import { useApp, type Msg, type Task } from "@/lib/store";
 import { IconLock, IconScam, IconShield } from "./icons";
-import { Evidence, FileCard, VoiceBubble } from "./ChatCards";
+import { Evidence, FileCard, MomentCard, PlanCard, ReminderCard, VoiceBubble } from "./ChatCards";
 
 const enter = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as const } };
 
@@ -84,6 +84,12 @@ function Item({ m, task }: { m: Msg; task: Task }) {
       return <Evidence m={m} />;
     case "file":
       return <FileCard m={m} />;
+    case "plan":
+      return <PlanCard m={m} />;
+    case "reminder":
+      return <ReminderCard m={m} />;
+    case "moment":
+      return <MomentCard m={m} />;
   }
 }
 

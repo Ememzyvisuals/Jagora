@@ -46,6 +46,10 @@ export type Msg =
   | { id: string; kind: "evidence"; claim: string; quote: string; url: string; site: string; title: string; official: boolean; owner?: string; page?: number | null; date?: string; image: string }
   /** a file Jagora downloaded for her */
   | { id: string; kind: "file"; name: string; url: string; size: number; type: string; source?: string }
+  /** Jagora's plan for a longer task, ticked off as it goes */
+  | { id: string; kind: "plan"; steps: { text: string; status: "todo" | "doing" | "done" | "skipped" }[] }
+  | { id: string; kind: "reminder"; at: number; text: string; repeat: string }
+  | { id: string; kind: "moment"; title: string; tags: string[]; note: string; url: string }
   | { id: string; kind: "result"; title: string; reference?: string; lines: [string, string][] };
 
 export type TaskStatus = "working" | "waiting" | "done" | "stopped";
@@ -86,6 +90,12 @@ type State = {
   pointer: Pointer;
   highlight: Highlight;
   pageTitle: string;
+  /** the size of Jagora's browser window, so the highlight and cursor land on the right spot of the live picture */
+  pageSize: { w: number; h: number; mobile: boolean };
+  /** she is using the live page herself; Jagora waits */
+  takeover: boolean;
+  setPageSize: (p: { w: number; h: number; mobile: boolean }) => void;
+  setTakeover: (v: boolean) => void;
   setLang: (l: Lang) => void;
   setMode: (m: Mode) => void;
   setProfile: (p: Partial<Profile>) => void;
@@ -140,6 +150,10 @@ export const useApp = create<State>()(
       pointer: { x: 0, y: 0, visible: false, clicking: false },
       highlight: null,
       pageTitle: "",
+      pageSize: { w: 1280, h: 860, mobile: false },
+      takeover: false,
+      setPageSize: (pageSize) => set({ pageSize }),
+      setTakeover: (takeover) => set({ takeover }),
       setLang: (lang) => set({ lang }),
       setMode: (mode) => set({ mode }),
       setProfile: (p) => set((s) => ({ profile: { ...s.profile, ...p } })),

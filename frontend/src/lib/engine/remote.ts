@@ -33,8 +33,14 @@ import { useApp, uid, type Msg, type Task } from "../store";
 
 const S = () => useApp.getState();
 let ws: WebSocket | null = null;
-let frameListener: ((jpeg: string) => void) | null = null;
-export const onRemoteFrame = (f: ((jpeg: string) => void) | null) => (frameListener = f);
+/* the latest picture of Jagora's browser; any screen showing the page subscribes */
+let lastFrame = "";
+const frameListeners = new Set<(jpeg: string) => void>();
+export function onRemoteFrame(f: (jpeg: string) => void) {
+  frameListeners.add(f);
+  if (lastFrame) f(lastFrame);
+  return () => void frameListeners.delete(f);
+}
 
 export const BACKEND = process.env.NEXT_PUBLIC_BACKEND_WS || "";
 
@@ -77,7 +83,17 @@ function handle(ev: Record<string, unknown>) {
       s.setUrl(task, ev.url as string);
       break;
     case "frame":
-      frameListener?.(ev.jpeg as string);
+      lastFrame = ev.jpeg as string;
+      frameListeners.forEach((f) => f(lastFrame));
+      break;
+    case "viewport":
+      s.setPageSize({ w: ev.w as number, h: ev.h as number, mobile: !!ev.mobile });
+      break;
+    case "takeover":
+      s.setTakeover(!!ev.on);
+      break;
+    case "hint":
+      s.push(task, { id: uid(), kind: "step", text: ev.text as string, status: "done" });
       break;
     case "pointer":
       s.setPointer({ x: ev.x as number, y: ev.y as number, visible: !!ev.visible, clicking: !!ev.clicking });
@@ -177,7 +193,7 @@ export async function remoteStart(task: string, goal: string, attachment?: { kin
     return;
   }
   s.setOrb("thinking");
-  sock.send(JSON.stringify({ type: "start", task, goal, lang: s.lang, mode: s.mode, profile: s.profile, attachment, history: historyOf(task) }));
+  sock.send(JSON.stringify({ type: "start", task, goal, lang: s.lang, mode: s.mode, profile: s.profile, attachment, history: historyOf(task), device: device() }));
 }
 export async function remoteAnswer(task: string, id: string, value: string) {
   (await connect()).send(JSON.stringify({ type: "answer", task, id, value }));
@@ -203,6 +219,21 @@ export async function remoteAudio(task: string, blob: Blob, id?: string) {
   st.setOrb("thinking");
   sock.send(JSON.stringify({ type: "audio", task, id, data, lang: st.lang, mode: st.mode, profile: st.profile, history: historyOf(task) }));
 }
+/** her screen, so Jagora's browser shows pages the way her device would (phone layout on a phone) */
+function device() {
+  const mobile = matchMedia("(max-width: 767px)").matches || matchMedia("(pointer: coarse) and (max-width: 1024px)").matches;
+  return { mobile, w: innerWidth, h: innerHeight };
+}
+
+/** her hands on the live page: taps, typing, keys, scrolling (only while she has taken over or Jagora waits for her) */
+export async function remoteInput(task: string, input: { action: "tap" | "type" | "key" | "scroll" | "back"; x?: number; y?: number; text?: string; key?: string; dy?: number }) {
+  ws?.send(JSON.stringify({ type: "input", task, ...input }));
+}
+export async function remoteTakeover(task: string, on: boolean) {
+  S().setTakeover(on);
+  (await connect()).send(JSON.stringify({ type: "takeover", task, on }));
+}
+
 export async function remoteStop(task: string) {
   hush();
   ws?.send(JSON.stringify({ type: "stop", task }));

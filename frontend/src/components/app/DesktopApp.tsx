@@ -26,7 +26,7 @@ import {
   Sun,
   X,
 } from "@phosphor-icons/react";
-import { hush } from "@/lib/engine/remote";
+import { hush, remoteTakeover } from "@/lib/engine/remote";
 import { fly } from "../Effects";
 import { setAutoFullscreen, toggleFullscreen, useAutoFullscreen } from "../Pwa";
 import { Starters, openSite, useTopSites } from "./NewTabBits";
@@ -34,7 +34,7 @@ import { startPageWars } from "../PageWars";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ask, quick } from "@/lib/engine";
+import { ask, live, quick } from "@/lib/engine";
 import { ago } from "@/lib/hooks";
 import { LANGS, type Lang } from "@/lib/i18n";
 import { activeTask, useApp, type Task } from "@/lib/store";
@@ -187,7 +187,8 @@ export function DesktopApp() {
             <div className="ml-2 flex h-9 flex-1 items-center gap-2 rounded-full bg-white/55 px-4 text-[14px] text-ink shadow-[inset_0_1px_2px_rgba(20,40,80,.08)]">
               <LockSimple size={14} weight="bold" className="text-ok" />
               <span className="truncate">{url}</span>
-              <span className="ml-auto shrink-0 text-[12px] font-medium text-ink-3">Jagora is browsing</span>
+              <span className="ml-auto shrink-0 text-[12px] font-medium text-ink-3">{task?.status === "working" ? "Jagora is browsing" : ""}</span>
+              {live && task && <TakeOver taskId={task.id} />}
             </div>
           </div>
         )}
@@ -281,21 +282,21 @@ export function DesktopApp() {
           </motion.aside>
 
           {/* the page */}
-          <main className="relative min-w-0 flex-1 overflow-hidden rounded-[24px] shadow-[inset_0_1px_1px_rgba(255,255,255,.8)]">{showPage ? <PageView bar={false} /> : <StartPage />}</main>
+          <motion.main layout transition={{ type: "spring", stiffness: 260, damping: 32 }} className="relative min-w-0 flex-1 overflow-hidden rounded-[24px] shadow-[inset_0_1px_1px_rgba(255,255,255,.8)]">{showPage ? <PageView bar={false} /> : <StartPage />}</motion.main>
 
           {/* Jagora */}
-          <section className="flex w-[372px] shrink-0 flex-col overflow-hidden rounded-[24px] bg-white/45 shadow-[inset_0_1px_1px_rgba(255,255,255,1)]">
+          <motion.section layout transition={{ type: "spring", stiffness: 260, damping: 32 }} className={`flex w-[372px] shrink-0 flex-col overflow-hidden rounded-[24px] bg-white/45 shadow-[inset_0_1px_1px_rgba(255,255,255,1)] ${showPage ? "order-first" : ""}`}>
             <div className="flex justify-end gap-1 px-3 pt-3 text-ink-2">
               <VoiceToggle />
             </div>
             <div className="-mt-8 flex flex-col items-center">
-              <TalkOrb size={170} />
+              <TalkOrb size={showPage ? 110 : 170} />
             </div>
             <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pt-2">{task ? <Conversation task={task} /> : <Hello lang={lang} />}</div>
             <div className="p-3">
               <Composer />
             </div>
-          </section>
+          </motion.section>
         </div>
       </Glass>
       <LiveMode />
@@ -447,6 +448,15 @@ function StartPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+function TakeOver({ taskId }: { taskId: string }) {
+  const on = useApp((s) => s.takeover);
+  return (
+    <button onClick={() => void remoteTakeover(taskId, !on)} className={`-mr-2 h-7 shrink-0 rounded-full px-3 text-[12.5px] font-semibold transition ${on ? "bg-accent text-snow" : "bg-white/80 text-ink hover:bg-white"}`}>
+      {on ? "Hand back to Jagora" : "Take over"}
+    </button>
   );
 }
 

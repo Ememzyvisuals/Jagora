@@ -160,6 +160,29 @@ COMMON = [
          {"title": {"type": "string"}, "tags": {"type": "array", "items": {"type": "string"}}, "note": {"type": "string"},
           "url": {"type": "string"}}, ["title", "tags"]),
     tool("find_moments", "Find things she saved before, by words or tags.", {"query": {"type": "string"}}, []),
+    tool("use_saved_login", "Type one of her saved private values (a login email, password, PIN) into a box, by its name. "
+         "Code types it, and only if the page is on the site it was saved for; you never see it.",
+         {"element": EL, "name": {"type": "string"}}, ["element", "name"]),
+    tool("schedule_task", "Run a task for her later on its own, at a set time (for example when a portal is less busy at "
+         "night), even if her phone is locked. Agree the time and what you may do with her first. She gets the result "
+         "as a message. Sign-ins need her saved login (ask_private with saving, beforehand).",
+         {"when": {"type": "string", "description": "ISO date and time with offset, e.g. 2026-10-28T00:15:00+01:00"},
+          "goal": {"type": "string", "description": "the full task, with every detail needed, in English"},
+          "may_submit_on": {"type": "array", "items": {"type": "string"}, "description": "sites where she agrees you may submit or sign in without asking again, e.g. jamb.gov.ng. Payments always wait for her."},
+          "repeat": {"type": "string", "enum": ["none", "daily", "weekly"]},
+          "retry_every_min": {"type": "integer", "description": "if the site is down or busy, try again every N minutes (e.g. 30) until it works, up to 24 times"}},
+         ["when", "goal"]),
+    tool("list_scheduled", "Her scheduled tasks.", {}, []),
+    tool("cancel_scheduled", "Cancel a scheduled task by id.", {"id": {"type": "string"}}, ["id"]),
+    tool("play_media", "Play a song, voice note or video from the page for her in the app (the live view has no sound). "
+         "Give its address (from find_media) or the link element.", {"url": {"type": "string"}, "element": EL, "name": {"type": "string"}}, []),
+    tool("page_theme", "Switch the website to dark or light mode for her.", {"mode": {"type": "string", "enum": ["dark", "light"]}}, ["mode"]),
+    tool("save_page", "Save the open page for her as a PDF (what='pdf'), as one tall picture (what='picture'), or print every "
+         "page of this website into one PDF (what='site', for design references or offline reading).",
+         {"what": {"type": "string", "enum": ["pdf", "picture", "site"]}, "max_pages": {"type": "integer"}, "name": {"type": "string"}}, ["what"]),
+    tool("fetch_code", "A site sent her a one-time code by email or SMS, and she agreed you may read it: open her mail in "
+         "another tab first, then this copies the newest code from that tab into the code box. You never see the code.",
+         {"from_tab": {"type": "integer"}, "element": EL}, ["from_tab", "element"]),
     tool("finish", "The task is done, or cannot be done. Tell her the result in her language: the answer, what you "
          "confirmed (and where), anything you could not confirm, and the next step.",
          {"summary": {"type": "string"}, "success": {"type": "boolean"}}, ["summary", "success"]),
@@ -216,6 +239,10 @@ HOW YOU WORK
 - You may call several tools in one turn when they belong together (filling several boxes, or show_evidence for several facts on the same page).
 - Use her saved details when they answer a form question; ask only for what is missing. Never invent personal details, IDs or numbers.
 - When she tells you a value, pass her words exactly; the system converts, checks and reads them back to her.
+- Signing in: use her saved login (use_saved_login) when there is one for that site; otherwise ask_private, and for a task she may repeat or schedule, label it clearly (e.g. "JAMB password") so she can choose to save it.
+- Time-based help: if a portal is busy or she wants it done later ("try at midnight", "every morning check"), agree the time and what you may do, then schedule_task. Reminders are for her; scheduled tasks are for you.
+- Any website, by voice: sign in (her saved login, or ask_private once and let her save it), open dashboards and read the numbers to her, press buttons she names (approve, play, create), fill forms, switch a site to dark or light (page_theme), play audio or video for her (play_media), save pages or whole sites as PDF (save_page). Ask before anything that changes her account (create, delete, approve, send, pay).
+- One-time codes: ask her whether to read it from her email (open her mail in a new tab, then fetch_code) or whether she will type it (ask_private). Captchas and "are you human" checks: hand_over so she does it on the live page.
 - Private values (account number, NIN, BVN, card, OTP, PIN, password): use ask_private. Never type them yourself, never ask her to say them aloud, never repeat them.
 - Submitting, paying, sending, agreeing to terms, or leaving the website needs her yes: write the yes/no question in `ask`, in {lang}. If she says no, do not try again; ask what she wants.
 - Jagora's guard blocks adult, phishing and fake sites, closes ads and pop-ups and stops redirect tricks. If a page was blocked, tell her briefly and find a safe source.
@@ -261,6 +288,9 @@ class Agent:
     on_watch: Callable[[str, str, int], Awaitable[None]] | None = None
     memory: Any = None  # reminders and saved moments (server: database; tests: in memory)
     pause_gate: Callable[[], Awaitable[None]] | None = None
+    vault: Any = None  # her saved logins (values never reach the model)
+    unattended: bool = False  # a scheduled run: nobody is watching
+    _vault_names: list | None = None
     evidence: int = 0
     searched: int = 0
     _nudged_evidence: bool = False
@@ -278,11 +308,18 @@ class Agent:
             await self.browser.goto(start_url)
         turns = 0
         heard: list[str] = []
+        if self.vault and self._vault_names is None:
+            try:
+                self._vault_names = await self.vault.names()
+            except Exception:  # noqa: BLE001
+                self._vault_names = []
         while turns < self.max_turns:
             turns += 1
             if self.pause_gate:
                 await self.pause_gate()  # she has taken over the page: wait until she hands it back
             heard += self._drain_steering()
+            if self.vault and self._vault_names is None:
+                self._vault_names = await self.vault.names()
             snap = await self._snapshot()
             if snap:
                 await self.io.event("page", {"url": snap.url, "title": snap.title})
@@ -324,7 +361,7 @@ class Agent:
         if snap is None:  # no page open yet: page tools make no sense
             page_only = {"click", "type_text", "choose", "set_checkbox", "press_key", "point_at", "hand_over", "ask_private",
                          "find_text", "list_links", "pdf_page", "show_evidence", "scroll", "go_back", "switch_tab", "close_tab",
-                         "read_page", "page_tables", "find_media"}
+                         "read_page", "page_tables", "find_media", "use_saved_login", "page_theme", "save_page", "fetch_code"}
             return [t for t in base if t["function"]["name"] not in page_only]
         return base
 
@@ -406,7 +443,8 @@ class Agent:
                 steps = [{"text": str(x.get("text", ""))[:140], "status": x.get("status", "todo")} for x in (a.get("steps") or [])][:12]
                 await self.io.event("plan", {"steps": steps})
                 return "plan shown", False, None
-            if name in ("set_reminder", "list_reminders", "cancel_reminder", "save_moment", "find_moments"):
+            if name in ("set_reminder", "list_reminders", "cancel_reminder", "save_moment", "find_moments",
+                        "schedule_task", "list_scheduled", "cancel_scheduled"):
                 return await self._memory(name, a), False, None
             if name == "check_official":
                 r = research.check_official(str(a.get("site", "")), str(a.get("claimed_owner", "")))
@@ -432,6 +470,8 @@ class Agent:
                 return await self._go_to(a, new_tab=name == "new_tab")
             if name == "download":
                 return await self._download(a, snap)
+            if name == "play_media":
+                return await self._download(a, snap, play=True)
 
             if self.browser is None or snap is None:
                 return "no page is open yet; search or open a web address first", False, None
@@ -474,6 +514,27 @@ class Agent:
                     return "no tables on this page", False, None
                 return "tables:\n" + "\n\n".join(
                     (f"[{t['caption']}]\n" if t.get("caption") else "") + "\n".join(" | ".join(r) for r in t["rows"]) for t in ts), False, None
+            if name == "page_theme":
+                return f"page is now {await b.set_theme(str(a.get('mode', 'dark')))}", True, None
+            if name == "save_page":
+                what = a.get("what", "pdf")
+                title = re.sub(r"[^\w\- ]+", "", str(a.get("name") or (b.pdf.title if b.pdf else snap.title) or "page")).strip()[:60] or "page"
+                if what == "picture":
+                    data, ext, ctype, note = await b.full_screenshot(), ".png", "image/png", ""
+                elif what == "site":
+                    data, done_urls = await b.site_pdf(int(a.get("max_pages") or 12))
+                    ext, ctype, note = ".pdf", "application/pdf", f" ({len(done_urls)} pages of the site)"
+                else:
+                    data, ext, ctype, note = await b.print_pdf(), ".pdf", "application/pdf", ""
+                await self._give_file(title + ext, data, ctype, b.pdf.url if b.pdf else b.page.url)
+                return f"saved and given to her{note}", False, None
+            if name == "fetch_code":
+                code = await b.code_in_tab(int(a.get("from_tab", -1)))
+                if not code:
+                    return "no code found in that tab; ask her to open the newest message, or to type it herself with ask_private", False, None
+                n = await b.fill_secret(int(a["element"]), code)
+                code = ""  # noqa: F841
+                return f"copied the code into the box ({n} digits)", True, None
             if name == "find_media":
                 ms = await b.media()
                 if not ms:
@@ -494,6 +555,15 @@ class Agent:
                 return f"she did it herself ({said})", True, None
             if name == "ask_private":
                 return await self._private(el, a)
+            if name == "use_saved_login":
+                if not self.vault:
+                    return "no saved logins here; use ask_private", False, None
+                value, why = await self.vault.take(str(a.get("name", "")), b.pdf.url if b.pdf else b.page.url)
+                if value is None:
+                    return f"not typed: {why}", False, None
+                n = await b.fill_secret(el.id, value)
+                value = None  # noqa: F841  (dropped)
+                return f'typed her saved "{a.get("name")}" ({n} characters)', False, None
             if name == "point_at":
                 said = await self.io.point(await b.rect(el.id), a.get("message", ""))
                 return f"she says: \"{said}\"", True, None
@@ -589,13 +659,20 @@ class Agent:
         if not ask_private:
             said = await self.io.handoff(await self.browser.rect(el.id), a.get("label", ""))
             return f"she typed it on the page herself ({said})", True, None
-        value = await ask_private(await self.browser.rect(el.id), str(a.get("label", "")), str(a.get("field", "other")),
-                                  a.get("digits"))
+        got = await ask_private(await self.browser.rect(el.id), str(a.get("label", "")), str(a.get("field", "other")),
+                                a.get("digits"))
+        value, save = (got.get("value", ""), bool(got.get("save"))) if isinstance(got, dict) else (got, False)
         if not value:
             return "she skipped it; ask what she wants to do", True, None
         n = await self.browser.fill_secret(el.id, value)
+        saved = ""
+        if save and self.vault:
+            url = self.browser.pdf.url if self.browser.pdf else self.browser.page.url
+            site_ = await self.vault.save(str(a.get("label") or a.get("field") or "login"), url, str(a.get("field", "other")), value)
+            saved = f'; she saved it as "{str(a.get("label") or a.get("field"))[:60]}" for {site_} (use_saved_login next time)'
+            self._vault_names = None
         value = ""  # noqa: F841  (dropped: never logged, spoken or sent to the model)
-        return f"filled by her ({n} characters in the box)", False, None
+        return f"filled by her ({n} characters in the box){saved}", False, None
 
     async def _go_to(self, a, new_tab: bool = False):
         url = str(a.get("url", "")).strip()
@@ -653,7 +730,15 @@ class Agent:
             bits.append(f"page dated {when}")
         return "; ".join(bits), False, None
 
-    async def _download(self, a, snap: Snapshot | None):
+    async def _give_file(self, name: str, data: bytes, ctype: str, source: str, play: bool = False) -> str:
+        token = secrets.token_urlsafe(12)
+        folder = FILES_DIR / token
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / name).write_bytes(data)
+        await self.io.event("media" if play else "file", {"name": name, "url": f"/files/{token}/{name}", "size": len(data), "type": ctype, "source": source})
+        return f"/files/{token}/{name}"
+
+    async def _download(self, a, snap: Snapshot | None, play: bool = False):
         b = await self._ensure_browser()
         url = str(a.get("url") or "")
         if not url and a.get("element") is not None and snap:
@@ -676,12 +761,10 @@ class Agent:
             ext = Path(name).suffix or (".pdf" if "pdf" in ctype else "")
             name = nice if nice.lower().endswith(ext.lower()) else nice + ext
         name = name[:90] or "download"
-        token = secrets.token_urlsafe(12)
-        folder = FILES_DIR / token
-        folder.mkdir(parents=True, exist_ok=True)
-        (folder / name).write_bytes(data)
-        await self.io.event("file", {"name": name, "url": f"/files/{token}/{name}", "size": len(data), "type": ctype, "source": url})
-        return f"downloaded {name} ({len(data) // 1024} KB) and gave it to her", False, None
+        if play and not re.match(r"(audio|video)/", ctype or "") and not re.search(r"\.(mp3|m4a|wav|ogg|opus|webm|mp4|aac|flac)$", name, re.I):
+            return f"that is not audio or video ({ctype or 'unknown type'})", False, None
+        await self._give_file(name, data, ctype, url, play)
+        return (f"playing {name} for her in the app" if play else f"downloaded {name} ({len(data) // 1024} KB) and gave it to her"), False, None
 
     async def _memory(self, name: str, a: dict) -> str:
         if not self.memory:
@@ -700,6 +783,28 @@ class Agent:
             rid = await m.add_reminder(at, str(a.get("text", ""))[:400], a.get("repeat") or "none")
             await self.io.event("reminder", {"id": rid, "at": int(at * 1000), "text": a.get("text", ""), "repeat": a.get("repeat") or "none"})
             return f"reminder {rid} set for {when.isoformat(timespec='minutes')}"
+        if name == "schedule_task":
+            try:
+                when = dt.datetime.fromisoformat(str(a.get("when", "")).replace("Z", "+00:00"))
+            except ValueError:
+                return "that time is not clear; ask her"
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=dt.timezone(dt.timedelta(hours=1)))
+            if when.timestamp() < time.time() - 60:
+                return "that time is in the past; ask her"
+            allow = [registrable(x) or x for x in (a.get("may_submit_on") or [])][:5]
+            jid = await m.schedule(when.timestamp(), str(a.get("goal", ""))[:2000], allow, a.get("repeat") or "none",
+                                   int(a.get("retry_every_min") or 0))
+            await self.io.event("scheduled", {"id": jid, "at": int(when.timestamp() * 1000), "goal": a.get("goal", ""), "allow": allow,
+                                              "repeat": a.get("repeat") or "none"})
+            return f"scheduled {jid} for {when.isoformat(timespec='minutes')}"
+        if name == "list_scheduled":
+            js = await m.jobs()
+            lagos = dt.timezone(dt.timedelta(hours=1))
+            return ("scheduled:\n" + "\n".join(f"- {j['id']}: {dt.datetime.fromtimestamp(j['at'], lagos).strftime('%a %d %b %H:%M')} "
+                                                f"{j['goal'][:120]}" for j in js)) if js else "nothing scheduled"
+        if name == "cancel_scheduled":
+            return "cancelled" if await m.cancel_job(str(a.get("id", ""))) else "no such scheduled task"
         if name == "list_reminders":
             rs = await m.reminders()
             if not rs:
@@ -743,6 +848,13 @@ class Agent:
             parts.append(f"Earlier in this conversation:\n{convo}")
         parts.append(f"What she wants now: {goal}")
         parts.append(f"Her saved details: {self._profile_summary()}")
+        if self._vault_names:
+            parts.append("Her saved logins (typed by code with use_saved_login, only on their own site; you never see them): "
+                         + "; ".join(f'"{v["name"]}" for {v["site"]}' for v in self._vault_names))
+        if self.unattended:
+            parts.append("This is a SCHEDULED run: she is not watching. Do the task with her saved details and logins. Do not "
+                         "ask her questions; if something needed is missing or a step needs her yes, stop and finish with a "
+                         "clear message saying exactly what you need. Busy or failing portal: try again a few times, then finish.")
         if heard:
             parts.append("She just said (while you were working): " + " / ".join(f'"{h}"' for h in heard))
         parts.append(f"What has happened in this task:\n{done}")
