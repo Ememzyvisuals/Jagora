@@ -27,7 +27,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <link rel="preload" href="/fonts/jagora-sans.woff2" as="font" type="font/woff2" crossOrigin="" />
-        <link rel="preload" href="/fonts/jagora-body-400.woff2" as="font" type="font/woff2" crossOrigin="" />
+        <link rel="preload" href="/fonts/vollkorn-400.woff2" as="font" type="font/woff2" crossOrigin="" />
+        <link rel="preload" href="/fonts/boiling.woff2" as="font" type="font/woff2" crossOrigin="" />
         
       </head>
       <body className="min-h-dvh antialiased">

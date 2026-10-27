@@ -12,6 +12,7 @@ import Link from "next/link";
 import { Mark } from "@/components/Brand";
 import { SiteFooter } from "@/components/SiteFooter";
 import { CloudWordmark } from "@/components/glass/CloudWordmark";
+import { useHomeMark } from "@/lib/fontTrial";
 import { Backdrop } from "@/components/glass/Backdrop";
 import { Glass } from "@/components/glass/Glass";
 import { Orb } from "@/components/Orb";
@@ -58,6 +59,7 @@ const TAGS: { id: Lang; x: number; y: number; r: number; glow: string }[] = [
 ];
 
 export default function Start() {
+  const hm = useHomeMark();
   const ready = useHydrated();
   const router = useRouter();
   const still = useReducedMotion();
@@ -115,7 +117,7 @@ export default function Start() {
         <section className="flex flex-col items-center">
           <div className="flex origin-center flex-col items-center md:scale-[1.3] lg:scale-[1.65]">
             <Orb size={120} state="idle" />
-            <CloudWordmark width={280} className="-mt-6" />
+            <CloudWordmark key={hm.family} family={hm.family} weight={hm.weight} width={280} className="-mt-6" />
             <p className="-mt-2 text-center text-[15.5px] font-medium text-ink-2 dark:text-ink dark:[text-shadow:0_1px_10px_rgba(0,0,0,.55)]">{TAGLINE[lang]}</p>
           </div>
           <p className="mt-5 text-[12.5px] font-semibold uppercase tracking-[0.14em] text-ink-2 md:mt-14 md:text-[14px] lg:mt-24 dark:text-ink">{T.pick[lang]}</p>

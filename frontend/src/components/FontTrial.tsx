@@ -1,43 +1,22 @@
 "use client";
 
-/* Temporary picker for choosing fonts: body text, and the big wordmark at the end of each page. */
+/* Temporary switch: the home wordmark in Bricolage or Boiling. */
 import { useEffect, useState } from "react";
-import { BODY, MARK, setTrial, useTrial } from "@/lib/fontTrial";
-
-const LABEL: Record<string, string> = { piazzolla: "Piazzolla", biolinum: "Biolinum", vollkorn: "Vollkorn", bricolage: "Bricolage", boiling: "Boiling", anson: "Anson" };
+import { MARK, setMark, useHomeMarkName } from "@/lib/fontTrial";
 
 export function FontTrial() {
-  const t = useTrial();
+  const cur = useHomeMarkName();
   const [on, setOn] = useState(false);
-  const [open, setOpen] = useState(true);
-  useEffect(() => {
-    setOn(true);
-    if (innerWidth < 700) setOpen(false);
-  }, []);
+  useEffect(() => setOn(true), []);
   if (!on) return null;
-  const row = (k: "body" | "mark", list: readonly string[], cur: string) => (
-    <div>
-      <p className="px-1 pb-1 font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-3">{k === "body" ? "Body" : "Wordmark"}</p>
-      <div className="flex flex-col gap-1">
-        {list.map((v) => (
-          <button key={v} onClick={() => setTrial(k, v)} className={`h-8 rounded-full px-3 text-left text-[13.5px] transition ${cur === v ? "bg-ink text-paper" : "text-ink hover:bg-black/5"}`}>
-            {LABEL[v]}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
   return (
-    <div className="fixed left-2 top-[38%] z-[250] -translate-y-1/2 rounded-[20px] bg-white/85 p-2 shadow-[0_12px_30px_-12px_rgba(10,30,70,.5)] ring-1 ring-black/5 backdrop-blur-xl dark:bg-black/60">
-      <button onClick={() => setOpen((v) => !v)} className="w-full px-1 pb-1 text-left text-[12px] font-semibold text-accent">
-        {open ? "Fonts" : "Aa"}
-      </button>
-      {open && (
-        <div className="flex flex-col gap-3">
-          {row("body", BODY, t.body)}
-          {row("mark", MARK, t.mark)}
-        </div>
-      )}
+    <div className="fixed bottom-[max(90px,env(safe-area-inset-bottom))] left-2 z-[250] flex items-center gap-1 rounded-full bg-white/85 p-1 shadow-[0_12px_30px_-12px_rgba(10,30,70,.5)] ring-1 ring-black/5 backdrop-blur-xl dark:bg-black/60">
+      <span className="px-2 font-sans text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-3">Logo</span>
+      {MARK.map((v) => (
+        <button key={v} onClick={() => setMark(v)} className={`h-8 rounded-full px-3 text-[13px] transition ${cur === v ? "bg-ink text-paper" : "text-ink hover:bg-black/5"}`}>
+          {v === "boiling" ? "Boiling" : "Bricolage"}
+        </button>
+      ))}
     </div>
   );
 }

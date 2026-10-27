@@ -7,7 +7,6 @@ import { useEffect, useRef, useState } from "react";
 import { siMeta } from "simple-icons";
 import { Mark } from "./Brand";
 import { startPageWars } from "./PageWars";
-import { MARK_FAMILY, useTrial } from "@/lib/fontTrial";
 import { CloudWordmark } from "./glass/CloudWordmark";
 import { BUILDER, PLOTWEAVER, REPO } from "@/lib/credits";
 import { Glass } from "./glass/Glass";
@@ -70,7 +69,6 @@ function PlotWeaverMark() {
 export function SiteFooter() {
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
-  const trial = useTrial();
   useEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -176,7 +174,7 @@ export function SiteFooter() {
       </Glass>
       {/* the wordmark on the sky, as wide as the page */}
       <div ref={box} className="mx-auto -mt-2 w-full max-w-[1360px] select-none" aria-hidden="true">
-        {w > 0 && <CloudWordmark key={trial.mark} width={w} family={MARK_FAMILY[trial.mark].family} weight={MARK_FAMILY[trial.mark].weight} />}
+        {w > 0 && <CloudWordmark width={w} family="Jagora Boiling" weight={400} />}
       </div>
     </footer>
   );

@@ -12,71 +12,34 @@
   font-weight: 200 800;
   font-display: swap;
 }
-/* body text: Piazzolla (SIL OFL), patched for Yorùbá and Igbo by scripts/patch-display-font.py */
+/* body: Vollkorn (SIL OFL); headings and subheadings: Boiling (Alit Design). Both carry the Yorùbá and Igbo letters
+   (scripts/patch-display-font.py, scripts/build-boiling.py). Jagora Sans (Bricolage) stays for interface labels. */
 @font-face {
   font-family: "Jagora Body";
-  src: url("/fonts/jagora-body-400.woff2") format("woff2");
+  src: url("/fonts/vollkorn-400.woff2") format("woff2");
   font-weight: 400;
   font-display: swap;
 }
 @font-face {
   font-family: "Jagora Body";
-  src: url("/fonts/jagora-body-500.woff2") format("woff2");
-  font-weight: 500;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Jagora Body";
-  src: url("/fonts/jagora-body-600.woff2") format("woff2");
+  src: url("/fonts/vollkorn-600.woff2") format("woff2");
   font-weight: 600;
   font-display: swap;
 }
 @font-face {
   font-family: "Jagora Body";
-  src: url("/fonts/jagora-body-700.woff2") format("woff2");
+  src: url("/fonts/vollkorn-700.woff2") format("woff2");
   font-weight: 700;
   font-display: swap;
 }
 @font-face {
-  font-family: "Trial Biolinum";
-  src: url("/fonts/trial/biolinum-400.woff2") format("woff2");
-  font-weight: 400;
+  font-family: "Jagora Boiling";
+  src: url("/fonts/boiling.woff2") format("woff2");
   font-display: swap;
-}
-@font-face {
-  font-family: "Trial Biolinum";
-  src: url("/fonts/trial/biolinum-700.woff2") format("woff2");
-  font-weight: 700;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Trial Vollkorn";
-  src: url("/fonts/trial/vollkorn-400.woff2") format("woff2");
-  font-weight: 400;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Trial Vollkorn";
-  src: url("/fonts/trial/vollkorn-600.woff2") format("woff2");
-  font-weight: 600;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Trial Vollkorn";
-  src: url("/fonts/trial/vollkorn-700.woff2") format("woff2");
-  font-weight: 700;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Trial Boiling";
-  src: url("/fonts/trial/boiling.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Trial Anson";
-  src: url("/fonts/trial/anson.woff2") format("woff2");
 }
 @theme {
   --font-sans: "Jagora Body", "Jagora Sans", "Inter Variable", ui-serif, Georgia, serif;
+  --font-head: "Jagora Boiling", "Jagora Sans", "Inter Variable", sans-serif;
   --font-display: "Jagora Sans", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 
   --color-ink: #0e0f12;
@@ -417,14 +380,15 @@ h3,
   }
 }
 
-/* headings: Jagora Sans (Bricolage Grotesque), tight and confident; body text is Piazzolla */
+/* headings and subheadings: Boiling, a heavy friendly display face; body text is Vollkorn */
 h1,
 h2,
 h3,
-.font-pixel {
-  font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: -0.035em;
+.font-pixel,
+.font-head {
+  font-family: var(--font-head);
+  font-weight: 400;
+  letter-spacing: -0.005em;
 }
 
 /* reading pages (about, legal): calm, roomy, professional */
@@ -494,11 +458,11 @@ h3,
 }
 .jd-title {
   margin-top: 14px;
-  font-family: var(--font-display);
-  font-weight: 700;
+  font-family: var(--font-head);
+  font-weight: 400;
   font-size: clamp(30px, 4.8vw, 44px);
   line-height: 1.08;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.01em;
   color: #111317;
 }
 .jd-sub {
@@ -514,8 +478,8 @@ h3,
 }
 .jd-h {
   margin-top: 40px;
-  font-family: var(--font-display);
-  font-weight: 700;
+  font-family: var(--font-head);
+  font-weight: 400;
   font-size: 20px;
   letter-spacing: -0.02em;
   color: #111317;
@@ -612,12 +576,4 @@ h3,
 .jd-sources a {
   color: #1d63ed;
   text-decoration: none;
-}
-
-/* font trial (temporary) */
-[data-body="biolinum"] {
-  --font-sans: "Trial Biolinum", "Jagora Sans", "Inter Variable", serif;
-}
-[data-body="vollkorn"] {
-  --font-sans: "Trial Vollkorn", "Jagora Sans", "Inter Variable", serif;
 }
