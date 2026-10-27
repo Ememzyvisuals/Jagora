@@ -9,7 +9,6 @@ import { createPortal } from "react-dom";
 import { renderToStaticMarkup } from "react-dom/server";
 import { downloadDocx, downloadMarkdown } from "@/lib/docs/export";
 import type { DocBlock, JDoc } from "@/lib/store";
-import { Mark } from "./Brand";
 
 const date = (t: number) => new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 const host = (u: string) => {
@@ -23,15 +22,18 @@ const host = (u: string) => {
 function Block({ b }: { b: DocBlock }) {
   if (b.t === "h") return <h2 className="jd-h">{b.text}</h2>;
   if (b.t === "p") return <p className="jd-p">{b.text}</p>;
-  if (b.t === "note") return <aside className="jd-note">{b.text}</aside>;
+  if (b.t === "note")
+    return (
+      <aside className="jd-note">
+        <span>Note</span>
+        {b.text}
+      </aside>
+    );
   if (b.t === "list")
     return b.ordered ? (
       <ol className="jd-ol">
         {b.items.map((it, i) => (
-          <li key={i}>
-            <span className="jd-num">{i + 1}</span>
-            <span>{it}</span>
-          </li>
+          <li key={i}>{it}</li>
         ))}
       </ol>
     ) : (
@@ -43,54 +45,46 @@ function Block({ b }: { b: DocBlock }) {
     );
   return (
     <figure className="jd-fig">
-      <div className="jd-tablewrap">
-        <table className="jd-table">
-          <thead>
-            <tr>
-              {b.head.map((h) => (
-                <th key={h}>{h}</th>
+      <table className="jd-table">
+        <thead>
+          <tr>
+            {b.head.map((h) => (
+              <th key={h}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {b.rows.map((r, i) => (
+            <tr key={i}>
+              {r.map((c, j) => (
+                <td key={j}>{c}</td>
               ))}
             </tr>
-          </thead>
-          <tbody>
-            {b.rows.map((r, i) => (
-              <tr key={i}>
-                {r.map((c, j) => (
-                  <td key={j}>{c}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </table>
       {b.caption && <figcaption>{b.caption}</figcaption>}
     </figure>
   );
 }
 
-/** The page itself */
+/** The page itself: a plain, well-set report */
 export function DocPage({ d }: { d: JDoc }) {
   return (
     <article className="jd">
       <header className="jd-head">
-        <div className="jd-brand">
-          <Mark size={28} />
-          <span>Jagora</span>
-          <span className="jd-kind">{d.kind}</span>
-        </div>
+        <p className="jd-kind">{d.kind}</p>
         <h1 className="jd-title">{d.title}</h1>
         {d.subtitle && <p className="jd-sub">{d.subtitle}</p>}
         <p className="jd-meta">
-          Prepared by Jagora · {date(d.created)} · {d.sources.length} sources
+          Prepared by Jagora, {date(d.created)}
         </p>
       </header>
       <section className="jd-summary">
-        <p className="jd-label">Summary</p>
-        <ul>
-          {d.summary.map((s, i) => (
-            <li key={i}>{s}</li>
-          ))}
-        </ul>
+        <h2 className="jd-h">Key points</h2>
+        {d.summary.map((s, i) => (
+          <p key={i}>{s}</p>
+        ))}
       </section>
       {d.blocks.map((b, i) => (
         <Block key={i} b={b} />
@@ -98,18 +92,16 @@ export function DocPage({ d }: { d: JDoc }) {
       <section className="jd-sources">
         <h2 className="jd-h">Sources</h2>
         <ol>
-          {d.sources.map((s, i) => (
+          {d.sources.map((s) => (
             <li key={s.url}>
-              <span className="jd-num">{i + 1}</span>
+              {s.title}.{" "}
               <a href={s.url} target="_blank" rel="noreferrer">
-                {s.title}
-                <span>{host(s.url)}</span>
+                {host(s.url)}
               </a>
             </li>
           ))}
         </ol>
       </section>
-      <footer className="jd-foot">Made with Jagora, the voice-first browser for Nigeria</footer>
     </article>
   );
 }

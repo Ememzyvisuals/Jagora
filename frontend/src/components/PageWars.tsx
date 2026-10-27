@@ -36,7 +36,7 @@ type Shot = { x: number; y: number; vx: number; vy: number; team: Man["team"]; l
 type Bit = { x: number; y: number; vx: number; vy: number; s: number; c: string; life: number; rot: number; vr: number };
 
 const G = 1500; // gravity px/s²
-const H = 46; // stickman height
+const H = 58; // stickman height
 const SPEED = 230;
 const JUMP = 640;
 const BULLET = 980;
@@ -164,7 +164,7 @@ export function PageWars() {
     };
     const fire = (m: Man, tx: number, ty: number, spread = 0.02) => {
       const w = world.current!;
-      const gx = m.x + Math.cos(m.aim) * 22, gy = m.y - H * 0.62 + Math.sin(m.aim) * 22;
+      const gx = m.x + Math.cos(m.aim) * 34, gy = m.y - 51 + Math.sin(m.aim) * 34;
       const a = Math.atan2(ty - gy, tx - gx) + (Math.random() - 0.5) * spread;
       w.shots.push({ x: gx, y: gy, vx: Math.cos(a) * BULLET, vy: Math.sin(a) * BULLET, team: m.team, life: 1.4 });
     };
@@ -206,7 +206,7 @@ export function PageWars() {
             m.vy = -JUMP;
             m.ground = false;
           }
-          m.aim = Math.atan2(inp.aim.y - (m.y - H * 0.62), inp.aim.x - m.x);
+          m.aim = Math.atan2(inp.aim.y - (m.y - 51), inp.aim.x - m.x);
           m.face = Math.cos(m.aim) >= 0 ? 1 : -1;
           m.cool -= dt;
           if (inp.fire && m.cool <= 0) {
@@ -221,7 +221,7 @@ export function PageWars() {
           // danger: a shot coming its way, or the player aiming right at it
           const threatened =
             w.shots.some((s) => s.team !== m.team && Math.hypot(s.x - m.x, s.y - (m.y - H / 2)) < 160 && (s.vx > 0) === (m.x > s.x)) ||
-            (m.team === "red" && Math.abs(Math.atan2(m.y - H * 0.6 - (me.y - H * 0.62), m.x - me.x) - me.aim) < 0.12 && !me.dead);
+            (m.team === "red" && Math.abs(Math.atan2(m.y - 40 - (me.y - 51), m.x - me.x) - me.aim) < 0.12 && !me.dead);
           if (threatened && m.panic <= 0) {
             m.panic = 0.7 + Math.random() * 0.5;
             m.goal = m.x + (m.x > (foe?.x ?? 0) ? 1 : -1) * (160 + Math.random() * 200);
@@ -244,11 +244,11 @@ export function PageWars() {
           const d = m.goal - m.x;
           m.vx = Math.abs(d) > 8 ? Math.sign(d) * SPEED * (m.panic > 0 ? 1.35 : 0.8) : 0;
           if (foe) {
-            m.aim = Math.atan2(foe.y - H * 0.6 - (m.y - H * 0.62), foe.x - m.x);
+            m.aim = Math.atan2(foe.y - 40 - (m.y - 51), foe.x - m.x);
             m.face = Math.cos(m.aim) >= 0 ? 1 : -1;
             m.cool -= dt;
             if (m.cool <= 0) {
-              fire(m, foe.x, foe.y - H * 0.6, m.team === "red" ? 0.22 : 0.08);
+              fire(m, foe.x, foe.y - 40, m.team === "red" ? 0.22 : 0.08);
               m.cool = m.team === "red" ? Math.max(0.7, 2.2 - w.wave * 0.15) + Math.random() : 0.5 + Math.random() * 0.5;
             }
           }
@@ -283,7 +283,7 @@ export function PageWars() {
           // people
           for (const m of w.men) {
             if (m.dead || m.team === s.team) continue;
-            if (Math.abs(s.x - m.x) < 9 && s.y > m.y - H && s.y < m.y) {
+            if (Math.abs(s.x - m.x) < 11 && s.y > m.y - H && s.y < m.y) {
               s.life = 0;
               m.hp -= m.me ? 9 : 25;
               m.vx += s.vx * 0.05;
@@ -499,16 +499,16 @@ export function PageWars() {
       {phase !== "play" && (
         <div className="absolute inset-0 grid place-items-center bg-[#0b1426]/25 p-5 backdrop-blur-[2px]">
           <div className="w-full max-w-[420px] rounded-[30px] bg-white/85 p-6 text-center shadow-[0_30px_80px_-30px_rgba(10,30,70,.6)] ring-1 ring-black/5 backdrop-blur-2xl dark:bg-[#23262d]/90">
-            <svg viewBox="0 0 120 60" className="mx-auto h-16 w-32" aria-hidden="true">
-              <g stroke={BLUE} strokeWidth="4" strokeLinecap="round" fill="none">
-                <circle cx="30" cy="12" r="7" />
-                <path d="M30 19v18M30 37l-8 14M30 37l8 14M30 25l16-2" />
+            <svg viewBox="0 0 140 70" className="mx-auto h-[70px] w-[140px]" aria-hidden="true">
+              <g stroke="#15171c" strokeWidth="4.2" strokeLinecap="round" strokeLinejoin="round" fill="none">
+                <path d="M30 40 L24 52 L20 64 M30 40 L36 52 L40 64 M30 40 L31 20 M31 23 L40 27 L48 25 M31 23 L42 30 L54 26" />
+                <path d="M110 40 L104 52 L100 64 M110 40 L117 52 L121 64 M110 40 L109 20 M109 23 L100 28 L92 26 M109 23 L98 31 L86 27" />
               </g>
-              <g stroke={RED} strokeWidth="4" strokeLinecap="round" fill="none">
-                <circle cx="92" cy="12" r="7" />
-                <path d="M92 19v18M92 37l-10 12M92 37l11 10M92 25l-16 3" />
-              </g>
-              <circle cx="62" cy="22" r="3" fill="#ffd166" />
+              <path d="M38 26 L66 22" stroke="#2a2d34" strokeWidth="4.5" strokeLinecap="round" />
+              <path d="M102 26 L74 22" stroke="#2a2d34" strokeWidth="4.5" strokeLinecap="round" />
+              <circle cx="31" cy="11" r="8" fill={BLUE} stroke="#15171c" strokeWidth="2.4" />
+              <circle cx="109" cy="11" r="8" fill={RED} stroke="#15171c" strokeWidth="2.4" />
+              <path d="M24 9 L38 9 M23 10 L14 13" stroke="#ffd166" strokeWidth="3" strokeLinecap="round" />
             </svg>
             <h2 className="mt-2 font-display text-[34px] font-bold leading-none tracking-[-0.04em] text-ink">{phase === "over" ? "You're down" : "Page Wars"}</h2>
             {phase === "over" ? (
@@ -543,71 +543,124 @@ export function PageWars() {
   );
 }
 
+/** two-bone reach: the middle joint (knee or elbow) for a limb from a to b, bending toward `bend` (+1 or -1) */
+function joint(a: V, b: V, l1: number, l2: number, bend: number): V {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const d = Math.min(Math.hypot(dx, dy), l1 + l2 - 0.01);
+  const ang = Math.atan2(dy, dx);
+  const cos = (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d);
+  const off = Math.acos(Math.max(-1, Math.min(1, cos))) * bend;
+  return { x: a.x + Math.cos(ang + off) * l1, y: a.y + Math.sin(ang + off) * l1 };
+}
+
+const INK = "#15171c";
+
 function drawMan(ctx: CanvasRenderingContext2D, m: Man) {
-  const col = m.team === "red" ? RED : m.me ? BLUE : ALLY;
-  const alpha = m.dead ? Math.max(0, 1 - m.dead / 2.5) : 1;
+  const team = m.team === "red" ? RED : m.me ? BLUE : ALLY;
+  const f = m.face;
   ctx.save();
-  ctx.globalAlpha = alpha;
+  ctx.globalAlpha = m.dead ? Math.max(0, 1 - m.dead / 2.5) : 1;
   ctx.translate(m.x, m.y);
-  if (m.dead) ctx.rotate(Math.min(Math.PI / 2, m.dead * 4) * (m.face > 0 ? -1 : 1));
-  ctx.strokeStyle = col;
-  ctx.fillStyle = col;
-  ctx.lineWidth = 3.4;
+  if (m.dead) ctx.rotate(Math.min(Math.PI / 2, m.dead * 5) * -f);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  const sw = m.ground ? Math.sin(m.phase) * 0.7 : 0.5;
-  const hip = { x: 0, y: -H * 0.38 };
-  const neck = { x: 0, y: -H * 0.74 };
-  // legs
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 4.6;
+
+  // proportions (y up is negative)
+  const T = 22, TH = 14, SH = 14, UA = 11, FA = 11, R = 8.5;
+  const run = m.ground && Math.abs(m.vx) > 5;
+  const p = m.phase * 1.6;
+  const bob = run ? Math.abs(Math.sin(p)) * 2.5 : Math.sin(performance.now() / 500) * 0.8;
+  const hip: V = { x: 0, y: -(TH + SH) + 1 - bob };
+  const lean = run ? f * 3 : 0;
+  const neck: V = { x: hip.x + lean, y: hip.y - T };
+  const head: V = { x: neck.x + lean * 0.3, y: neck.y - R - 2 };
+
+  // legs: feet swing on a cycle when running, tuck when airborne, stand apart when still
+  const feet: V[] = [0, Math.PI].map((o) => {
+    if (!m.ground) return { x: f * (o ? -6 : 8), y: -8 };
+    if (!run) return { x: o ? -6 : 7, y: 0 };
+    const s = Math.sin(p + o), c = Math.cos(p + o);
+    return { x: s * 14 * f, y: Math.min(0, c * 7) };
+  });
   ctx.beginPath();
-  ctx.moveTo(hip.x, hip.y);
-  ctx.lineTo(hip.x + Math.sin(sw) * 12, 0);
-  ctx.moveTo(hip.x, hip.y);
-  ctx.lineTo(hip.x - Math.sin(sw) * 12, m.ground ? 0 : -6);
+  for (const ft of feet) {
+    const k = joint(hip, ft, TH, SH, -f);
+    ctx.moveTo(hip.x, hip.y);
+    ctx.lineTo(k.x, k.y);
+    ctx.lineTo(ft.x, ft.y);
+  }
   // body
   ctx.moveTo(hip.x, hip.y);
   ctx.lineTo(neck.x, neck.y);
   ctx.stroke();
-  // arms and gun along the aim
-  const shoulder = { x: 0, y: -H * 0.62 };
+
+  // the rifle along the aim, held with both hands
+  const sh: V = { x: neck.x, y: neck.y + 4 };
   const ax = Math.cos(m.aim), ay = Math.sin(m.aim);
+  const px = -ay * f, py = ax * f; // perpendicular, toward the top of the gun
+  const butt: V = { x: sh.x + ax * 2, y: sh.y + ay * 2 };
+  const grip: V = { x: sh.x + ax * 12 - px * 2, y: sh.y + ay * 12 - py * 2 };
+  const fore: V = { x: sh.x + ax * 21, y: sh.y + ay * 21 };
+  const muzzle: V = { x: sh.x + ax * 34, y: sh.y + ay * 34 };
+  ctx.strokeStyle = "#2a2d34";
+  ctx.lineWidth = 5.5;
   ctx.beginPath();
-  ctx.moveTo(shoulder.x, shoulder.y);
-  ctx.lineTo(shoulder.x + ax * 14, shoulder.y + ay * 14);
-  ctx.moveTo(shoulder.x, shoulder.y);
-  ctx.lineTo(shoulder.x + ax * 10 - ay * 4, shoulder.y + ay * 10 + ax * 4);
+  ctx.moveTo(butt.x, butt.y);
+  ctx.lineTo(fore.x, fore.y);
   ctx.stroke();
-  ctx.strokeStyle = "#0e0f12";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(fore.x, fore.y);
+  ctx.lineTo(muzzle.x, muzzle.y);
+  // magazine
+  ctx.moveTo(sh.x + ax * 15, sh.y + ay * 15);
+  ctx.lineTo(sh.x + ax * 14 - px * 6, sh.y + ay * 14 - py * 6);
+  ctx.stroke();
+  // arms to grip and fore-grip
+  ctx.strokeStyle = INK;
   ctx.lineWidth = 4.2;
   ctx.beginPath();
-  ctx.moveTo(shoulder.x + ax * 10, shoulder.y + ay * 10);
-  ctx.lineTo(shoulder.x + ax * 24, shoulder.y + ay * 24);
+  for (const hand of [grip, fore]) {
+    const e = joint(sh, hand, UA, FA, f * (hand === fore ? 1 : 1));
+    ctx.moveTo(sh.x, sh.y);
+    ctx.lineTo(e.x, e.y);
+    ctx.lineTo(hand.x, hand.y);
+  }
   ctx.stroke();
-  // head
-  ctx.strokeStyle = col;
-  ctx.lineWidth = 3.4;
+
+  // head: solid, in the team colour
+  ctx.fillStyle = team;
   ctx.beginPath();
-  ctx.arc(0, -H * 0.88, 7, 0, Math.PI * 2);
-  ctx.fillStyle = "#fff";
+  ctx.arc(head.x, head.y, R, 0, Math.PI * 2);
   ctx.fill();
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = INK;
   ctx.stroke();
-  // you wear a headband
+  // you: a bandana with two tails in the wind
   if (m.me) {
     ctx.strokeStyle = "#ffd166";
-    ctx.lineWidth = 2.6;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(-7, -H * 0.9);
-    ctx.lineTo(7, -H * 0.9);
-    ctx.lineTo(7 - m.face * 14, -H * 0.86 + Math.sin(m.phase * 2) * 2);
+    ctx.moveTo(head.x - R + 1, head.y - 2);
+    ctx.lineTo(head.x + R - 1, head.y - 2);
+    const tx = head.x - f * (R + 2), ty = head.y - 1;
+    const w = Math.sin(performance.now() / 90) * 2;
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx - f * 10, ty + 2 + w);
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx - f * 8, ty + 6 - w);
     ctx.stroke();
   }
-  // health bar for the living
+  // a small health bar over the others
   if (!m.dead && !m.me) {
     const max = m.team === "blue" ? 80 : 40;
-    ctx.fillStyle = "rgba(0,0,0,.15)";
-    ctx.fillRect(-12, -H - 8, 24, 3);
-    ctx.fillStyle = col;
-    ctx.fillRect(-12, -H - 8, (24 * Math.max(0, m.hp)) / max, 3);
+    ctx.globalAlpha *= 0.9;
+    ctx.fillStyle = "rgba(0,0,0,.18)";
+    ctx.fillRect(head.x - 13, head.y - R - 9, 26, 3.5);
+    ctx.fillStyle = team;
+    ctx.fillRect(head.x - 13, head.y - R - 9, (26 * Math.max(0, m.hp)) / max, 3.5);
   }
   ctx.restore();
 }

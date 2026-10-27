@@ -19,7 +19,7 @@ function save(blob: Blob, name: string) {
 export function toMarkdown(d: JDoc) {
   const out: string[] = [`# ${d.title}`, ""];
   if (d.subtitle) out.push(`*${d.subtitle}*`, "");
-  out.push(`${d.kind} · Prepared by Jagora · ${date(d.created)}`, "", "## Summary", "", ...d.summary.map((s) => `- ${s}`), "");
+  out.push(`${d.kind}. Prepared by Jagora, ${date(d.created)}.`, "", "## Key points", "", ...d.summary.map((s) => `- ${s}`), "");
   for (const b of d.blocks) {
     if (b.t === "h") out.push(`## ${b.text}`, "");
     else if (b.t === "p") out.push(b.text, "");
@@ -40,12 +40,12 @@ export function downloadMarkdown(d: JDoc) {
 
 export async function downloadDocx(d: JDoc) {
   const x = await import("docx");
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, ExternalHyperlink, BorderStyle, ShadingType, AlignmentType } = x;
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, ExternalHyperlink, BorderStyle } = x;
   const INK = "0E0F12", MUTED = "5B5E66", ACCENT = "1D63ED", LINE = "DDE3EC";
   const body = { font: "Georgia", size: 22, color: "3A3D44" };
   const para = (text: string, o: Record<string, unknown> = {}) => new Paragraph({ spacing: { after: 140, line: 330 }, children: [new TextRun({ text, ...body, ...o })] });
   const children: (InstanceType<typeof Paragraph> | InstanceType<typeof Table>)[] = [
-    new Paragraph({ spacing: { after: 80 }, children: [new TextRun({ text: d.kind.toUpperCase(), font: "Arial", size: 18, bold: true, color: ACCENT, characterSpacing: 40 })] }),
+    new Paragraph({ spacing: { after: 80 }, children: [new TextRun({ text: d.kind.toUpperCase(), font: "Arial", size: 17, color: MUTED, characterSpacing: 40 })] }),
     new Paragraph({ heading: HeadingLevel.TITLE, spacing: { after: 120 }, children: [new TextRun({ text: d.title, font: "Arial", size: 52, bold: true, color: INK })] }),
   ];
   if (d.subtitle) children.push(new Paragraph({ spacing: { after: 160 }, children: [new TextRun({ text: d.subtitle, ...body, size: 26, color: MUTED })] }));
@@ -53,10 +53,12 @@ export async function downloadDocx(d: JDoc) {
     new Paragraph({
       spacing: { after: 360 },
       border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: LINE, space: 8 } },
-      children: [new TextRun({ text: `Prepared by Jagora  ·  ${date(d.created)}`, font: "Arial", size: 18, color: MUTED })],
+      children: [new TextRun({ text: `Prepared by Jagora, ${date(d.created)}`, font: "Arial", size: 18, color: MUTED })],
     }),
-    new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: "Summary", font: "Arial", size: 26, bold: true, color: INK })] }),
-    ...d.summary.map((s) => new Paragraph({ bullet: { level: 0 }, spacing: { after: 80, line: 320 }, children: [new TextRun({ text: s, ...body })] })),
+    new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: "Key points", font: "Arial", size: 26, bold: true, color: INK })] }),
+    ...d.summary.map(
+      (s) => new Paragraph({ spacing: { after: 100, line: 320 }, indent: { left: 200 }, border: { left: { style: BorderStyle.SINGLE, size: 12, color: ACCENT, space: 10 } }, children: [new TextRun({ text: s, ...body })] }),
+    ),
   );
   for (const b of d.blocks) {
     if (b.t === "h") children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 360, after: 140 }, children: [new TextRun({ text: b.text, font: "Arial", size: 28, bold: true, color: INK })] }));
@@ -65,31 +67,29 @@ export async function downloadDocx(d: JDoc) {
       children.push(
         new Paragraph({
           spacing: { before: 200, after: 200, line: 320 },
-          shading: { type: ShadingType.CLEAR, color: "auto", fill: "EEF3FD" },
-          border: { left: { style: BorderStyle.SINGLE, size: 18, color: ACCENT, space: 10 } },
-          children: [new TextRun({ text: b.text, ...body, color: "2A3550" })],
+          border: { top: { style: BorderStyle.SINGLE, size: 4, color: LINE, space: 8 } },
+          children: [new TextRun({ text: "NOTE   ", font: "Arial", size: 16, color: MUTED, characterSpacing: 30 }), new TextRun({ text: b.text, ...body, italics: true, color: "4A4E57" })],
         }),
       );
     else if (b.t === "list")
       b.items.forEach((it, i) =>
         children.push(
           b.ordered
-            ? new Paragraph({ spacing: { after: 80, line: 320 }, indent: { left: 360, hanging: 360 }, children: [new TextRun({ text: `${i + 1}.  `, ...body, bold: true, color: ACCENT }), new TextRun({ text: it, ...body })] })
+            ? new Paragraph({ spacing: { after: 80, line: 320 }, indent: { left: 360, hanging: 360 }, children: [new TextRun({ text: `${i + 1}.  `, ...body, color: MUTED }), new TextRun({ text: it, ...body })] })
             : new Paragraph({ bullet: { level: 0 }, spacing: { after: 80, line: 320 }, children: [new TextRun({ text: it, ...body })] }),
         ),
       );
     else if (b.t === "table") {
       const cell = (t: string, head: boolean) =>
         new TableCell({
-          shading: head ? { type: ShadingType.CLEAR, color: "auto", fill: "0E0F12" } : undefined,
-          margins: { top: 100, bottom: 100, left: 140, right: 140 },
-          children: [new Paragraph({ children: [new TextRun({ text: t, font: head ? "Arial" : "Georgia", size: head ? 18 : 20, bold: head, color: head ? "FFFFFF" : "2B2E35" })] })],
+          margins: { top: 100, bottom: 100, left: 0, right: 160 },
+          children: [new Paragraph({ children: [new TextRun({ text: t, font: "Georgia", size: 20, bold: head, color: head ? INK : "2B2E35" })] })],
         });
       children.push(
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           borders: {
-            top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+            top: { style: BorderStyle.SINGLE, size: 10, color: INK },
             bottom: { style: BorderStyle.SINGLE, size: 4, color: LINE },
             left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
             right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
@@ -107,11 +107,10 @@ export async function downloadDocx(d: JDoc) {
     children.push(
       new Paragraph({
         spacing: { after: 80 },
-        children: [new TextRun({ text: `${i + 1}.  `, ...body, color: MUTED }), new ExternalHyperlink({ link: s.url, children: [new TextRun({ text: s.title, ...body, color: ACCENT, underline: {} })] })],
+        children: [new TextRun({ text: `${i + 1}.  ${s.title}. `, ...body, size: 20, color: "4A4E57" }), new ExternalHyperlink({ link: s.url, children: [new TextRun({ text: s.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, ""), ...body, size: 20, color: ACCENT })] })],
       }),
     ),
   );
-  children.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 600 }, children: [new TextRun({ text: "Made with Jagora, the voice-first browser for Nigeria.", font: "Arial", size: 16, color: "9A9DA5" })] }));
   const doc = new Document({
     creator: "Jagora",
     title: d.title,

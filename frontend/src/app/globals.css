@@ -37,6 +37,44 @@
   font-weight: 700;
   font-display: swap;
 }
+@font-face {
+  font-family: "Trial Biolinum";
+  src: url("/fonts/trial/biolinum-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Trial Biolinum";
+  src: url("/fonts/trial/biolinum-700.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Trial Vollkorn";
+  src: url("/fonts/trial/vollkorn-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Trial Vollkorn";
+  src: url("/fonts/trial/vollkorn-600.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Trial Vollkorn";
+  src: url("/fonts/trial/vollkorn-700.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Trial Boiling";
+  src: url("/fonts/trial/boiling.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Trial Anson";
+  src: url("/fonts/trial/anson.woff2") format("woff2");
+}
 @theme {
   --font-sans: "Jagora Body", "Jagora Sans", "Inter Variable", ui-serif, Georgia, serif;
   --font-display: "Jagora Sans", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
@@ -436,158 +474,102 @@ h3,
   text-underline-offset: 3px;
 }
 
-/* ---- documents Jagora writes: a calm editorial page -------------------------------------------------------- */
+/* ---- documents Jagora writes: a plain, well-set report ---------------------------------------------------- */
 .jd {
-  color: #2b2e35;
+  color: #23262c;
   font-family: var(--font-sans);
   font-size: 16.5px;
-  line-height: 1.7;
-  padding: clamp(28px, 6vw, 72px) clamp(22px, 7vw, 80px) 40px;
+  line-height: 1.68;
+  padding: clamp(32px, 7vw, 84px) clamp(24px, 8vw, 92px) clamp(40px, 6vw, 72px);
 }
 .jd-head {
-  border-bottom: 1px solid #e3e8ef;
-  padding-bottom: 28px;
-}
-.jd-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 16px;
-  letter-spacing: -0.02em;
-  color: #0e0f12;
+  padding-bottom: 26px;
+  border-bottom: 1px solid #d9dde3;
 }
 .jd-kind {
-  margin-left: auto;
-  font-size: 11.5px;
-  letter-spacing: 0.14em;
+  font-size: 12.5px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #1d63ed;
-  background: #e8efff;
-  padding: 5px 10px;
-  border-radius: 999px;
+  color: #6b6f78;
 }
 .jd-title {
-  margin-top: 34px;
+  margin-top: 14px;
   font-family: var(--font-display);
-  font-weight: 800;
-  font-size: clamp(32px, 5.4vw, 52px);
-  line-height: 1.02;
-  letter-spacing: -0.04em;
-  color: #0e0f12;
+  font-weight: 700;
+  font-size: clamp(30px, 4.8vw, 44px);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  color: #111317;
 }
 .jd-sub {
-  margin-top: 14px;
-  font-size: clamp(17px, 2.2vw, 20px);
-  color: #5b5e66;
-  max-width: 46ch;
+  margin-top: 12px;
+  font-size: clamp(17px, 2vw, 19px);
+  color: #555962;
+  max-width: 52ch;
 }
 .jd-meta {
-  margin-top: 18px;
-  font-size: 13px;
-  color: #8a8d95;
-}
-.jd-summary {
-  margin-top: 30px;
-  background: linear-gradient(180deg, #f3f7ff, #eef3fb);
-  border-radius: 18px;
-  padding: 22px 26px;
-}
-.jd-label {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #1d63ed;
-}
-.jd-summary ul {
-  margin-top: 10px;
-}
-.jd-summary li {
-  position: relative;
-  padding-left: 20px;
-  margin-top: 6px;
-  color: #23262d;
-}
-.jd-summary li::before {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: 0.68em;
-  width: 7px;
-  height: 7px;
-  border-radius: 99px;
-  background: #1d63ed;
+  margin-top: 16px;
+  font-size: 13.5px;
+  color: #80848c;
 }
 .jd-h {
-  margin-top: 44px;
+  margin-top: 40px;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 24px;
-  letter-spacing: -0.03em;
-  color: #0e0f12;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: #111317;
+}
+.jd-summary p {
+  margin-top: 10px;
+  padding-left: 16px;
+  border-left: 2px solid #1d63ed;
+}
+.jd-summary .jd-h {
+  margin-top: 30px;
 }
 .jd-p {
   margin-top: 12px;
 }
-.jd-ul {
+.jd-ul,
+.jd-ol {
   margin-top: 12px;
+  padding-left: 1.4em;
 }
-.jd-ul li {
-  position: relative;
-  padding-left: 22px;
-  margin-top: 8px;
-}
-.jd-ul li::before {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 0.72em;
-  width: 8px;
-  height: 2px;
-  background: #1d63ed;
+.jd-ul {
+  list-style: disc;
 }
 .jd-ol {
-  margin-top: 14px;
+  list-style: decimal;
 }
+.jd-ul li,
 .jd-ol li {
-  display: flex;
-  gap: 14px;
-  margin-top: 10px;
+  margin-top: 7px;
+  padding-left: 4px;
 }
-.jd-num {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  margin-top: 1px;
-  border-radius: 99px;
-  background: #0e0f12;
-  color: #fff;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 13px;
-  line-height: 1;
+.jd-ul li::marker,
+.jd-ol li::marker {
+  color: #80848c;
 }
 .jd-note {
   margin-top: 26px;
-  border-left: 3px solid #1d63ed;
-  background: #f3f7ff;
-  border-radius: 0 14px 14px 0;
-  padding: 14px 18px;
-  color: #2a3550;
+  padding-top: 14px;
+  border-top: 1px solid #d9dde3;
   font-size: 15px;
+  font-style: italic;
+  color: #4a4e57;
+}
+.jd-note span {
+  font-style: normal;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #6b6f78;
+  margin-right: 10px;
 }
 .jd-fig {
-  margin-top: 18px;
-}
-.jd-tablewrap {
+  margin-top: 16px;
   overflow-x: auto;
-  border-radius: 14px;
-  border: 1px solid #e3e8ef;
 }
 .jd-table {
   width: 100%;
@@ -596,64 +578,46 @@ h3,
   line-height: 1.45;
 }
 .jd-table th {
-  background: #0e0f12;
-  color: #fff;
   text-align: left;
-  font-family: var(--font-display);
   font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0.02em;
-  padding: 12px 16px;
+  color: #111317;
+  padding: 10px 14px 10px 0;
+  border-top: 1.5px solid #111317;
+  border-bottom: 1px solid #111317;
 }
 .jd-table td {
-  padding: 12px 16px;
-  border-top: 1px solid #edf0f5;
+  padding: 10px 14px 10px 0;
+  border-bottom: 1px solid #e3e6ea;
   vertical-align: top;
-}
-.jd-table tbody tr:nth-child(even) td {
-  background: #fafbfd;
 }
 .jd-table td:first-child {
   font-weight: 600;
-  color: #0e0f12;
+  color: #111317;
 }
 .jd-fig figcaption {
   margin-top: 8px;
   font-size: 13px;
-  color: #8a8d95;
+  color: #80848c;
 }
 .jd-sources ol {
-  margin-top: 12px;
+  margin-top: 10px;
+  padding-left: 1.4em;
+  list-style: decimal;
+  font-size: 14.5px;
+  color: #4a4e57;
 }
 .jd-sources li {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  margin-top: 10px;
-}
-.jd-sources .jd-num {
-  background: #e8efff;
-  color: #1d63ed;
+  margin-top: 5px;
 }
 .jd-sources a {
-  display: flex;
-  flex-direction: column;
-  color: #0e0f12;
-  font-weight: 600;
+  color: #1d63ed;
   text-decoration: none;
 }
-.jd-sources a span {
-  font-weight: 400;
-  font-size: 13.5px;
-  color: #1d63ed;
-}
-.jd-foot {
-  margin-top: 56px;
-  padding-top: 18px;
-  border-top: 1px solid #e3e8ef;
-  font-size: 12.5px;
-  color: #9a9da5;
-  text-align: center;
-}
 
-
+/* font trial (temporary) */
+[data-body="biolinum"] {
+  --font-sans: "Trial Biolinum", "Jagora Sans", "Inter Variable", serif;
+}
+[data-body="vollkorn"] {
+  --font-sans: "Trial Vollkorn", "Jagora Sans", "Inter Variable", serif;
+}

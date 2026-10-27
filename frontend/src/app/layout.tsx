@@ -3,6 +3,7 @@ import "./globals.css";
 import { Pwa } from "@/components/Pwa";
 import { Effects } from "@/components/Effects";
 import { PageWars } from "@/components/PageWars";
+import { FontTrial } from "@/components/FontTrial";
 import { THEME_SCRIPT } from "@/lib/themeScript";
 
 export const metadata: Metadata = {
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <Pwa />
         <Effects />
         <PageWars />
+        <FontTrial />
         {children}
       </body>
     </html>

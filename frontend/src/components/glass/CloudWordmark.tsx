@@ -59,7 +59,11 @@ export function CloudWordmark({
   width = 320,
   levelRef,
   className = "",
+  family = "Jagora Sans",
+  weight = 800,
 }: {
+  family?: string;
+  weight?: number;
   text?: string;
   width?: number;
   levelRef?: MutableRefObject<number>;
@@ -116,7 +120,7 @@ export function CloudWordmark({
     };
 
     const draw = () => {
-      const font = `800 ${H}px "Jagora Sans", sans-serif`;
+      const font = `${weight} ${H}px "${family}", "Jagora Sans", sans-serif`;
       const mk = (blur: number) => {
         const c = document.createElement("canvas");
         c.width = W;
@@ -127,7 +131,7 @@ export function CloudWordmark({
         x.font = font;
         const m = x.measureText(text);
         const size = H * Math.min(0.92, (W * 0.94) / m.width);
-        x.font = `800 ${size}px "Jagora Sans", sans-serif`;
+        x.font = `${weight} ${size}px "${family}", "Jagora Sans", sans-serif`;
         x.letterSpacing = `${-size * 0.02}px`;
         x.textAlign = "center";
         x.textBaseline = "middle";
@@ -191,7 +195,7 @@ export function CloudWordmark({
     window.addEventListener("pointermove", move);
     cv.addEventListener("pointerdown", down);
 
-    document.fonts.load(`800 40px "Jagora Sans"`).finally(() => {
+    document.fonts.load(`${weight} 40px "${family}"`).finally(() => {
       if (!alive) return;
       draw();
       raf = requestAnimationFrame(frame);
@@ -204,7 +208,7 @@ export function CloudWordmark({
       window.removeEventListener("pointermove", move);
       cv.removeEventListener("pointerdown", down);
     };
-  }, [text, width, height, levelRef]);
+  }, [text, width, height, levelRef, family, weight]);
 
   return (
     <canvas
