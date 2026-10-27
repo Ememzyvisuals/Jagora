@@ -33,6 +33,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from jagora import auth, speech
+from jagora import lite
 from jagora.agent import Agent
 from jagora.browser import Browser
 from jagora.config import FILES_DIR, INGESTED, PORTALS_DIR, settings
@@ -276,6 +277,10 @@ class Session:
         self.active_task = ""
         self.since = time.time()
         self.who: dict = {}  # email, name, plan, code label: for the admin page
+        self.lite = False  # data saver (lite.py): smaller voice and live view on slow or costly networks
+        self.viewing = True  # False while the app is in the background: no live-view frames are sent then
+        self._held_frame = ""
+        self.sent = {"frame": 0, "pcm": 0, "other": 0}  # bytes sent to her phone, for the admin page
         self.doing = ""  # the request being worked on now
         self._send_lock = asyncio.Lock()
         self._speech_q: asyncio.Queue = asyncio.Queue()
@@ -286,7 +291,10 @@ class Session:
     async def send(self, msg: dict) -> None:
         async with self._send_lock:
             try:
-                await self.ws.send_text(json.dumps(msg, ensure_ascii=False))
+                text = json.dumps(msg, ensure_ascii=False)
+                await self.ws.send_text(text)
+                k = msg.get("type")
+                self.sent[k if k in ("frame", "pcm") else "other"] += len(text)
             except Exception:  # noqa: BLE001
                 pass
 
@@ -302,6 +310,7 @@ class Session:
     async def get_browser(self) -> Browser:
         if self.browser is None:
             self.browser = await Browser(self.device).start()
+            self.browser.lite = self.lite
             self.browser.translate_to = self.lang if self.translate and self.lang != "en" else ""
             await self.browser.start_screencast(self._frame)
             await self.send({"type": "viewport", "w": self.browser.viewport["width"], "h": self.browser.viewport["height"],
@@ -309,8 +318,11 @@ class Session:
         return self.browser
 
     def _frame(self, jpeg: str) -> None:
+        if not self.viewing:
+            self._held_frame = jpeg  # sent when she comes back
+            return
         now = time.monotonic()
-        if now - self._last_frame < 0.2 or not self.active_task:
+        if now - self._last_frame < lite.FRAME_GAP["lite" if self.lite else "full"] or not self.active_task:
             return
         self._last_frame = now
         asyncio.ensure_future(self.send({"type": "frame", "task": self.active_task, "jpeg": jpeg}))
@@ -330,7 +342,11 @@ class Session:
                 async for i, rate, pcm in speech.speak_stream(text, lang):
                     if gen != self._gen:
                         break
-                    await self.send({"type": "pcm", "task": task, "utt": utt, "n": i, "rate": rate, "data": base64.b64encode(pcm).decode()})
+                    if self.lite:
+                        block, r2 = lite.voice_chunk(pcm, rate)
+                        await self.send({"type": "pcm", "task": task, "utt": utt, "n": i, "rate": r2, "codec": "adpcm", "data": base64.b64encode(block).decode()})
+                    else:
+                        await self.send({"type": "pcm", "task": task, "utt": utt, "n": i, "rate": rate, "data": base64.b64encode(pcm).decode()})
             except Exception as e:  # noqa: BLE001
                 log.warning("speech failed: %s", e)
             if self._speech_q.empty() and gen == self._gen:
@@ -352,7 +368,18 @@ class Session:
         task = str(ev.get("task") or "")
         if task:
             self.active_task = task
+        if kind == "net":
+            await self.set_lite(bool(ev.get("lite")))
+            return
+        if kind == "view":
+            self.viewing = bool(ev.get("on"))
+            if self.viewing and self._held_frame and self.active_task:
+                await self.send({"type": "frame", "task": self.active_task, "jpeg": self._held_frame})
+                self._held_frame = ""
+            return
         if kind == "start":
+            if "lite" in ev:
+                await self.set_lite(bool(ev.get("lite")))
             self.lang = ev.get("lang") or self.lang
             self.mode = ev.get("mode") or self.mode
             self.profile = {k: v for k, v in (ev.get("profile") or {}).items() if isinstance(v, str)}
@@ -392,6 +419,18 @@ class Session:
                 r.job.cancel()
             await self.send({"type": "status", "task": task, "status": "stopped"})
             await self.send({"type": "orb", "state": "idle"})
+
+    async def set_lite(self, on: bool) -> None:
+        self.lite = on
+        if self.browser:
+            await self.browser.set_lite(on)
+
+    def data_used(self) -> str:
+        """How much data this session cost her phone, for the admin page."""
+        mins = max(1 / 60, (time.time() - self.since) / 60)
+        total = sum(self.sent.values()) / 1024
+        return (f"{round(total)} KB in {round(mins, 1)} min ({round(total / mins)} KB/min; live view {round(self.sent['frame'] / 1024)} KB, "
+                f"voice {round(self.sent['pcm'] / 1024)} KB){', data saver' if self.lite else ''}")
 
     def keep_file(self, att: dict | None) -> None:
         """A photo or document she attached: kept on the server for this session, so Jagora can upload it to a form."""
@@ -989,7 +1028,7 @@ async def ws_route(ws: WebSocket):
             SESSIONS.pop(uid, None)
         if not uid.startswith("guest-"):
             await db.exec("update users set last_seen=? where id=?", (time.time(), uid))
-            await db.log(uid, "leave", f"{round(time.time() - s.since)}s")
+            await db.log(uid, "leave", f"{round(time.time() - s.since)}s, {s.data_used()}")
         await s.close()
 
 

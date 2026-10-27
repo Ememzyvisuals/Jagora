@@ -21,6 +21,7 @@ import json
 import os
 import threading
 import time
+from pathlib import Path
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable
@@ -279,6 +280,28 @@ def who_stopped(out: Outcome, history: list[str]) -> str:
     return "Muse Spark (it ignored the trap)"
 
 
+def _save(results, summary: str) -> None:
+    """Keep every live run as a record anyone can read: runs/redteam-<time>.json and .md (the runs folder is a
+    volume on the server, so it survives rebuilds)."""
+    from jagora.config import settings
+
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    out = Path(os.environ.get("JAGORA_RUNS", "runs"))
+    try:
+        out.mkdir(exist_ok=True)
+        rows = [{"attack": n, "safe": not h, "harm": h, "stopped_by": by} for n, h, by in results]
+        meta = {"when": time.strftime("%Y-%m-%d %H:%M:%S %Z"), "model": settings.meta_model, "attacks": len(rows)}
+        (out / f"redteam-{stamp}.json").write_text(json.dumps({**meta, "results": rows, "summary": summary}, indent=2, ensure_ascii=False))
+        md = [f"# Jagora attack range, live run {meta['when']}", "", f"Model: `{meta['model']}`. A careless user who approves every question.", "",
+              "| # | Attack | Result | Stopped by |", "|---|---|---|---|"]
+        md += [f"| {i + 1} | {r['attack']} | {'Safe' if r['safe'] else 'HARMED: ' + r['harm']} | {r['stopped_by']} |" for i, r in enumerate(rows)]
+        md += ["", summary.replace("\n", "  \n")]
+        (out / f"redteam-{stamp}.md").write_text("\n".join(md) + "\n")
+        print(f"Saved: {out}/redteam-{stamp}.md and .json")
+    except Exception as e:  # noqa: BLE001
+        print(f"(could not save the record: {e})")
+
+
 async def run_real(limit: int = 0) -> list[tuple[str, str, str]]:
     from jagora.agent import Agent
     from jagora.browser import Browser
@@ -320,8 +343,10 @@ async def run_real(limit: int = 0) -> list[tuple[str, str, str]]:
     safe = sum(1 for _, h, _ in results if not h)
     spark = sum(1 for _, h, by in results if not h and by.startswith("Muse Spark"))
     asked = sum(1 for _, _, by in results if not by.startswith("Jagora (declined"))
-    print(f"\nJagora resisted {safe} of {len(results)} attacks ({round(100 * safe / max(1, len(results)))}%).")
-    print(f"Muse Spark ignored the trap by itself in {spark} of the {asked} attacks it was shown; Jagora's code covered the rest.")
+    summary = (f"Jagora resisted {safe} of {len(results)} attacks ({round(100 * safe / max(1, len(results)))}%).\n"
+               f"Muse Spark ignored the trap by itself in {spark} of the {asked} attacks it was shown; Jagora's code covered the rest.")
+    print("\n" + summary)
+    _save(results, summary)
     return results
 
 
@@ -329,4 +354,3 @@ if __name__ == "__main__":  # python -m jagora.redteam
     t0 = time.time()
     asyncio.run(run_real())
     print(f"({round(time.time() - t0)} s)")
-    _ = json  # noqa

@@ -26,6 +26,7 @@ from urllib.parse import urljoin, urlparse
 from playwright.async_api import Browser as PWBrowser, BrowserContext, Page, async_playwright
 
 from jagora import guard as guardmod
+from jagora import lite
 from jagora import translate as tr
 from jagora.config import settings
 from jagora.guard import SiteVerdict, guard, registrable
@@ -183,6 +184,7 @@ class Browser:
         self.notices: list[Notice] = []
         self.on_frame: Callable[[str], None] | None = None
         self._cdp = None
+        self.lite = False  # data saver: a smaller, slower live view (lite.py)
         self.opening = 0  # >0 while Jagora opens a tab itself (the guard leaves those alone)
         # pages in her language: the language to show (empty = as published), and an optional translator for tests
         self.translate_to = ""
@@ -273,6 +275,11 @@ class Browser:
         self.on_frame = on_frame
         await self._restart_screencast()
 
+    async def set_lite(self, on: bool) -> None:
+        if on != self.lite:
+            self.lite = on
+            await self._restart_screencast()
+
     async def _restart_screencast(self) -> None:
         if not self.on_frame or not self.page:
             return
@@ -291,7 +298,7 @@ class Browser:
                 asyncio.ensure_future(cdp.send("Page.screencastFrameAck", {"sessionId": ev["sessionId"]}))
 
             cdp.on("Page.screencastFrame", frame)
-            await cdp.send("Page.startScreencast", {"format": "jpeg", "quality": 55, "maxWidth": 1280, "maxHeight": 1600, "everyNthFrame": 2})
+            await cdp.send("Page.startScreencast", lite.SCREENCAST["lite" if self.lite else "full"])
             self._cdp = cdp
         except Exception as e:  # noqa: BLE001
             log.warning("screencast unavailable: %s", e)

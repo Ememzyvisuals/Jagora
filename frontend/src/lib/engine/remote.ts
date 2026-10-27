@@ -49,12 +49,71 @@ function connect(): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const token = getToken();
     const sock = new WebSocket(token ? `${BACKEND}${BACKEND.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}` : BACKEND);
-    sock.onopen = () => resolve(sock);
+    sock.onopen = () => {
+      sock.send(JSON.stringify({ type: "net", lite: liteWanted() }));
+      resolve(sock);
+    };
     sock.onerror = () => reject(new Error("backend unreachable"));
     sock.onclose = () => (ws = null);
     sock.onmessage = (e) => handle(JSON.parse(e.data));
     ws = sock;
   });
+}
+
+/* ---- data saver (backend lite.py): on slow or costly networks the voice comes compressed and the live view smaller ---- */
+type NetInfo = { saveData?: boolean; effectiveType?: string; addEventListener?: (t: string, f: () => void) => void };
+const netInfo = (): NetInfo | undefined => (typeof navigator !== "undefined" ? (navigator as unknown as { connection?: NetInfo }).connection : undefined);
+/** Is data saver on? Her choice, or (auto) what the phone says about its connection. */
+export function liteWanted(): boolean {
+  const mode = S().dataSaver;
+  if (mode !== "auto") return mode === "on";
+  const c = netInfo();
+  return !!c && (!!c.saveData || ["slow-2g", "2g", "3g"].includes(c.effectiveType || ""));
+}
+function sendNet() {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "net", lite: liteWanted() }));
+}
+if (typeof window !== "undefined") {
+  netInfo()?.addEventListener?.("change", sendNet);
+  // no live-view frames while the app is in the background (phone locked, another app open)
+  document.addEventListener("visibilitychange", () => {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "view", on: !document.hidden }));
+  });
+  let last = useApp.getState().dataSaver;
+  useApp.subscribe((st) => {
+    if (st.dataSaver !== last) {
+      last = st.dataSaver;
+      sendNet();
+    }
+  });
+}
+
+/** IMA ADPCM block from lite.py: 2 bytes first sample, 1 byte step index, then two 4-bit codes a byte */
+const STEPS = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107, 118, 130, 143, 157, 173, 190, 209,
+  230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796, 876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024, 3327, 3660,
+  4026, 4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899, 15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794, 32767];
+const IDX = [-1, -1, -1, -1, 2, 4, 6, 8];
+function adpcm(bin: string): Float32Array {
+  if (bin.length < 3) return new Float32Array(0);
+  let pred = (bin.charCodeAt(0) | (bin.charCodeAt(1) << 8)) << 16 >> 16;
+  let idx = bin.charCodeAt(2);
+  const out = new Float32Array(1 + (bin.length - 3) * 2);
+  out[0] = pred / 32768;
+  let o = 1;
+  for (let i = 3; i < bin.length; i++) {
+    const b = bin.charCodeAt(i);
+    for (const code of [b & 15, b >> 4]) {
+      const step = STEPS[idx];
+      let d = step >> 3;
+      if (code & 4) d += step;
+      if (code & 2) d += step >> 1;
+      if (code & 1) d += step >> 2;
+      pred = Math.max(-32768, Math.min(32767, code & 8 ? pred - d : pred + d));
+      idx = Math.max(0, Math.min(88, idx + IDX[code & 7]));
+      out[o++] = pred / 32768;
+    }
+  }
+  return out;
 }
 
 function handle(ev: Record<string, unknown>) {
@@ -105,7 +164,7 @@ function handle(ev: Record<string, unknown>) {
       s.setOrb(ev.state as never);
       break;
     case "pcm":
-      playPcm(ev.data as string, (ev.rate as number) || 24000, ev.utt as string);
+      playPcm(ev.data as string, (ev.rate as number) || 24000, ev.utt as string, ev.codec as string | undefined);
       break;
     case "speech_end":
       speechDone = true;
@@ -146,7 +205,7 @@ if (typeof window !== "undefined") {
 let lastUtt = "";
 let hushedAt = 0;
 const hushed = new Set<string>();
-function playPcm(b64: string, rate: number, utt = "") {
+function playPcm(b64: string, rate: number, utt = "", codec?: string) {
   if (S().muted) return;
   // what was already on its way when she cut in stays silent
   if (hushed.has(utt) || performance.now() - hushedAt < 700) return;
@@ -154,14 +213,22 @@ function playPcm(b64: string, rate: number, utt = "") {
   const c = audio();
   if (!c) return;
   const bin = atob(b64);
-  const n = bin.length >> 1;
-  if (!n) return;
-  const buf = c.createBuffer(1, n, rate);
-  const ch = buf.getChannelData(0);
-  for (let i = 0; i < n; i++) {
-    let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8);
-    if (v >= 32768) v -= 65536;
-    ch[i] = v / 32768;
+  let buf: AudioBuffer;
+  if (codec === "adpcm") {
+    const pcm = adpcm(bin);
+    if (!pcm.length) return;
+    buf = c.createBuffer(1, pcm.length, rate);
+    buf.getChannelData(0).set(pcm);
+  } else {
+    const n = bin.length >> 1;
+    if (!n) return;
+    buf = c.createBuffer(1, n, rate);
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) {
+      let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8);
+      if (v >= 32768) v -= 65536;
+      ch[i] = v / 32768;
+    }
   }
   const src = c.createBufferSource();
   src.buffer = buf;

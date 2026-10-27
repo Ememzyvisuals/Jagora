@@ -25,6 +25,8 @@ import {
   Moon,
   Sun,
   X,
+  CellSignalFull,
+  CellSignalLow,
 } from "@phosphor-icons/react";
 import { hush, remoteTakeover } from "@/lib/engine/remote";
 import { fly } from "../Effects";
@@ -289,6 +291,7 @@ export function DesktopApp() {
           {/* Jagora */}
           <motion.section layout transition={{ type: "spring", stiffness: 260, damping: 32 }} className={`flex w-[372px] shrink-0 flex-col overflow-hidden rounded-[24px] bg-white/45 shadow-[inset_0_1px_1px_rgba(255,255,255,1)] ${showPage ? "order-first" : ""}`}>
             <div className="flex justify-end gap-1 px-3 pt-3 text-ink-2">
+              <DataSaverToggle />
               <VoiceToggle />
             </div>
             <div className="-mt-8 flex flex-col items-center">
@@ -458,6 +461,26 @@ function TakeOver({ taskId }: { taskId: string }) {
   return (
     <button onClick={() => void remoteTakeover(taskId, !on)} className={`-mr-2 h-7 shrink-0 rounded-full px-3 text-[12.5px] font-semibold transition ${on ? "bg-accent text-snow" : "bg-white/80 text-ink hover:bg-white"}`}>
       {on ? "Hand back to Jagora" : "Take over"}
+    </button>
+  );
+}
+
+/** Data saver: Auto (follows the phone's own connection report), On, Off. On, the voice comes compressed and the
+    live page smaller, for slow or costly networks. */
+function DataSaverToggle() {
+  const mode = useApp((s) => s.dataSaver);
+  const set = useApp((s) => s.setDataSaver);
+  const next = mode === "auto" ? "on" : mode === "on" ? "off" : "auto";
+  const label = mode === "auto" ? "Data saver: auto" : mode === "on" ? "Data saver: on" : "Data saver: off";
+  return (
+    <button
+      onClick={() => set(next)}
+      className={`flex h-8 items-center gap-1 rounded-full px-2 text-[12px] font-semibold hover:bg-white/60 ${mode === "on" ? "text-accent" : ""}`}
+      aria-label={`${label}. Tap to change.`}
+      title={label}
+    >
+      {mode === "off" ? <CellSignalFull size={17} /> : <CellSignalLow size={17} />}
+      <span>{mode === "auto" ? "Auto" : mode === "on" ? "Saver" : "Full"}</span>
     </button>
   );
 }

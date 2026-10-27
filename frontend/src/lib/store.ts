@@ -99,6 +99,9 @@ type State = {
   /** show websites' main content in her language (Yoruba, Hausa, Igbo) */
   translatePages: boolean;
   setTranslatePages: (v: boolean) => void;
+  /** data saver: smaller voice and live view (auto: on when the phone reports a slow or metered connection) */
+  dataSaver: "auto" | "on" | "off";
+  setDataSaver: (v: "auto" | "on" | "off") => void;
   /** a chat with this id (one that started on the server: a finished scheduled task, a reminder) */
   ensureTask: (id: string, title: string) => void;
   /** a short banner: something finished while she was away */
@@ -167,6 +170,8 @@ export const useApp = create<State>()(
       muted: false,
       translatePages: true,
       setTranslatePages: (translatePages) => set({ translatePages }),
+      dataSaver: "auto",
+      setDataSaver: (dataSaver) => set({ dataSaver }),
       ensureTask: (id, title) =>
         set((s) => (s.tasks.some((t) => t.id === id) ? {} : { tasks: [{ id, title, kind: "chat" as const, url: "", status: "done" as TaskStatus, createdAt: Date.now(), messages: [] }, ...s.tasks].slice(0, 30) })),
       toast: null,
@@ -232,7 +237,7 @@ export const useApp = create<State>()(
           return sessionStorage;
         }
       }),
-      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, starters: s.starters, muted: s.muted, translatePages: s.translatePages }),
+      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, starters: s.starters, muted: s.muted, translatePages: s.translatePages, dataSaver: s.dataSaver }),
     },
   ),
 );

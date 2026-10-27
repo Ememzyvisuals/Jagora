@@ -22,9 +22,8 @@
   <img alt="Muse Spark 1.3" src="https://img.shields.io/badge/Meta-Muse%20Spark%201.3-0467DF?style=flat-square">
   <img alt="Muse Wonder" src="https://img.shields.io/badge/Meta-Muse%20Wonder-0467DF?style=flat-square">
   <img alt="Muse Image" src="https://img.shields.io/badge/Meta-Muse%20Image-0467DF?style=flat-square">
-  <img alt="Open weights" src="https://img.shields.io/badge/Meta-Muse%20Glimmer%20%2F%20Spark%20Open-0467DF?style=flat-square">
   <img alt="Languages" src="https://img.shields.io/badge/languages-yo%20%C2%B7%20ha%20%C2%B7%20ig%20%C2%B7%20pcm%20%C2%B7%20en-111318?style=flat-square">
-  <img alt="Tests" src="https://img.shields.io/badge/backend%20tests-64%20passing-3f8f5c?style=flat-square">
+  <img alt="Tests" src="https://img.shields.io/badge/backend%20tests-67%20passing-3f8f5c?style=flat-square">
   <a href="#live-result-against-the-real-model"><img alt="Attacks resisted" src="https://img.shields.io/badge/live%20attack%20range-20%2F20%20resisted-3f8f5c?style=flat-square"></a>
 </p>
 
@@ -116,7 +115,7 @@ engine and the same voice.
 | The page streamed to you as live frames | You see the page directly, at full speed |
 | Logins for each task, entered through the private box | Your real logged-in accounts, never leaving your device |
 | Safety checks run on our server | The same checks built into the browser engine |
-| Muse Spark called from our server | Muse Spark called from the browser, with the open-weights model (Muse Glimmer / Spark Open) for safety checks where hardware allows |
+| Muse Spark called from our server | Muse Spark called from the browser (and, later, the option of an open-weights model for the safety checks on the user's own computer) |
 | STORM speech through our server | STORM speech called directly, with on-device listening where possible |
 
 ### Why Muse Spark is the right brain for this browser
@@ -138,8 +137,8 @@ of people.
 - **It is priced for scale.** Meta launched the Muse Spark API at $1.25 per million input tokens and $4.25 per million
   output tokens, which makes an agent that works on every step of every task realistic for a mass-market browser in
   Nigeria.
-- **It has an open-weights family.** Muse Glimmer and Muse Spark Open let the safety checks run on hardware we
-  control today, and on the user's own machine later.
+- **It has an open-weights family.** Muse Glimmer and Muse Spark Open give the desktop browser a future option to run
+  the safety checks on the user's own machine. In this demo, Muse Spark does all of them.
 - **The family covers the rest.** Muse Wonder reads photos, PDFs and videos of real letters and bills; Muse Image
   turns steps into picture guides for people who find reading hard.
 
@@ -200,14 +199,15 @@ millions of cloud browsers.
 
 ## How Meta AI powers Jagora
 
-Jagora uses four parts of Meta's model family, each for the job it does best.
+Jagora runs on three of Meta's models, each for the job it does best, and is ready for a fourth (open weights) when
+we choose to host one.
 
 | Meta model | Role in Jagora | Where in the code |
 |---|---|---|
 | **Muse Spark 1.3**<br>`muse-spark-1.3` | The agent's brain. One tool-calling loop over 50+ tools (search, open, click, type, upload, drag, read PDFs, show evidence, schedule, remember). Sees the page as a numbered element list plus a screenshot. Also runs the **completion checker** (a second call that must agree the task is done before the user hears "done"). | `backend/jagora/agent.py`, `llm.py` |
 | **Muse Wonder**<br>`muse-wonder-1.0` | Reads what she shares in one call: photos, screenshots, PDFs (as page images) and short videos (as stills). Returns sender, amounts, reference numbers, deadlines, what it asks her to do, and scam risk, in her language. Jagora then acts on it. | `backend/jagora/muse.py` (`read_attachment`) |
 | **Muse Image**<br>`muse-image-1.0` | Picture guides. A result becomes 3 or 4 illustrations: the first is generated from a fixed character and style, the rest are drawn from it with `images/edits`, so the same woman appears in every frame. Captions are read aloud. | `backend/jagora/muse.py` (`Images`, `draw_guide`) |
-| **Muse Glimmer / Muse Spark Open**<br>open weights | When `OPEN_BASE_URL` points at an OpenAI-compatible server (vLLM, SGLang, llama.cpp or a hosted provider), the **safety judgement** (the separate "does this action match her request?" check) and the **terms review** run on the open model, on hardware we control. Without it, Muse Spark does that work. | `backend/jagora/muse.py` (`open_model`) |
+| **Muse Glimmer / Muse Spark Open**<br>open weights, *optional, off in this demo* | Not used in this demo: Muse Spark does all of the work above, including every safety check. The code is ready for later: when `OPEN_BASE_URL` points at an OpenAI-compatible server (vLLM, SGLang, llama.cpp or a hosted provider), the **safety judgement** and the **terms review** move to the open model, on hardware we control. | `backend/jagora/muse.py` (`open_model`) |
 
 Why not Muse Voice Transcribe for speech? Its 25 evaluated languages do not include Yorùbá, Hausa, Igbo or
 Pidgin, so speech goes through PlotWeaver's STORM models, which were trained for exactly these languages (see
@@ -249,7 +249,7 @@ flowchart TB
         SP["<b>Muse Spark 1.3</b><br/>agent · checker"]
         WO["<b>Muse Wonder</b><br/>photos · PDFs · video"]
         IM["<b>Muse Image</b><br/>picture guides"]
-        OW["<b>Muse Glimmer / Spark Open</b><br/>open weights · safety checks"]
+        OW["<b>Muse Glimmer / Spark Open</b><br/>optional · off in this demo"]
     end
 
     ST["PlotWeaver STORM<br/>ASR · TTS · MT · 5 languages"]
@@ -308,7 +308,7 @@ flowchart LR
 |---|---|
 | App | Next.js 15, React 19, Tailwind v4, Motion, Zustand, WebGL (living orb, cloud-glass wordmark), three.js (3D devices) |
 | Server | Python 3.12, FastAPI, WebSockets, Playwright Chromium, PyMuPDF, ffmpeg |
-| Models | Meta Model API (Muse Spark, Muse Wonder, Muse Image), optional open weights, PlotWeaver STORM speech |
+| Models | Meta Model API (Muse Spark, Muse Wonder, Muse Image), PlotWeaver STORM speech; an optional open-weights hook, off in this demo |
 | Data | Turso (libSQL over HTTP), SQLite fallback, per-site encrypted vault |
 | Safety | Public blocklists (StevenBlack, URLhaus, Phishing.Database, HaGeZi), lookalike detection, content classifiers |
 | Delivery | Vercel (app), Docker behind Caddy on AWS EC2 (agent), Web Push (VAPID) |
@@ -393,9 +393,31 @@ one fails even when the model itself is fooled.
 | | Engine | Notes |
 |---|---|---|
 | Speech to text | **STORM ASR** (PlotWeaver) | Yorùbá, Hausa, Igbo, Pidgin, English; silence trimmed on the server before upload |
-| Text to speech | **STORM TTS** (PlotWeaver), voice *Amina* | Streamed as 16-bit PCM in 0.2 s pieces. The next sentence is made while the current one plays. Cached by text. |
+| Text to speech | **STORM TTS** (PlotWeaver), voice *Amina* | Streamed in 0.2 s pieces as 16-bit PCM, or compressed (16 kHz IMA ADPCM) in data saver. The next sentence is made while the current one plays. Cached by text. |
 | Interrupting | Barge-in | Talk over Jagora (echo-cancelled) or tap the orb and she stops at once. The server drops whatever was queued. |
 | Page translation | **STORM MT** | Pages shown in her language. The agent always reads the original. |
+
+### Light on data, for real Nigerian networks
+
+The browser runs on our server, so her phone does almost no computing: it shows the live page and plays the voice.
+What she pays for is data, so Jagora has a **data saver** (`backend/jagora/lite.py`). It turns on by itself when the
+phone reports a slow connection (2G or 3G) or its own data saver, and she can switch it on or off in the app.
+
+| | Normal | Data saver |
+|---|---|---|
+| Jagora's voice | 24 kHz, 16-bit: **516 kbit/s** while speaking | 16 kHz IMA ADPCM: **90 kbit/s** (5.7 times smaller, still clear speech) |
+| One live-view frame (phone layout, practice portal) | 42 KB | 25 KB, 360 px wide |
+| Live-view frames | at most 5 a second, only when the page changes | at most 2 a second, only when the page changes |
+| App in the background (phone locked, another app open) | no frames sent | no frames sent |
+
+Every 0.2 s piece of compressed voice carries its own starting state, so a lost piece never garbles the next one.
+The figures above were measured with the measuring tool; run it yourself on any server:
+
+```bash
+python -m jagora.netcheck
+```
+
+Every session's data use (live view and voice, in KB per minute) is also recorded on the owner's admin page.
 
 ## Run it yourself
 
@@ -426,7 +448,7 @@ Without the two `NEXT_PUBLIC_BACKEND_*` variables the app runs a scripted demo, 
 |---|---|
 | `META_API_KEY` | Meta Model API (Muse Spark, Wonder, Image) |
 | `META_MODEL` · `META_WONDER_MODEL` · `META_IMAGE_MODEL` | Defaults: `muse-spark-1.3`, `muse-wonder-1.0`, `muse-image-1.0` |
-| `OPEN_BASE_URL` · `OPEN_MODEL` · `OPEN_KEY` | Optional open-weights server for the safety checks |
+| `OPEN_BASE_URL` · `OPEN_MODEL` · `OPEN_KEY` | Optional, not needed: an open-weights server for the safety checks. Leave unset to use Muse Spark (as the demo does). |
 | `PLOTWEAVER_API_KEY` | STORM speech and translation |
 | `TURSO_DATABASE_URL` · `TURSO_AUTH_TOKEN` | Accounts and memory (SQLite is used when unset) |
 | `ACCESS_CODES` · `ADMIN_CODE` | Judge codes (labelled Code 1 to 5) and the owner's admin code, generated on first start |
@@ -447,7 +469,7 @@ cd backend && pytest -q
 | `test_attacks.py` | The **attack range** (below), with a *hijacked* model that obeys every trap |
 | `test_fields_safety.py` | Number and date reading in five languages, the approval gate, her account's locks |
 | `test_hands.py` | Hover menus, drag and drop, key combinations, canvas clicks, uploads, date pickers, pointing |
-| `test_muse.py` | Muse Wonder reading (photos, PDFs), fallback to Muse Spark, picture guides, open-weights safety checks |
+| `test_muse.py` | Muse Wonder reading (photos, PDFs), fallback to Muse Spark, picture guides, the optional open-weights hook |
 | `test_power.py` | Vault, scheduled sign-in, translation, page tools, retries, parallel reading, checker, memory, terms review, learned skills |
 | `test_research.py` | Search, official-site checks, evidence |
 | `test_server.py` | Sign-up with proof-of-work, a full research run over WebSocket, admin monitoring, phone notifications |
@@ -470,6 +492,28 @@ The tests run the range with a hijacked model, to prove the code holds even when
 ```bash
 python -m jagora.redteam
 ```
+
+### Reproduce it, or try to break it
+
+Anyone can check these results.
+
+- **Without any API key:** the full range runs against a hijacked model that obeys every trap.
+
+  ```bash
+  cd backend && pytest -q tests/test_attacks.py
+  ```
+
+- **Against the real Muse Spark:** set `META_API_KEY` in `backend/.env`, then run the live range. Every run is saved as
+  a readable record in `runs/redteam-<time>.md` and `.json`, with who stopped each attack.
+
+  ```bash
+  cd backend && python -m jagora.redteam
+  ```
+
+- **Add your own attack:** put a trap page in `PAGES` and a line in `ATTACKS` in `backend/jagora/redteam.py`, then
+  run it. If it gets through, open an issue with the page; it joins the range and gets fixed.
+
+The raw output of the live run below is kept in [`docs/redteam/2026-10-27-live.md`](docs/redteam/2026-10-27-live.md).
 
 ### Live result against the real model
 
@@ -532,7 +576,7 @@ backend/
     guard.py       blocklists, content checks, injection removal, browser hygiene
     safety.py      the approval gate and her account's locks
     flow.py        task sites and data labels: what may cross from one site to another
-    muse.py        Muse Wonder reading, Muse Image picture guides, open-weights hook
+    muse.py        Muse Wonder reading, Muse Image picture guides, optional open-weights hook
     speech.py      STORM ASR and streaming TTS
     translate.py   pages in her language
     vault.py       site-bound encrypted logins
