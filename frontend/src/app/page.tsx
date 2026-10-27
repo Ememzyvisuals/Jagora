@@ -23,6 +23,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Mark } from "@/components/Brand";
 import { Backdrop } from "@/components/glass/Backdrop";
 import { CloudWordmark } from "@/components/glass/CloudWordmark";
+import { Devices3D } from "@/components/Devices3D";
 import { Orb } from "@/components/Orb";
 import { SiteFooter } from "@/components/SiteFooter";
 import { useApp } from "@/lib/store";
@@ -150,7 +151,11 @@ export default function Landing() {
         </div>
 
         <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1.1, delay: 0.3 }} className="relative mx-auto max-w-[1200px] px-5 pb-20 md:px-8">
-          <Shot src="/shots/desktop-register.webp" alt="Jagora filling a registration form on the live page, with the conversation on the left" wide />
+          <Devices3D
+            scene="hero"
+            className="aspect-[5/4] w-full sm:aspect-[16/9]"
+            fallback={<Shot src="/shots/desktop-register.webp" alt="Jagora filling a registration form on the live page, with the conversation on the left" wide />}
+          />
         </motion.div>
       </section>
 
@@ -185,9 +190,17 @@ export default function Landing() {
                 <Li icon={<MagnifyingGlass size={20} />}>Reads five sources at once, then shows proof</Li>
               </ul>
             </motion.div>
-            <motion.div {...rise} className="flex items-end justify-center gap-4">
-              <PhoneShot src="/shots/phone-register.webp" alt="Jagora filling a form on a phone" />
-              <PhoneShot src="/shots/phone-doc.webp" alt="A research document Jagora wrote, ready as PDF, Word or Markdown" className="hidden translate-y-10 sm:block" />
+            <motion.div {...rise}>
+              <Devices3D
+                scene="phones"
+                className="aspect-[1/1] w-full"
+                fallback={
+                  <div className="flex items-end justify-center gap-4">
+                    <PhoneShot src="/shots/phone-register.webp" alt="Jagora filling a form on a phone" />
+                    <PhoneShot src="/shots/phone-doc.webp" alt="A research document Jagora wrote, ready as PDF, Word or Markdown" className="hidden translate-y-10 sm:block" />
+                  </div>
+                }
+              />
             </motion.div>
           </div>
         </div>
@@ -213,7 +226,11 @@ export default function Landing() {
             </ul>
           </motion.div>
           <motion.div {...rise}>
-            <Shot src="/shots/desktop-private.webp" alt="Jagora asking for a NIN in a private box that only the website sees" />
+            <Devices3D
+              scene="safety"
+              className="aspect-[4/3] w-full"
+              fallback={<Shot src="/shots/desktop-private.webp" alt="Jagora asking for a NIN in a private box that only the website sees" />}
+            />
           </motion.div>
         </div>
       </section>
