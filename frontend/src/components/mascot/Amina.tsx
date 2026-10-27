@@ -129,41 +129,38 @@ function Stage() {
     /* her real voice (Jagora's STORM voice) for the hello lines. Browsers only allow sound after the visitor has
        tapped or clicked the page once; until then the bubble invites a tap, and that tap plays the line. */
     let actx: AudioContext | null = null;
-    const clips = new Map<string, Promise<AudioBuffer | null>>();
+    const files = new Map<string, Promise<ArrayBuffer | null>>(); // fetched early, decoded once sound is allowed
+    const clips = new Map<string, AudioBuffer>();
     let voiceSrc: AudioBufferSourceNode | null = null;
     let analyser: AnalyserNode | null = null;
     const level = new Uint8Array(256);
     let pending = "";
     let tapHint = false;
     let unlocked = false;
-    const audio = () => {
-      if (!actx) {
-        const C = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        actx = new C();
-      }
-      return actx;
+    const fetchClip = (lang: string) => {
+      if (!files.has(lang))
+        files.set(lang, fetch(`${API}/voice/hello/${lang}`).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null));
+      return files.get(lang)!;
     };
-    const clip = (lang: string) => {
-      if (!clips.has(lang))
-        clips.set(lang, fetch(`${API}/voice/hello/${lang}`)
-          .then((r) => (r.ok ? r.arrayBuffer() : null))
-          .then((b) => (b ? audio().decodeAudioData(b) : null))
-          .catch(() => null));
-      return clips.get(lang)!;
-    };
-    const mayPlay = () => unlocked || !!(navigator as unknown as { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive;
     const sayAloud = async (lang: string) => {
       if (!API || calm || useApp.getState().muted || !LANGS.includes(lang)) return;
-      if (!mayPlay()) {
+      if (!unlocked || !actx) {
         pending = lang;
         tapHint = true;
         return;
       }
       tapHint = false;
-      const c = audio();
-      await c.resume().catch(() => {});
-      const buf = await clip(lang);
-      if (!buf || dead) return;
+      const c = actx;
+      if (c.state !== "running") await c.resume().catch(() => {});
+      let buf = clips.get(lang);
+      if (!buf) {
+        const raw = await fetchClip(lang);
+        if (!raw) return;
+        buf = await c.decodeAudioData(raw.slice(0)).catch(() => undefined);
+        if (!buf) return;
+        clips.set(lang, buf);
+      }
+      if (dead) return;
       try {
         voiceSrc?.stop();
       } catch {}
@@ -184,9 +181,24 @@ function Stage() {
         }
       };
     };
+    /** her first tap, click or key: make the player inside it and play a moment of silence, which is what unlocks
+        sound on iPhone and Android; then anything she was about to say is said */
     const unlock = () => {
-      unlocked = true;
-      audio().resume().catch(() => {});
+      if (unlocked && actx?.state === "running") return;
+      try {
+        if (!actx) {
+          const C = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+          actx = new C();
+        }
+        const blip = actx.createBufferSource();
+        blip.buffer = actx.createBuffer(1, 1, 22050);
+        blip.connect(actx.destination);
+        blip.start(0);
+        void actx.resume();
+        unlocked = true;
+      } catch {
+        return;
+      }
       if (pending) {
         const l = pending;
         pending = "";
@@ -208,7 +220,7 @@ function Stage() {
         stage.mood = s.kind === "seat" ? "happy" : "calm";
       }
       if (s.say && !calm) setTimeout(() => spot === s && speak(s.say!), 650);
-      if (s.id === "languages" && API && !calm) LANGS.forEach((l) => void clip(l));
+      if (s.id === "languages" && API && !calm) LANGS.forEach((l) => void fetchClip(l));
     };
     const leave = () => {
       dir = -1;
@@ -216,6 +228,21 @@ function Stage() {
     };
 
     /* choose where to be */
+    /** the language line nearest the middle of the screen, if one is in the middle half */
+    const langLine = () => {
+      let best: HTMLElement | null = null, bestD = 1e9;
+      document.querySelectorAll<HTMLElement>("[data-amina-say]").forEach((n) => {
+        const r = n.getBoundingClientRect();
+        const c = r.top + r.height / 2;
+        const d = Math.abs(c - innerHeight / 2);
+        if (c > innerHeight * 0.22 && c < innerHeight * 0.78 && d < bestD) {
+          best = n;
+          bestD = d;
+        }
+      });
+      return best as HTMLElement | null;
+    };
+
     const choose = () => {
       const seat = seatEl();
       if (seat && visible(seat.getBoundingClientRect())) {
@@ -227,6 +254,23 @@ function Stage() {
       }
       if (spot?.kind === "seat") return leave();
       if (calm) return;
+      // the languages: she comes as soon as a line reaches the middle, and a peek that is still showing makes way
+      const talking = langLine();
+      if (talking && spot?.id !== "languages") {
+        if (spot && phase > 0.05) {
+          if (dir !== -1) {
+            done.add(spot.id);
+            leave();
+          }
+          return;
+        }
+        const a = anchors().find((x) => x.id === "languages");
+        if (a) return enter(a);
+      }
+      if (spot?.id === "languages") {
+        if (!talking && dir !== -1) leave();
+        return;
+      }
       if (spot) {
         const r = spot.el?.getBoundingClientRect();
         const stillHere = spot.kind === "corner" || (r && visible(r) && (spot.persistent ? inView(r, 0.15) : true));
@@ -239,7 +283,7 @@ function Stage() {
         return;
       }
       for (const s of anchors()) {
-        if (done.has(s.id) && !s.persistent) continue;
+        if (s.persistent || done.has(s.id)) continue;
         const r = s.el!.getBoundingClientRect();
         if (s.persistent ? inView(r, 0.15) : inView(r)) return enter(s);
       }
@@ -272,7 +316,7 @@ function Stage() {
         tx = left ? -150 + (150 + inX) * e : innerWidth + 150 - (150 + inX) * e;
         ty = Math.min(innerHeight * 0.7, Math.max(innerHeight * 0.3, r.top + r.height / 2));
         if (sp.id === "languages") {
-          const line = [...document.querySelectorAll<HTMLElement>("[data-amina-say]")].find((n) => inView(n.getBoundingClientRect(), 0.4));
+          const line = langLine();
           if (line) {
             ty = line.getBoundingClientRect().top + 10;
             if (line !== lastLine && phase > 0.8) {
@@ -516,8 +560,8 @@ function Stage() {
     seat?.addEventListener("click", onSeatClick);
     addEventListener("pointermove", onMove, { passive: true });
     addEventListener("pointerdown", onDown, { capture: true });
-    addEventListener("pointerdown", unlock, { capture: true });
-    addEventListener("keydown", unlock, { capture: true });
+    const UNLOCK = ["pointerdown", "touchend", "click", "keydown"] as const;
+    UNLOCK.forEach((e) => addEventListener(e, unlock, { capture: true, passive: true }));
     addEventListener("pointerup", onUp, { capture: true });
     addEventListener("click", onClick, { capture: true });
     addEventListener("resize", size);
@@ -530,8 +574,7 @@ function Stage() {
       seat?.removeEventListener("click", onSeatClick);
       removeEventListener("pointermove", onMove);
       removeEventListener("pointerdown", onDown, { capture: true });
-      removeEventListener("pointerdown", unlock, { capture: true });
-      removeEventListener("keydown", unlock, { capture: true });
+      UNLOCK.forEach((e) => removeEventListener(e, unlock, { capture: true }));
       try {
         voiceSrc?.stop();
       } catch {}
