@@ -115,9 +115,28 @@ def altcha_verify(payload: str) -> bool:
 
 # ---- accounts -------------------------------------------------------------------------------------------------------
 
+ADMIN_CREDITS = 1_000_000
+
+
 def _code_ok(code: str) -> bool:
+    return bool(code_label(code))
+
+
+def code_label(code: str) -> str:
+    """'admin', 'Code 1'..'Code 5', or '' for no or a wrong code. The admin page shows the label, never the code."""
     c = (code or "").strip().upper()
-    return bool(c) and any(hmac.compare_digest(c, x) for x in settings.access_codes)
+    if not c:
+        return ""
+    if settings.admin_code and hmac.compare_digest(c, settings.admin_code):
+        return "admin"
+    for i, x in enumerate(settings.access_codes, 1):
+        if hmac.compare_digest(c, x):
+            return f"Code {i}"
+    return ""
+
+
+def is_admin_code(code: str) -> bool:
+    return code_label(code) == "admin"
 
 
 async def signup(db: DB, email: str, password: str, code: str = "", name: str = "") -> dict:
@@ -131,10 +150,11 @@ async def signup(db: DB, email: str, password: str, code: str = "", name: str = 
     if await db.one("select id from users where email=?", (email,)):
         raise AuthError("exists", "An account with this email already exists. Sign in instead.", 409)
     uid = uuid.uuid4().hex
-    plan = "code" if code else "free"
-    credits = settings.credits_code if code else settings.credits_free
-    await db.exec("insert into users (id, email, pass, created, credits, plan, last_topup, name) values (?,?,?,?,?,?,?,?)",
-                  (uid, email, hash_password(password), time.time(), credits, plan, time.time(), (name or "")[:80]))
+    label = code_label(code)
+    plan = "admin" if label == "admin" else "code" if label else "free"
+    credits = ADMIN_CREDITS if plan == "admin" else settings.credits_code if label else settings.credits_free
+    await db.exec("insert into users (id, email, pass, created, credits, plan, last_topup, name, code) values (?,?,?,?,?,?,?,?,?)",
+                  (uid, email, hash_password(password), time.time(), credits, plan, time.time(), (name or "")[:80], label))
     return {"token": make_token(uid), "user": {"id": uid, "email": email, "credits": credits, "plan": plan}}
 
 
@@ -143,8 +163,11 @@ async def signin(db: DB, email: str, password: str, code: str = "") -> dict:
     row = await db.one("select * from users where email=?", (email,))
     if not row or not check_password(password or "", row["pass"]):
         raise AuthError("login", "The email or password is not right.", 401)
-    if code and _code_ok(code) and row["plan"] != "code":
-        await db.exec("update users set plan='code', credits=max(credits, ?) where id=?", (settings.credits_code, row["id"]))
+    label = code_label(code)
+    if label == "admin" and row["plan"] != "admin":
+        await db.exec("update users set plan='admin', credits=?, code='admin' where id=?", (ADMIN_CREDITS, row["id"]))
+    elif label and row["plan"] == "free":
+        await db.exec("update users set plan='code', credits=max(credits, ?), code=? where id=?", (settings.credits_code, label, row["id"]))
     user = await account(db, row["id"])
     return {"token": make_token(row["id"]), "user": user}
 
@@ -154,7 +177,7 @@ async def account(db: DB, user_id: str) -> dict | None:
     row = await db.one("select id, email, credits, plan, last_topup, name from users where id=?", (user_id,))
     if not row:
         return None
-    floor = settings.credits_code if row["plan"] == "code" else settings.credits_free
+    floor = ADMIN_CREDITS if row["plan"] == "admin" else settings.credits_code if row["plan"] == "code" else settings.credits_free
     if time.time() - float(row["last_topup"] or 0) > 86400 and row["credits"] < floor:
         await db.exec("update users set credits=?, last_topup=? where id=?", (floor, time.time(), user_id))
         row["credits"] = floor
@@ -163,7 +186,9 @@ async def account(db: DB, user_id: str) -> dict | None:
 
 async def spend_credit(db: DB, user_id: str, n: int = 1) -> int | None:
     """Take n credits; returns what is left, or None when there are not enough."""
-    row = await db.one("select credits from users where id=?", (user_id,))
+    row = await db.one("select credits, plan from users where id=?", (user_id,))
+    if row and row["plan"] == "admin":
+        return row["credits"]  # the owner tests without limits
     if not row or row["credits"] < n:
         return None
     await db.exec("update users set credits = credits - ? where id=? and credits >= ?", (n, user_id, n))

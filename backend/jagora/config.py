@@ -56,6 +56,7 @@ def ingest_secrets() -> list[str]:
         "ALTCHA_HMAC_KEY": lambda: _secrets.token_urlsafe(32),
         "VAULT_KEY": lambda: _secrets.token_urlsafe(32),
         "ACCESS_CODES": lambda: ",".join(f"JAGORA-{_secrets.token_hex(3).upper()}" for _ in range(5)),
+        "ADMIN_CODE": lambda: f"JAGORA-ADMIN-{_secrets.token_hex(4).upper()}",
     }
     for k, make in made.items():
         if not current.get(k) and not os.environ.get(k):
@@ -122,6 +123,8 @@ class Settings:
     altcha_key: str = field(default_factory=lambda: env("ALTCHA_HMAC_KEY", "dev-only-altcha"))
     vault_key: str = field(default_factory=lambda: env("VAULT_KEY"))
     access_codes: tuple[str, ...] = field(default_factory=lambda: tuple(c.strip().upper() for c in env("ACCESS_CODES").split(",") if c.strip()))
+    admin_code: str = field(default_factory=lambda: env("ADMIN_CODE").strip().upper())
+    alert_webhook: str = field(default_factory=lambda: env("ALERT_WEBHOOK"))  # optional: Discord, Slack or any JSON webhook
     require_account: bool = field(default_factory=lambda: env("REQUIRE_ACCOUNT", "true").lower() != "false")
     credits_free: int = field(default_factory=lambda: env_int("CREDITS_FREE", 30))
     credits_code: int = field(default_factory=lambda: env_int("CREDITS_CODE", 400))

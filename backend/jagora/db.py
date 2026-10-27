@@ -48,9 +48,19 @@ SCHEMA = [
     """create table if not exists notices (
          id text primary key, user_id text not null, t real not null, chat_id text not null, title text not null,
          text text not null, delivered integer not null default 0, payload text not null default '')""",
+    """create table if not exists events (
+         id integer primary key autoincrement, t real not null, user_id text not null, kind text not null,
+         detail text not null default '')""",
+    "create index if not exists events_t on events(t)",
     """create table if not exists moments (
          id text primary key, user_id text not null, t real not null, title text not null, tags text not null,
          note text not null, url text not null default '', chat_id text not null default '')""",
+]
+
+
+MIGRATIONS = [
+    "alter table users add column code text not null default ''",  # which access code she came with (label, never the code)
+    "alter table users add column last_seen real not null default 0",
 ]
 
 
@@ -97,7 +107,20 @@ class DB:
             self._conn = sqlite3.connect(settings.sqlite_path, check_same_thread=False)
         for s in SCHEMA:
             await self.exec(s)
+        for s in MIGRATIONS:
+            try:
+                await self.exec(s)
+            except Exception:  # noqa: BLE001  (the column is already there)
+                pass
         return self
+
+    # ---- what happened, for the admin page --------------------------------------------------------------------
+
+    async def log(self, user_id: str, kind: str, detail: str = "") -> None:
+        try:
+            await self.exec("insert into events (t, user_id, kind, detail) values (?,?,?,?)", (time.time(), user_id, kind, detail[:600]))
+        except Exception:  # noqa: BLE001  (monitoring never stops the work)
+            pass
 
     async def close(self) -> None:
         if self._http:

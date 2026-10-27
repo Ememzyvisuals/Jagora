@@ -126,6 +126,10 @@ async def auth_route(action: str, request: Request):
             raise HTTPException(404)
     except auth.AuthError as e:
         return JSONResponse({"error": e.code, "message": e.message}, status_code=e.status)
+    u = out.get("user", {})
+    await db.log(u.get("id", ""), action, u.get("email", ""))
+    if action == "signup":
+        await alert(None, "signup", f"{u.get('email', '')} ({u.get('plan', '')})", user=u)
     return out
 
 
@@ -219,6 +223,9 @@ class Session:
         self.runs: dict[str, Run] = {}
         self.browser: Browser | None = None
         self.active_task = ""
+        self.since = time.time()
+        self.who: dict = {}  # email, name, plan, code label: for the admin page
+        self.doing = ""  # the request being worked on now
         self._send_lock = asyncio.Lock()
         self._speech_q: asyncio.Queue = asyncio.Queue()
         self._speaker = asyncio.create_task(self._speak_loop())
@@ -436,7 +443,12 @@ class Session:
         task = r.task_id
         await self.send({"type": "status", "task": task, "status": "working"})
         await self.send({"type": "orb", "state": "thinking"})
-        if settings.require_account:
+        admin = self.who.get("plan") == "admin"
+        started = time.time()
+        self.doing = goal or (attachment or {}).get("name", "")
+        await db.log(self.user_id, "task", self.doing)
+        await alert(self, "task", self.doing)
+        if settings.require_account and not admin:
             if await db.spent_today() >= settings.daily_budget_usd:
                 await self.agent_says(task, "Jagora is very busy today. Please try again tomorrow.")
                 await self.send({"type": "status", "task": task, "status": "stopped"})
@@ -460,15 +472,20 @@ class Session:
                           vault=Vault(db, self.user_id) if not self.user_id.startswith("guest-") else None, files=self.files)
             result = await agent.run(goal)
             await db.add_spend(agent.model.usage.dollars)
+            await db.log(self.user_id, "done" if result.success else "stopped",
+                         json.dumps({"goal": goal[:200], "secs": round(time.time() - started), "steps": result.steps,
+                                     "usd": round(agent.model.usage.dollars, 4), "summary": (result.summary or "")[:300]}))
             await self.send({"type": "status", "task": task, "status": "done" if result.success else "stopped"})
         except asyncio.CancelledError:
             await self.send({"type": "status", "task": task, "status": "stopped"})
         except Exception as e:  # noqa: BLE001
             log.exception("run failed")
+            await db.log(self.user_id, "error", f"{goal[:200]} | {type(e).__name__}: {str(e)[:200]}")
             await self.agent_says(task, "Something went wrong on my side. Please try again." if "META" not in str(e)
                                   else "Jagora's brain is not connected yet.")
             await self.send({"type": "status", "task": task, "status": "stopped"})
         finally:
+            self.doing = ""
             await io.close_step()
             await self.send({"type": "highlight", "task": task, "box": None})
             if self._speech_q.empty():
@@ -683,6 +700,106 @@ def _box(rect: dict) -> dict:
     return {"x": rect.get("x", 0), "y": rect.get("y", 0), "w": rect.get("width", rect.get("w", 0)), "h": rect.get("height", rect.get("h", 0))}
 
 
+# ---- the owner's monitoring page ---------------------------------------------------------------------------------------
+# Who is on Jagora right now, what each person asked, whether it worked, and which access code they came with, so
+# the owner knows when the judges are testing. Opened with the ADMIN_CODE; never shows passwords, vault values or codes.
+
+ADMIN = "~admin"
+
+
+async def alert(s: "Session | None", kind: str, text: str, user: dict | None = None) -> None:
+    """Optional ping to the owner (ALERT_WEBHOOK: Discord, Slack or any JSON webhook) when someone signs up or
+    starts a task. The owner's own use is not announced."""
+    who = (s.who if s else user) or {}
+    if not settings.alert_webhook or who.get("plan") == "admin":
+        return
+    label = who.get("code") or ("code" if who.get("plan") == "code" else "free")
+    line = f"Jagora: {who.get('name') or who.get('email', 'someone')} [{label}] " + ("signed up" if kind == "signup" else f"asked: {text[:300]}")
+
+    async def send():
+        import httpx
+
+        with contextlib.suppress(Exception):
+            async with httpx.AsyncClient(timeout=8) as c:
+                await c.post(settings.alert_webhook, json={"content": line, "text": line})
+
+    asyncio.create_task(send())
+
+
+def _admin(request: Request) -> None:
+    if _user_from(request) != ADMIN:
+        raise HTTPException(401, "admin only")
+
+
+_admin_fails: dict[str, list[float]] = {}
+
+
+@app.post("/admin/login")
+async def admin_login(request: Request):
+    ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "").split(",")[0].strip()
+    now = time.time()
+    fails = [t for t in _admin_fails.get(ip, []) if now - t < 900]
+    if len(fails) >= 5:
+        return JSONResponse({"error": "wait", "message": "Too many tries. Wait 15 minutes."}, status_code=429)
+    body = await request.json()
+    if not auth.is_admin_code(str(body.get("code", ""))):
+        _admin_fails[ip] = fails + [now]
+        await asyncio.sleep(1)
+        return JSONResponse({"error": "code", "message": "That is not the admin code."}, status_code=401)
+    _admin_fails.pop(ip, None)
+    return {"token": auth.make_token(ADMIN)}
+
+
+@app.get("/admin/overview")
+async def admin_overview(request: Request):
+    _admin(request)
+    day = time.time() - 86400
+    users = await db.exec("select id, email, name, plan, code, created, last_seen, credits from users order by created desc limit 500")
+    counts = {r["user_id"]: r for r in await db.exec(
+        "select user_id, sum(case when kind='task' then 1 else 0 end) as tasks, "
+        "sum(case when kind='done' then 1 else 0 end) as done, max(t) as last from events group by user_id")}
+    names = {u["id"]: u for u in users}
+    for u in users:
+        c = counts.get(u["id"]) or {}
+        u["tasks"], u["done"], u["last_event"] = int(c.get("tasks") or 0), int(c.get("done") or 0), c.get("last") or 0
+        u["online"] = u["id"] in SESSIONS
+    events = await db.exec("select t, user_id, kind, detail from events order by t desc limit 200")
+    for e in events:
+        u = names.get(e["user_id"]) or {}
+        e["who"] = u.get("name") or u.get("email") or ("guest" if e["user_id"].startswith("guest-") else e["user_id"][:8])
+        e["code"] = u.get("code", "")
+    live = [{"user_id": uid, "who": s.who.get("name") or s.who.get("email") or "guest", "email": s.who.get("email", ""),
+             "code": s.who.get("code", ""), "plan": s.who.get("plan", ""), "since": s.since, "doing": s.doing,
+             "device": "phone" if (s.device or {}).get("mobile") else "computer"} for uid, s in SESSIONS.items()]
+    today = await db.one("select sum(case when kind='task' then 1 else 0 end) as tasks, "
+                         "sum(case when kind='done' then 1 else 0 end) as done, count(distinct user_id) as people "
+                         "from events where t > ?", (day,)) or {}
+    return {
+        "now": time.time(),
+        "live": live,
+        "today": {"tasks": int(today.get("tasks") or 0), "done": int(today.get("done") or 0),
+                  "people": int(today.get("people") or 0), "usd": round(await db.spent_today(), 4)},
+        "users": users,
+        "events": events,
+        "codes": ["admin"] + [f"Code {i}" for i in range(1, len(settings.access_codes) + 1)],
+        "model": bool(settings.meta_key), "speech": speech.enabled(),
+    }
+
+
+@app.get("/admin/user/{user_id}")
+async def admin_user(user_id: str, request: Request):
+    _admin(request)
+    chats = await db.exec("select chat_id, title, updated from chats where user_id=? order by updated desc limit 50", (user_id,))
+    return {"chats": chats}
+
+
+@app.get("/admin/chat/{user_id}/{chat_id}")
+async def admin_chat(user_id: str, chat_id: str, request: Request):
+    _admin(request)
+    rows = await db.exec("select t, role, text from messages where user_id=? and chat_id=? order by t limit 400", (user_id, chat_id))
+    return {"messages": rows}
+
+
 # ---- the WebSocket ---------------------------------------------------------------------------------------------------
 
 @app.websocket("/ws")
@@ -693,6 +810,13 @@ async def ws_route(ws: WebSocket):
         return
     token = ws.query_params.get("token", "")
     uid = auth.read_token(token) if token else None
+    if settings.require_account and not uid:
+        await ws.accept()
+        await ws.send_text(json.dumps({"type": "error", "error": "signin", "message": "Please sign in to use Jagora."}))
+        await ws.close(code=4401)
+        return
+    if uid and uid.startswith("~"):
+        uid = None  # the admin page's token is not an account
     if settings.require_account and not uid:
         await ws.accept()
         await ws.send_text(json.dumps({"type": "error", "error": "signin", "message": "Please sign in to use Jagora."}))
@@ -712,6 +836,10 @@ async def ws_route(ws: WebSocket):
     SESSIONS[uid] = s
     acc = await auth.account(db, uid) if not uid.startswith("guest-") else None
     if acc:
+        row = await db.one("select plan, code from users where id=?", (uid,)) or {}
+        s.who = {"email": acc["email"], "name": acc.get("name", ""), "plan": row.get("plan", ""), "code": row.get("code", "")}
+        await db.exec("update users set last_seen=? where id=?", (time.time(), uid))
+        await db.log(uid, "open", ws.headers.get("user-agent", "")[:160])
         await s.send({"type": "account", "credits": acc["credits"]})
         # reminders that came due while she was away
         for n in await db.exec("select * from notices where user_id=? and delivered=0 order by t", (uid,)):
@@ -732,6 +860,9 @@ async def ws_route(ws: WebSocket):
     finally:
         if SESSIONS.get(uid) is s:
             SESSIONS.pop(uid, None)
+        if not uid.startswith("guest-"):
+            await db.exec("update users set last_seen=? where id=?", (time.time(), uid))
+            await db.log(uid, "leave", f"{round(time.time() - s.since)}s")
         await s.close()
 
 

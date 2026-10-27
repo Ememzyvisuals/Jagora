@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-os.environ.update({"JAGORA_NO_INGEST": "1", "REQUIRE_ACCOUNT": "true", "ACCESS_CODES": "JUDGE-1", "ALLOWED_ORIGINS": ""})
+os.environ.update({"JAGORA_NO_INGEST": "1", "REQUIRE_ACCOUNT": "true", "ACCESS_CODES": "JUDGE-1,JUDGE-2", "ADMIN_CODE": "JAGORA-ADMIN-TEST", "ALLOWED_ORIGINS": ""})
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -163,3 +163,46 @@ def test_phone_view_plan_reminders_moments_and_take_over(client, site):  # noqa:
         while ev["type"] != "notify":
             ev = json.loads(ws.receive_text())
         assert "Check the UNILAG cut-off" in ev["text"]
+
+
+def test_admin_sees_who_used_it_and_tests_without_limits(client, site):  # noqa: F811
+    c, server = client
+    # the monitoring page opens only with the admin code
+    assert c.post("/admin/login", json={"code": "nope"}).status_code == 401
+    assert c.get("/admin/overview").status_code == 401
+    admin = c.post("/admin/login", json={"code": "jagora-admin-test"}).json()["token"]
+    H = {"Authorization": f"Bearer {admin}"}
+    # a judge signs up with the second code and runs a task
+    judge = c.post("/auth/signup", json={"email": "judge@meta.com", "password": "longenough", "code": "JUDGE-2", "name": "Judge",
+                                         "altcha": solve(c.get("/altcha").json())}).json()
+    assert judge["user"]["plan"] == "code"
+    server._model = lambda: Research(site)
+    with c.websocket_connect(f"/ws?token={judge['token']}") as ws:
+        ws.send_text(json.dumps({"type": "start", "task": "j1", "goal": "UNILAG computer science subjects", "lang": "en", "mode": "do", "profile": {}}))
+        while True:
+            ev = json.loads(ws.receive_text())
+            if ev["type"] == "status" and ev["status"] in ("done", "stopped"):
+                break
+        live = c.get("/admin/overview", headers=H).json()["live"]
+        assert any(x["email"] == "judge@meta.com" and x["code"] == "Code 2" for x in live)
+    o = c.get("/admin/overview", headers=H).json()
+    u = next(x for x in o["users"] if x["email"] == "judge@meta.com")
+    assert u["code"] == "Code 2" and u["tasks"] == 1 and u["done"] == 1 and u["last_seen"] > 0
+    kinds = [e["kind"] for e in o["events"] if e["user_id"] == u["id"]]
+    assert {"signup", "open", "task", "done", "leave"} <= set(kinds)
+    assert o["today"]["tasks"] >= 1
+    assert "JUDGE" not in json.dumps(o) and "JAGORA-ADMIN" not in json.dumps(o)  # labels only, never the codes
+    chats = c.get(f"/admin/user/{u['id']}", headers=H).json()["chats"]
+    msgs = c.get(f"/admin/chat/{u['id']}/{chats[0]['chat_id']}", headers=H).json()["messages"]
+    assert msgs[0]["text"] == "UNILAG computer science subjects"
+    # the admin token is not an account
+    with c.websocket_connect(f"/ws?token={admin}") as ws:
+        assert json.loads(ws.receive_text())["error"] == "signin"
+    # the owner's own account: unlimited, never counts down
+    me = c.post("/auth/signup", json={"email": "owner@plotweaver.app", "password": "longenough", "code": "JAGORA-ADMIN-TEST",
+                                      "altcha": solve(c.get("/altcha").json())}).json()
+    assert me["user"]["plan"] == "admin"
+    import asyncio
+
+    left = [asyncio.run(server.auth.spend_credit(server.db, me["user"]["id"])) for _ in range(3)]
+    assert left[0] == left[2] >= 1_000_000
