@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1280 780" width="1280" height="780" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eaf3fd"/><stop offset="1" stop-color="#f8fbff"/></linearGradient>
+  <filter id="sh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0a1e46" flood-opacity=".10"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#9fb0c8"/></marker>
+  <style>
+    .t{fill:#0e0f12;font-weight:700;font-size:15px} .s{fill:#4b4a50;font-size:12.5px} .k{fill:#8b8a91;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:600}
+    .edge{fill:none;stroke:#9fb0c8;stroke-width:1.6} .flow{fill:none;stroke-width:2.2;stroke-dasharray:6 10;animation:run 1.6s linear infinite}
+    .pulse{animation:pulse 2.4s ease-in-out infinite} .lab{fill:#8b8a91;font-size:11px;font-weight:600}
+    @keyframes run{to{stroke-dashoffset:-32}} @keyframes pulse{0%,100%{stroke-opacity:.25}50%{stroke-opacity:1}}
+  </style>
+</defs>
+<rect width="1280" height="780" rx="28" fill="url(#sky)"/>
+<text x="40" y="54" style="fill:#0e0f12;font-size:26px;font-weight:800;letter-spacing:-.02em">Jagora · system architecture</text>
+<text x="40" y="80" class="s" style="font-size:14px">Her voice in, a real browser doing the work, Meta's Muse models thinking, safety enforced in code. The dots are live traffic.</text>
+
+<rect x="30" y="110" width="230" height="470" rx="24" fill="#ffffff66" stroke="#b9c6da" stroke-width="1.5" stroke-dasharray="7 7"/><text x="50" y="138" class="k">Her phone or computer</text>
+<rect x="60" y="150" width="170" height="330" rx="30" fill="#0e0f12"/><rect x="68" y="158" width="154" height="314" rx="24" fill="#f4f8fd"/>
+<rect x="78" y="172" width="134" height="58" rx="12" fill="#fff" stroke="#e1e7f0"/><text x="88" y="194" class="s" style="font-size:11px">jamb.gov.ng</text><rect x="88" y="203" width="90" height="7" rx="3" fill="#dbe6f7"/><rect x="88" y="215" width="70" height="7" rx="3" fill="#dbe6f7"/>
+<rect x="120" y="244" width="92" height="26" rx="13" fill="#0e0f12"/><text x="166" y="261" text-anchor="middle" style="fill:#fff;font-size:11px">Ṣé kí n fi ránṣẹ́?</text>
+<rect x="78" y="280" width="104" height="26" rx="13" fill="#fff" stroke="#e1e7f0"/><text x="130" y="297" text-anchor="middle" class="s" style="font-size:11px">Bẹ́ẹ̀ni</text>
+<circle cx="145" cy="400" r="34" fill="#fff" stroke="#cfe0f7"/><circle cx="145" cy="400" r="22" fill="#1d63ed" opacity=".85"><animate attributeName="r" values="18;24;18" dur="1.6s" repeatCount="indefinite"/></circle>
+<text x="145" y="505" text-anchor="middle" class="t" style="font-size:13px">Jagora app</text><text x="145" y="523" text-anchor="middle" class="s" style="font-size:11.5px">Next.js 15 · PWA · Web Push</text><text x="145" y="541" text-anchor="middle" class="s" style="font-size:11.5px">live page view · take over</text>
+<rect x="290" y="110" width="640" height="560" rx="24" fill="#ffffff66" stroke="#b9c6da" stroke-width="1.5" stroke-dasharray="7 7"/><text x="310" y="138" class="k">Jagora agent server · FastAPI · Docker on AWS</text>
+<rect x="320" y="150" width="260" height="74" rx="16" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)" class=""/><text x="338" y="183.0" class="t" style="fill:#0e0f12">WebSocket session</text><text x="338" y="202.0" class="s">voice · steps · live frames</text>
+<rect x="320" y="270" width="260" height="74" rx="16" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)" class=""/><text x="338" y="303.0" class="t" style="fill:#0e0f12">Speech bridge</text><text x="338" y="322.0" class="s">ASR in · streamed TTS out</text>
+<rect x="320" y="390" width="260" height="74" rx="16" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)" class=""/><text x="338" y="423.0" class="t" style="fill:#0e0f12">Vault</text><text x="338" y="442.0" class="s">AES-256-GCM · bound to one site</text>
+<rect x="320" y="556" width="260" height="74" rx="16" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)" class=""/><text x="338" y="589.0" class="t" style="fill:#0e0f12">Scheduler</text><text x="338" y="608.0" class="s">reminders · tasks · page watches</text>
+<rect x="640" y="150" width="260" height="74" rx="16" fill="#fff" stroke="#1d63ed" stroke-width="1.5" filter="url(#sh)" class="pulse"/><text x="658" y="183.0" class="t" style="fill:#0e0f12">Agent loop</text><text x="658" y="202.0" class="s">57 tools · plan · checker</text>
+<rect x="640" y="270" width="260" height="74" rx="16" fill="#fff" stroke="#c2352f" stroke-width="1.5" filter="url(#sh)" class=""/><text x="658" y="303.0" class="t" style="fill:#0e0f12">Guard + safety gate</text><text x="658" y="322.0" class="s">lists · injection removal · approvals</text>
+<rect x="640" y="390" width="260" height="74" rx="16" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)" class=""/><text x="658" y="423.0" class="t" style="fill:#0e0f12">Chromium per user</text><text x="658" y="442.0" class="s">Playwright · CDP screencast</text>
+<rect x="640" y="556" width="260" height="74" rx="16" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)" class=""/><text x="658" y="589.0" class="t" style="fill:#0e0f12">Memory · learned skills</text><text x="658" y="608.0" class="s">Turso (libSQL)</text>
+<rect x="960" y="110" width="290" height="440" rx="24" fill="#eef5ff99" stroke="#9cc0f2" stroke-width="1.5" stroke-dasharray="7 7"/><text x="980" y="138" class="k">Meta AI · Model API</text>
+<rect x="985" y="150" width="240" height="74" rx="16" fill="#fff" stroke="#0467DF" stroke-width="1.5" filter="url(#sh)" class=""/><text x="1003" y="183.0" class="t" style="fill:#0467DF">Muse Spark 1.3</text><text x="1003" y="202.0" class="s">agent · completion checker</text>
+<rect x="985" y="248" width="240" height="74" rx="16" fill="#fff" stroke="#0467DF" stroke-width="1.5" filter="url(#sh)" class=""/><text x="1003" y="281.0" class="t" style="fill:#0467DF">Muse Wonder</text><text x="1003" y="300.0" class="s">photos · PDFs · short video</text>
+<rect x="985" y="346" width="240" height="74" rx="16" fill="#fff" stroke="#0467DF" stroke-width="1.5" filter="url(#sh)" class=""/><text x="1003" y="379.0" class="t" style="fill:#0467DF">Muse Image</text><text x="1003" y="398.0" class="s">picture guides</text>
+<rect x="985" y="444" width="240" height="74" rx="16" fill="#fff" stroke="#0467DF" stroke-width="1.5" stroke-dasharray="6 6" filter="url(#sh)" class=""/><text x="1003" y="477.0" class="t" style="fill:#0467DF">Glimmer / Spark Open</text><text x="1003" y="496.0" class="s">open weights · safety checks</text>
+<rect x="30" y="610" width="230" height="74" rx="16" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)" class=""/><text x="48" y="643.0" class="t" style="fill:#0e0f12">PlotWeaver STORM</text><text x="48" y="662.0" class="s">yo · ha · ig · pcm · en</text>
+<circle cx="1105" cy="660" r="56" fill="#fff" stroke="#2f8f57" stroke-width="1.5" filter="url(#sh)"/><ellipse cx="1105" cy="660" rx="24" ry="56" fill="none" stroke="#2f8f57" stroke-opacity=".35"/><line x1="1049" y1="660" x2="1161" y2="660" stroke="#2f8f57" stroke-opacity=".35"/><text x="1105" y="736" text-anchor="middle" class="t" style="font-size:13px">The real web</text>
+<path id="p_in" d="M230 205 C 270 205, 280 187, 318 187" class="edge" marker-end="url(#arr)"/><path d="M230 205 C 270 205, 280 187, 318 187" class="flow" style="stroke:#1d63ed"/>
+<path id="p_ag" d="M580 187 L 638 187" class="edge" marker-end="url(#arr)"/><path d="M580 187 L 638 187" class="flow" style="stroke:#1d63ed"/>
+<path id="p_sp" d="M900 178 L 983 178" class="edge" marker-end="url(#arr)"/><path d="M900 178 L 983 178" class="flow" style="stroke:#0467DF"/>
+<path id="p_spb" d="M983 198 L 902 198" class="edge" marker-end="url(#arr)"/><path d="M983 198 L 902 198" class="flow" style="stroke:#0467DF"/>
+<path id="p_wo" d="M900 205 C 940 205, 945 285, 983 285" class="edge" marker-end="url(#arr)"/>
+<path id="p_im" d="M900 214 C 930 214, 940 383, 983 383" class="edge" marker-end="url(#arr)"/>
+<path id="p_gd" d="M770 224 L 770 268" class="edge" marker-end="url(#arr)"/><path d="M770 224 L 770 268" class="flow" style="stroke:#c2352f"/>
+<path id="p_ow" d="M900 307 C 940 307, 950 481, 983 481" class="edge" marker-end="url(#arr)"/>
+<path id="p_cr" d="M770 344 L 770 388" class="edge" marker-end="url(#arr)"/><path d="M770 344 L 770 388" class="flow" style="stroke:#2f8f57"/>
+<path id="p_web" d="M900 445 C 945 445, 930 600, 1046 650" class="edge" marker-end="url(#arr)"/><path d="M900 445 C 945 445, 930 600, 1046 650" class="flow" style="stroke:#2f8f57"/>
+<path id="p_fr" d="M640 450 C 612 450, 612 508, 570 508 L 300 508 C 268 508, 262 470, 232 455" class="edge" marker-end="url(#arr)"/><path d="M640 450 C 612 450, 612 508, 570 508 L 300 508 C 268 508, 262 470, 232 455" class="flow" style="stroke:#d9821e"/>
+<path id="p_sb" d="M450 224 L 450 268" class="edge" marker-end="url(#arr)"/>
+<path id="p_st" d="M320 320 C 288 320, 292 590, 262 640" class="edge" marker-end="url(#arr)"/><path d="M320 320 C 288 320, 292 590, 262 640" class="flow" style="stroke:#6c7a90"/>
+<path id="p_push" d="M320 600 C 285 600, 270 560, 232 450" class="edge" marker-end="url(#arr)"/>
+<path id="p_mem" d="M770 556 L 770 466" class="edge" marker-end="url(#arr)"/>
+<path id="p_va" d="M580 427 L 638 427" class="edge" marker-end="url(#arr)"/>
+<text x="238" y="232" class="lab" text-anchor="start">voice, taps</text>
+<text x="906" y="166" class="lab" text-anchor="start">page in · tool calls out</text>
+<text x="930" y="560" class="lab" text-anchor="start" style="fill:#2f8f57">only checked pages</text>
+<text x="380" y="526" class="lab" text-anchor="start" style="fill:#d9821e">live frames · 5 fps</text>
+<text x="250" y="585" class="lab" text-anchor="start">push</text>
+<text x="782" y="252" class="lab" text-anchor="start">every action</text>
+<text x="782" y="372" class="lab" text-anchor="start">allowed only</text>
+<circle r="5" fill="#1d63ed" opacity="0"><animateMotion dur="2.2s" begin="0.0s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_in"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="2.2s" begin="0.0s" repeatCount="indefinite"/></circle>
+<circle r="5" fill="#1d63ed" opacity="0"><animateMotion dur="1.2s" begin="0.6s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_ag"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="1.2s" begin="0.6s" repeatCount="indefinite"/></circle>
+<circle r="5" fill="#0467DF" opacity="0"><animateMotion dur="1.4s" begin="0.2s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_sp"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="1.4s" begin="0.2s" repeatCount="indefinite"/></circle>
+<circle r="5" fill="#0467DF" opacity="0"><animateMotion dur="1.4s" begin="0.9s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_spb"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="1.4s" begin="0.9s" repeatCount="indefinite"/></circle>
+<circle r="4" fill="#0467DF" opacity="0"><animateMotion dur="2.6s" begin="1.1s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_wo"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="2.6s" begin="1.1s" repeatCount="indefinite"/></circle>
+<circle r="4" fill="#0467DF" opacity="0"><animateMotion dur="3.0s" begin="1.7s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_im"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="3.0s" begin="1.7s" repeatCount="indefinite"/></circle>
+<circle r="5" fill="#c2352f" opacity="0"><animateMotion dur="1.2s" begin="0.4s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_gd"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="1.2s" begin="0.4s" repeatCount="indefinite"/></circle>
+<circle r="4" fill="#0467DF" opacity="0"><animateMotion dur="3.2s" begin="0.5s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_ow"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="3.2s" begin="0.5s" repeatCount="indefinite"/></circle>
+<circle r="5" fill="#2f8f57" opacity="0"><animateMotion dur="1.2s" begin="0.8s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_cr"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="1.2s" begin="0.8s" repeatCount="indefinite"/></circle>
+<circle r="5" fill="#2f8f57" opacity="0"><animateMotion dur="2.4s" begin="1.0s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_web"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="2.4s" begin="1.0s" repeatCount="indefinite"/></circle>
+<circle r="5" fill="#d9821e" opacity="0"><animateMotion dur="3.4s" begin="0.3s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_fr"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="3.4s" begin="0.3s" repeatCount="indefinite"/></circle>
+<circle r="5" fill="#d9821e" opacity="0"><animateMotion dur="3.4s" begin="2.0s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_fr"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="3.4s" begin="2.0s" repeatCount="indefinite"/></circle>
+<circle r="4" fill="#6c7a90" opacity="0"><animateMotion dur="2.8s" begin="0.2s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_st"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="2.8s" begin="0.2s" repeatCount="indefinite"/></circle>
+<circle r="4" fill="#6c7a90" opacity="0"><animateMotion dur="3.6s" begin="1.4s" repeatCount="indefinite" rotate="auto"><mpath xlink:href="#p_push"/></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.85;1" dur="3.6s" begin="1.4s" repeatCount="indefinite"/></circle>
+<text x="1240" y="758" text-anchor="end" class="s" style="font-size:11.5px;fill:#8b8a91">github.com/Ememzyvisuals/Jagora</text></svg>

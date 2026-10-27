@@ -106,6 +106,11 @@ Pidgin, so speech goes through PlotWeaver's STORM models, which were trained for
 
 ## Architecture
 
+<p align="center"><img src="docs/diagrams/architecture.svg" alt="Jagora system architecture, animated" width="100%"></p>
+
+<details>
+<summary>Same diagram as text (Mermaid)</summary>
+
 ```mermaid
 flowchart TB
     subgraph User["Her phone or computer"]
@@ -140,6 +145,46 @@ flowchart TB
     AG <--> DB
     SCH -.->|"Web Push"| UI
 ```
+
+</details>
+
+### Inside the browser
+
+<p align="center"><img src="docs/diagrams/agent-loop.svg" alt="One turn of the agent loop: observe, think, gate, act, verify" width="100%"></p>
+
+Jagora drives a real Chromium for each person (phone layout on phones, desktop layout on computers). This is
+what happens around it:
+
+```mermaid
+flowchart LR
+    subgraph CTX["Chromium context · one per person · Playwright"]
+        direction TB
+        RT["Route interceptor<br/>every request"] -->|"page"| GV{"guard.check<br/>lists · lookalikes · schemes"}
+        GV -->|"blocked"| BP["Block page<br/>reason in plain words"]
+        GV -->|"allowed"| PG["Live page"]
+        RT -->|"ads · trackers"| AB["aborted"]
+        INIT["Init script<br/>permission watcher"] -.-> PG
+        PG -->|"pop-up tab"| PC["closed unless Jagora opened it"]
+        PG -->|"download"| DC["cancelled unless asked for"]
+    end
+    PG --> SNAP["Snapshot pipeline<br/>1 hide invisible text<br/>2 number every control<br/>3 screenshot with marks<br/>4 page content verdict<br/>5 cut orders to AI"]
+    SNAP --> MS["Muse Spark"]
+    MS -->|"tool calls"| GATE["Safety gate<br/>+ action check"]
+    GATE -->|"click · type · drag · upload"| PG
+    PG --> CDP["CDP screencast<br/>JPEG q55 · every 2nd frame · ≤ 5 fps"]
+    CDP --> WSS["WebSocket"] --> APP["Her screen<br/>scaled live view<br/>tap and type to take over"]
+    PG <--> PDF["PDF viewer<br/>PyMuPDF · find_text · evidence crops"]
+    PG <--> TR["Translation layer<br/>STORM MT · original restored<br/>before every read"]
+```
+
+| Piece | How it works |
+|---|---|
+| **Snapshot** | `snapshot.js` runs in the page. It numbers every control a person could use, skips anything covered by a pop-up (an occlusion check at each control's centre point), and reads each control's label the way a person would (label, nearby text, placeholder, group legend). The model sees the numbered list plus a marked screenshot. |
+| **Acting** | Clicks fall back step by step: a normal click, then a forced check for styled checkboxes and radios, then a script click. Clicks that jump to an unexpected site are checked by the guard and undone when needed. Typed values are read back and converted by code, so phone numbers, dates and names spoken in five languages come out right. |
+| **Seeing it live** | Chrome DevTools Protocol screencast frames go to her app, which overlays them at the right scale. She can tap and type on the live page to take over at any moment. |
+| **PDFs** | Opened in a built-in viewer (PyMuPDF), searched page by page, and cropped as highlighted evidence. |
+| **Translation** | Pages are shown in her language, and the original is restored before every read, so the agent never reasons over a translation. |
+
 
 | Layer | Technology |
 |---|---|
@@ -178,6 +223,8 @@ sequenceDiagram
 ```
 
 ## Safety model
+
+<p align="center"><img src="docs/diagrams/safety-locks.svg" alt="Seven locks, animated: what each one catches" width="100%"></p>
 
 People can visit any site themselves. Jagora is the thing that **acts**, so it has to be safe to hand the keys to.
 Every rule below is enforced in code, outside the model, so no web page or prompt can talk it out of them.
