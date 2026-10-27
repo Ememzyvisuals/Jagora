@@ -768,6 +768,16 @@ class DbMemory:
         await db.exec("insert into terms (site, t, data) values (?,?,?) on conflict(site) do update set t=excluded.t, data=excluded.data",
                       (rv["site"], time.time(), json.dumps(rv, ensure_ascii=False)))
 
+    async def skills_get(self, site: str) -> list[dict]:
+        """How this site was done before (shared by everyone: only steps and page words, never anyone's values)."""
+        rows = await db.exec("select goal, steps, uses from skills where site=? order by uses desc, t desc limit 3", (site,))
+        return [{"goal": r["goal"], "steps": json.loads(r["steps"]), "uses": r["uses"]} for r in rows]
+
+    async def skills_put(self, site: str, goal: str, steps: list[str]) -> None:
+        key = re.sub(r"[^a-z0-9]+", " ", goal.lower()).strip()[:60]
+        await db.exec("insert into skills (site, goal_key, goal, steps, t, uses) values (?,?,?,?,?,1) on conflict(site, goal_key) "
+                      "do update set steps=excluded.steps, t=excluded.t, uses=skills.uses+1", (site, key, goal, json.dumps(steps, ensure_ascii=False), time.time()))
+
     async def remember_fact(self, fact: str) -> None:
         await db.exec("insert into facts (id, user_id, t, fact) values (?,?,?,?)", (uuid.uuid4().hex[:10], self.u, time.time(), fact))
 

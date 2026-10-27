@@ -26,6 +26,7 @@ import json
 import logging
 import re
 import secrets
+from urllib.parse import urlparse
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -414,6 +415,8 @@ class Agent:
     attachment: dict | None = None  # {"kind": "image", "data": data URL}
     home_site: str = ""
     _share_ok: set = field(default_factory=set)
+    _route: list = field(default_factory=list)
+    _skills: dict = field(default_factory=dict)
     wonder: Model | None = None  # Muse Wonder: reads her photos, PDFs and videos
     side_model: Model | None = None  # open weights (Muse Glimmer / Spark Open) for safety checks, when configured
     images: Any = None  # Muse Image, for picture guides
@@ -481,6 +484,8 @@ class Agent:
                 await self.io.event("page", {"url": snap.url, "title": snap.title})
                 await self._report_notices()
                 await self._maybe_review_terms(snap)
+            if snap and snap.url.startswith("http"):
+                await self._load_skills(registrable(snap.url))
             wrap = turns >= self.max_turns - 2
             tools = self._tools(snap, wrap)
             reply = await self.model.chat(self._messages(goal, snap, heard, wrap), tools,
@@ -501,6 +506,7 @@ class Agent:
                     break
                 note, replan, done = await self._act(call.name, call.args, snap)
                 self.history.append(f"{call.name}({_short(call.args)}) -> {note}")
+                self._learn(call.name, call.args, snap, note)
                 if note.startswith(("could not", "that did not work", "refused", "not typed", "there is no element")):
                     self._fails += 1
                     if self._fails in (3, 6):
@@ -510,6 +516,8 @@ class Agent:
                     self._fails = 0
                 self._record("act", {"turn": turns, "tool": call.name, "args": _redact(call.args), "result": note})
                 if done:
+                    if done[0]:
+                        await self._save_skills()
                     return self._result(done[0], done[1], turns, t0)
                 if replan:
                     break
@@ -1231,6 +1239,61 @@ class Agent:
             return "nothing saved matches"
         return "saved items:\n" + "\n".join(f"- {f['title']} {f['tags']} {f['note'][:200]} {f['url']}" for f in found)
 
+    # ---- learned skills: how a site was done last time --------------------------------------------------------------
+
+    ROUTE_TOOLS = ("go_to", "click", "type_text", "choose", "set_checkbox", "ask_private", "use_saved_login", "upload_file",
+                   "set_date", "press_key", "fetch_code", "hover")
+
+    def _learn(self, name: str, a: dict, snap, note: str) -> None:
+        """Remember each step that worked, by what it did and the words on the page (never her values)."""
+        if name not in self.ROUTE_TOOLS or note.startswith(("could not", "that did not work", "refused", "not typed", "not pressed",
+                                                              "there is no element", "she said no", "STOPPED", "she did not")):
+            return
+        el = snap.element(int(a["element"])) if snap and a.get("element") is not None and str(a.get("element")).lstrip("-").isdigit() else None
+        label = re.sub(r"\d{4,}", "…", (el.label if el else "") or "")[:50]
+        url = str(a.get("url", ""))
+        here = registrable(url) if name == "go_to" else (registrable(snap.url) if snap else "")
+        if not here:
+            return
+        step = {
+            "go_to": lambda: f"open {urlparse(url).netloc}{urlparse(url).path[:60]}",
+            "click": lambda: f'press "{label}"',
+            "type_text": lambda: f'type her {a.get("profile_field") or "answer"} into "{label}"',
+            "choose": lambda: f'choose in "{label}"',
+            "set_checkbox": lambda: f'tick "{label}"',
+            "ask_private": lambda: f'she types her {a.get("field", "private value")} into "{label}"',
+            "use_saved_login": lambda: f'her saved login into "{label}"',
+            "upload_file": lambda: f'upload her file to "{label}"',
+            "set_date": lambda: f'set the date in "{label}"',
+            "press_key": lambda: f'press {a.get("key", "")}',
+            "fetch_code": lambda: "copy the one-time code from her email",
+            "hover": lambda: f'open the menu "{label}"',
+        }[name]()
+        self._route.append((here, step))
+
+    async def _save_skills(self) -> None:
+        if not self.memory or not hasattr(self.memory, "skills_put") or not self._route:
+            return
+        by: dict[str, list[str]] = {}
+        for s_, step in self._route:
+            if not by.get(s_) or by[s_][-1] != step:
+                by.setdefault(s_, []).append(step)
+        goal = re.sub(r"\S+@\S+", "[email]", re.sub(r"\d{4,}", "…", self._goal))[:120]
+        for s_, steps in by.items():
+            if len(steps) >= 2:
+                try:
+                    await self.memory.skills_put(s_, goal, steps[:20])
+                except Exception as e:  # noqa: BLE001
+                    log.info("skill not saved: %s", e)
+
+    async def _load_skills(self, here: str) -> None:
+        if here in self._skills or not self.memory or not hasattr(self.memory, "skills_get"):
+            return
+        try:
+            self._skills[here] = await self.memory.skills_get(here)
+        except Exception:  # noqa: BLE001
+            self._skills[here] = []
+
     async def _read_attachment(self) -> None:
         """Her photo, PDF or video, read once by Muse Wonder into facts, deadlines and scam signs (shown to her as a card)."""
         att = self.attachment or {}
@@ -1338,6 +1401,11 @@ class Agent:
         parts.append(f"Her saved details: {self._profile_summary()}")
         if self._facts:
             parts.append("What you know about her from before: " + "; ".join(self._facts))
+        here_skills = self._skills.get(registrable(snap.url)) if snap and snap.url.startswith("http") else None
+        if here_skills:
+            parts.append("What worked on this site before (a guide from earlier successful runs; the page may have changed, "
+                         "so check each step):\n" + "\n".join(
+                             f"- For \"{k['goal']}\": " + " -> ".join(k["steps"][:14]) for k in here_skills[:2]))
         if snap and snap.url.startswith("http"):
             rv = self._terms.get(registrable(snap.url))
             if isinstance(rv, dict):

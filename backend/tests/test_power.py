@@ -317,3 +317,37 @@ async def test_terms_are_read_for_her(tmp_path):
     assert card["verdict"] == "red" and card["points"][0]["text"] == "Reads your contacts and SMS"
     assert mem.kept["127.0.0.1"]["verdict"] == "red"
     assert any("Terms warning" in c for c in io.confirms)  # the warning is in front of her when she is asked to agree
+
+
+async def test_learned_skills_remember_how_a_site_was_done():
+    """A task that worked is kept as steps (never her values) and guides the next run on that site."""
+    from types import SimpleNamespace
+
+    from jagora.agent import Agent
+
+    store = {}
+
+    class Mem:
+        async def skills_put(self, site, goal, steps): store[site] = {"goal": goal, "steps": steps, "uses": 1}
+        async def skills_get(self, site): return [store[site]] if site in store else []
+
+    el = {3: SimpleNamespace(label="Registration number 12345678"), 4: SimpleNamespace(label="Check result")}
+    snap = SimpleNamespace(url="https://efacility.jamb.gov.ng/check", element=lambda i: el.get(i))
+    a = Agent(None, None, None, memory=Mem())
+    a._goal = "Check my JAMB result, reg 202612345678"
+    a._learn("go_to", {"url": "https://efacility.jamb.gov.ng/check"}, None, "opened")
+    a._learn("ask_private", {"element": 3, "field": "registration number"}, snap, "filled by her (12 characters in the box)")
+    a._learn("click", {"element": 4}, snap, 'clicked "Check result"')
+    a._learn("click", {"element": 4}, snap, "refused: no")  # failures are not learned
+    await a._save_skills()
+    saved = store["jamb.gov.ng"]
+    assert saved["steps"] == ["open efacility.jamb.gov.ng/check", 'she types her registration number into "Registration number …"', 'press "Check result"']
+    assert "202612345678" not in json.dumps(saved) and "12345678" not in json.dumps(saved)
+    b = Agent(None, None, None, memory=Mem())
+    b._goal = "result"
+    await b._load_skills("jamb.gov.ng")
+    snap2 = SimpleNamespace(url="https://efacility.jamb.gov.ng/", describe=lambda: "page", screenshot=b"", element=lambda i: None)
+    text = b._messages("result", None)[1]["content"][0]["text"]
+    assert "What worked on this site before" not in text  # only shown on that site
+    b._skills["jamb.gov.ng"] = await Mem().skills_get("jamb.gov.ng")
+    assert b._skills["jamb.gov.ng"][0]["steps"][2] == 'press "Check result"'
