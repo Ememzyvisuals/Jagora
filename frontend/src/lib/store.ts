@@ -61,7 +61,10 @@ export type Msg =
   /** Jagora is not sure what she means: she taps it on the live page */
   | { id: string; kind: "pointask"; question: string; status: "waiting" | "done" }
   | { id: string; kind: "scheduled"; at: number; goal: string; allow: string[]; repeat: string }
-  | { id: string; kind: "result"; title: string; reference?: string; lines: [string, string][] };
+  | { id: string; kind: "result"; title: string; reference?: string; lines: [string, string][] }
+  /** what Jagora did in a task: every site opened, box filled (values hidden), button pressed, approval and block,
+      plus the sites the task was allowed to act on */
+  | { id: string; kind: "record"; steps: { t: string; kind: string; text: string }[]; sites: string[]; success: boolean };
 
 export type TaskStatus = "working" | "waiting" | "done" | "stopped";
 export type Task = {

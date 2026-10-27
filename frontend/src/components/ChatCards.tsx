@@ -468,3 +468,63 @@ export function TermsCard({ m }: { m: Extract<Msg, { kind: "terms" }> }) {
     </div>
   );
 }
+
+const REC: L = { en: "What Jagora did", pcm: "Wetin Jagora do", yo: "Ohun tí Jagora ṣe", ha: "Abin da Jagora ya yi", ig: "Ihe Jagora mere" };
+const REC_STEPS: L = { en: "steps", pcm: "steps", yo: "ìgbésẹ̀", ha: "matakai", ig: "nzọụkwụ" };
+const REC_SITES: L = {
+  en: "Allowed to fill in forms on", pcm: "E fit fill form for", yo: "A gbà á láàyè láti kún fọ́ọ̀mù lórí", ha: "An bari ya cike fom a", ig: "Enyere ya ikike ijuchi fọm na",
+};
+const REC_READONLY: L = {
+  en: "Every other site was read-only.", pcm: "Other sites na only to read.", yo: "Kíkà nìkan ni fún àwọn ojú-òpó yòókù.",
+  ha: "Sauran shafuka karatu kawai.", ig: "Saịtị ndị ọzọ bụ maka ọgụgụ naanị.",
+};
+const REC_SAVE: L = { en: "Save record", pcm: "Save am", yo: "Fi pamọ́", ha: "Ajiye", ig: "Chekwaa" };
+const REC_ICON: Record<string, string> = { opened: "↗", typed: "⌨", clicked: "●", private: "🔒", uploaded: "⇪", approved: "✓", declined: "✕", blocked: "⛔" };
+
+/** "What Jagora did": the full, readable record of a task, so nothing it did is hidden from her */
+export function RecordCard({ m }: { m: Extract<Msg, { kind: "record" }> }) {
+  const lang = useApp((s) => s.lang);
+  const [open, setOpen] = useState(false);
+  const save = () => {
+    const lines = [REC.en, "", ...(m.sites.length ? [`${REC_SITES.en}: ${m.sites.join(", ")}`, ""] : []), ...m.steps.map((x) => `${x.t}  ${x.kind}: ${x.text}`)];
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/plain" }));
+    a.download = `jagora-record-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.txt`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  };
+  const blocked = m.steps.filter((x) => x.kind === "blocked").length;
+  return (
+    <div className="rounded-[22px] bg-white/80 p-4 shadow-[0_10px_30px_-20px_rgba(10,30,70,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-3 text-left">
+        <span className="font-head text-[16px] text-ink">{REC[lang]}</span>
+        <span className="flex items-center gap-2 text-[12.5px] tabular-nums text-ink-3">
+          {blocked > 0 && <span className="rounded-full bg-danger-soft px-2 py-0.5 font-semibold text-danger">⛔ {blocked}</span>}
+          {m.steps.length} {REC_STEPS[lang]} <span className={`transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+        </span>
+      </button>
+      {m.sites.length > 0 && (
+        <p className="mt-2 text-[13px] leading-snug text-ink-2">
+          {REC_SITES[lang]}: {m.sites.map((x) => <span key={x} className="mr-1 inline-block rounded-full bg-accent-soft px-2 py-0.5 font-semibold text-accent-deep">{x}</span>)}
+          <span className="text-ink-3"> {REC_READONLY[lang]}</span>
+        </p>
+      )}
+      {open && (
+        <>
+          <ol className="mt-3 flex max-h-[320px] flex-col gap-1.5 overflow-y-auto pr-1">
+            {m.steps.map((x, i) => (
+              <li key={i} className="flex items-start gap-2 text-[13.5px] leading-snug">
+                <span className="w-[54px] shrink-0 pt-px text-[11.5px] tabular-nums text-ink-3">{x.t}</span>
+                <span className={`w-4 shrink-0 text-center ${x.kind === "blocked" || x.kind === "declined" ? "text-danger" : x.kind === "approved" ? "text-ok" : "text-ink-3"}`}>{REC_ICON[x.kind] ?? "•"}</span>
+                <span className="min-w-0 break-words text-ink-2">{x.text}</span>
+              </li>
+            ))}
+          </ol>
+          <button onClick={save} className="mt-3 flex items-center gap-1.5 rounded-full bg-black/5 px-3 py-1.5 text-[13px] font-semibold text-ink-2 hover:bg-black/10 dark:bg-white/10">
+            <DownloadSimple size={14} /> {REC_SAVE[lang]}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}

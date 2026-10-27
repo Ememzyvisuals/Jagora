@@ -10,7 +10,7 @@ import type { Lang } from "@/lib/i18n";
 import { t } from "@/lib/i18n";
 import { useApp, type Msg, type Task } from "@/lib/store";
 import { IconLock, IconScam, IconShield } from "./icons";
-import { Evidence, FileCard, MediaCard, MomentCard, PicturesCard, PlanCard, PointAskCard, ReadingCard, ReminderCard, ScheduledCard, TermsCard, VoiceBubble } from "./ChatCards";
+import { Evidence, FileCard, MediaCard, MomentCard, PicturesCard, PlanCard, PointAskCard, ReadingCard, RecordCard, ReminderCard, ScheduledCard, TermsCard, VoiceBubble } from "./ChatCards";
 import { remotePictures } from "@/lib/engine/remote";
 
 const IN_PICTURES: Record<Lang, string> = { en: "Show me in pictures", pcm: "Show me for picture", yo: "Fi hàn mí ní àwòrán", ha: "Nuna mini a hotuna", ig: "Gosi m na foto" };
@@ -129,6 +129,8 @@ function Item({ m, task }: { m: Msg; task: Task }) {
       return <ReadingCard m={m} />;
     case "pictures":
       return <PicturesCard m={m} />;
+    case "record":
+      return <RecordCard m={m} />;
   }
 }
 

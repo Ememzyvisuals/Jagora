@@ -698,8 +698,16 @@ class WsIO:
             self.r.step_id = mid()
             await s.send({"type": "msg", "task": t, "msg": {"id": self.r.step_id, "kind": "step", "text": data["text"], "status": "doing"}})
             await s.send({"type": "orb", "state": "thinking"})
+        elif kind == "record":
+            await self.close_step()
+            await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "record", "steps": data.get("steps", [])[-120:],
+                                                             "sites": data.get("sites", []), "success": bool(data.get("success"))}})
+        elif kind == "scope":
+            sites = ", ".join(data.get("sites", []))
+            await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "step", "status": "done", "guard": True,
+                                                             "text": f"This task can fill in forms on: {sites}. Other sites are read-only."}})
         elif kind == "guard":
-            if data.get("kind") in ("blocked", "injection", "refused"):
+            if data.get("kind") in ("blocked", "injection", "refused", "leak"):
                 await db.log(s.user_id, data["kind"], f"{data.get('site', '')}: {data.get('text', '')}"[:300])
             if data.get("kind") in ("blocked", "refused"):
                 return  # Jagora says it in words already
@@ -1123,6 +1131,8 @@ class JobIO:
     async def event(self, kind: str, data: dict) -> None:
         if kind in ("evidence", "verdict", "reminder", "moment", "scheduled", "terms"):
             self._add({"kind": kind, **data})
+        elif kind == "record":
+            self._add({"kind": "record", "steps": data.get("steps", [])[-120:], "sites": data.get("sites", []), "success": bool(data.get("success"))})
         elif kind == "doc":
             self._add({"kind": "doc", "doc": data})
         elif kind in ("file", "media"):

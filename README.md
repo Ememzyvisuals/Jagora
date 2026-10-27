@@ -237,6 +237,8 @@ Every rule below is enforced in code, outside the model, so no web page or promp
 | **Action check** | Before anything that commits, a separate model call checks the action against **her** request, which catches a model talked into paying, posting or sending data elsewhere | `agent.py` (`_fits_request`) |
 | **Approval gate** | Submit, pay, send, agree and leave-the-site all wait for her yes. Spoken numbers are read back before typing. | `safety.py` |
 | **Her account's locks** | Changing passwords, turning off two-step login, changing recovery details, deleting accounts and adding new money recipients are hers to do (Take over), never Jagora's | `safety.py` (`HER_LOCKS`) |
+| **Task sites** | Each task gets a short list of sites it may act on: sites she named, official sites, and sites she allows during the task. Every other site is **read-only**: Jagora can read it, but filling in forms there waits for her yes. The same idea as Google's *Agent Origin Sets*. | `flow.py`, `agent.py` (`_may_act`) |
+| **Data labels** | Everything Jagora reads is labelled with the site it came from. A code, number, email or sentence read on one site cannot be typed into another, searched, or smuggled out inside a web address unless she said it herself. This closes the cross-site theft that the University of Washington showed in other AI browsers. | `flow.py`, `agent.py` (`_leaks`) |
 | **Private data lock** | Phone, email, address, ID numbers and logins go only to an official site, a site she named, or one she approves. Cards never go to unknown payment pages. | `agent.py` (`_may_share`, `_private`) |
 | **Secrets** | Passwords, PINs, OTPs, card details, NIN and BVN are typed by her through a private box. Values never reach the model, logs or speech. | `fields.py`, `vault.py` |
 | **Requests it declines** | "Help me bet", "get me WAEC expo", "hack his WhatsApp", "make a fake alert": declined kindly, with the honest alternative. Asking whether such a site is real is a scam check, and Jagora helps. | `agent.py` (`forbidden`) |
@@ -244,6 +246,24 @@ Every rule below is enforced in code, outside the model, so no web page or promp
 
 Every blocked site, refused request and removed hijack attempt is logged to the owner's **admin page**, and
 accounts that keep trying blocked sites are flagged.
+
+### The same-origin problem, and Jagora's answer
+
+For 30 years the **same-origin policy** has stopped one website from reading another's data. In 2026, researchers at
+the University of Washington showed that browser agents quietly undo it: a message or comment tricks the agent into
+reading something on one site (an inbox, a one-time code, a balance) and carrying it to another, something no web page
+could do by itself. They demonstrated the theft on one AI browser and found the conditions for it in others
+([UW News](https://www.washington.edu/news/2026/06/30/some-agentic-ai-browsers-come-with-major-cybersecurity-risks-uw-study-finds/),
+[paper](https://homes.cs.washington.edu/~franzi/pdf/roesner_kohlbrenner_2026_agentic_sop.pdf)).
+
+Jagora is built so that being useful never needs that hole:
+- **Task sites** (like Google's Agent Origin Sets): read anywhere, act only on the task's sites.
+- **Data labels** (information-flow control): text carries the site it came from, and crossing to another site needs her yes; inside a web address or a search it is refused outright.
+- **Her words are hers:** what she says or types in the chat may go anywhere she asks, so normal tasks stay smooth.
+- **A record of every task:** "What Jagora did" in the chat lists every site opened, box filled (private values hidden), button pressed, approval and block, and she can save it.
+
+The attack range includes the UW attack three ways (by form, by web address, by search), and the tests prove each
+one fails even when the model itself is fooled.
 
 ## Voice and languages
 
@@ -319,6 +339,7 @@ cd backend && pytest -q
 - an app installer
 - a betting site and a lookalike JAMB portal
 - requests to bet, buy exam leaks, hack an account or forge a bank alert
+- **the UW same-origin attack:** an inbox message that tries to carry her one-time code to another site by form, by web address and by search
 
 The tests run the range with a hijacked model, to prove the code holds even when the AI is fooled. To score the
 **real** model against the same traps, with a user who says yes to everything:
@@ -336,6 +357,7 @@ backend/
     browser.py     Chromium control, page snapshots, PDFs, live view, human-like input
     guard.py       blocklists, content checks, injection removal, browser hygiene
     safety.py      the approval gate and her account's locks
+    flow.py        task sites and data labels: what may cross from one site to another
     muse.py        Muse Wonder reading, Muse Image picture guides, open-weights hook
     speech.py      STORM ASR and streaming TTS
     translate.py   pages in her language
