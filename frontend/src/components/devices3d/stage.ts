@@ -4,10 +4,12 @@
 
    She can play with them:
      drag (mouse or finger)  turns the device in her hand; let go and it comes back to face her
-     tap or click            it spins all the way round, showing its back, and faces her again
+     tap or click            the laptop closes its lid, turns all the way round and opens again facing her;
+                             a phone turns over to show its back and camera, then turns back to face her
      hover                   it lifts a little towards the pointer
      typing anywhere         the same key goes down on the laptop's keyboard and lights up
      arrow keys              turn the device when it has focus
+     tilting her phone       the devices lean with it (motion sensor)
 
    Kept light: built only near the screen and freed when far away, drawn only while visible, big images decoded
    off the main thread and sent to the GPU one per frame, shaders compiled in the background. */
@@ -74,13 +76,14 @@ function face(w: number, h: number, r: number, seg = 16) {
 /* ---------- screens: the real screenshots, with a status bar on top like a real device ---------- */
 
 type Shot = { tex: THREE.Texture; aspect: number };
+type Kind = "phone" | "android" | "laptop";
 
-async function loadShot(name: string, kind: "phone" | "laptop", hd: boolean, aniso: number): Promise<Shot> {
+async function loadShot(name: string, kind: Kind, hd: boolean, aniso: number): Promise<Shot> {
   const src = `/shots/${hd ? "hd/" : ""}${name}.webp`;
   // decoded off the main thread, so scrolling stays smooth while the big images arrive
   const blob = await (await fetch(src)).blob();
   const im = await createImageBitmap(blob);
-  const strip = Math.round(im.width * (kind === "phone" ? 0.137 : 0.0267));
+  const strip = Math.round(im.width * (kind === "phone" ? 0.137 : kind === "android" ? 0.1 : 0.0267));
   const c = document.createElement("canvas");
   c.width = im.width;
   c.height = im.height + strip;
@@ -104,14 +107,15 @@ async function loadShot(name: string, kind: "phone" | "laptop", hd: boolean, ani
   g.fillStyle = ink;
   g.strokeStyle = ink;
   const sans = `-apple-system, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif`;
-  if (kind === "phone") {
-    const mid = strip * 0.6;
-    g.font = `600 ${strip * 0.34}px ${sans}`;
+  if (kind !== "laptop") {
+    const droid = kind === "android";
+    const mid = strip * (droid ? 0.56 : 0.6);
+    g.font = `${droid ? 500 : 600} ${strip * (droid ? 0.4 : 0.34)}px ${droid ? `Roboto, "Google Sans", ${sans}` : sans}`;
     g.textBaseline = "middle";
-    g.textAlign = "center";
-    g.fillText("9:41", c.width * 0.19, mid);
-    const u = strip * 0.06;
-    let x = c.width * 0.69;
+    g.textAlign = droid ? "left" : "center";
+    g.fillText("9:41", c.width * (droid ? 0.075 : 0.19), mid);
+    const u = strip * (droid ? 0.07 : 0.06);
+    let x = c.width * (droid ? 0.71 : 0.69);
     for (let i = 0; i < 4; i++) {
       const h = u * (1.6 + i * 0.9);
       g.beginPath();
@@ -206,6 +210,9 @@ function materials() {
     black: new THREE.MeshStandardMaterial({ color: 0x040507, metalness: 0.1, roughness: 0.12 }),
     back: new THREE.MeshStandardMaterial({ color: 0x27324a, metalness: 0.3, roughness: 0.48 }),
     lens: new THREE.MeshStandardMaterial({ color: 0x06080b, metalness: 0.3, roughness: 0.04 }),
+    flash: new THREE.MeshStandardMaterial({ color: 0xf3ead2, metalness: 0, roughness: 0.3, emissive: 0x3a3426 }),
+    silver: new THREE.MeshStandardMaterial({ color: 0xb9c4d2, metalness: 0.9, roughness: 0.24 }),
+    silverBack: new THREE.MeshStandardMaterial({ color: 0xcdd7e3, metalness: 0.25, roughness: 0.32 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x000000, metalness: 0, roughness: 0.06, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, envMapIntensity: 1.3 }),
   };
 }
@@ -291,54 +298,83 @@ type Keyboard = ReturnType<typeof buildLaptop>["keyboard"];
 
 /* ---------- the phone ---------- */
 
-function buildPhone(m: Mats, shots: Shot[]) {
-  const W = 0.716, SW = W - 0.068, SH = SW / shots[0].aspect, H = SH + 0.068, T = 0.082, R = 0.118;
+/* Two kinds, so the two phones on the page are clearly different:
+     iphone   midnight, rounded, Dynamic Island, two lenses on a square camera plateau
+     android  silver blue, flatter and squarer, a punch-hole camera, three lenses in a column */
+function buildPhone(m: Mats, shots: Shot[], style: "iphone" | "android" = "iphone") {
+  const droid = style === "android";
+  const W = droid ? 0.71 : 0.716, bz = droid ? 0.026 : 0.034;
+  const SW = W - 2 * bz, SH = SW / shots[0].aspect, H = SH + 2 * bz, T = droid ? 0.076 : 0.082, R = droid ? 0.075 : 0.118;
+  const frameM = droid ? m.silver : m.metal, backM = droid ? m.silverBack : m.back;
   const body = new THREE.Group();
-  body.add(new THREE.Mesh(slab(W, H, T, R, 0.027, 20), m.metal));
+  body.add(new THREE.Mesh(slab(W, H, T, R, droid ? 0.012 : 0.027, 20), frameM));
 
-  const back = new THREE.Mesh(face(W - 0.03, H - 0.03, R - 0.015), m.back);
+  const back = new THREE.Mesh(face(W - 0.03, H - 0.03, R - 0.015), backM);
   back.rotation.y = PI;
   back.position.z = -T / 2 - 0.0006;
   body.add(back);
 
-  const front = new THREE.Mesh(face(W - 0.012, H - 0.012, R - 0.006), m.black);
+  const front = new THREE.Mesh(face(W - 0.01, H - 0.01, R - 0.005), m.black);
   front.position.z = T / 2 + 0.0005;
   body.add(front);
   const holder = new THREE.Group();
   holder.position.z = T / 2;
   body.add(holder);
-  const screen = new Screen(face(SW, SH, 0.096), shots, 0.001, holder);
-  const island = new THREE.Mesh(face(0.172, 0.05, 0.025), m.black);
-  island.position.set(0, SH / 2 - 0.047, 0.0018);
-  holder.add(island);
-  const glass = new THREE.Mesh(face(W - 0.012, H - 0.012, R - 0.006), m.glass);
+  const screen = new Screen(face(SW, SH, droid ? 0.06 : 0.096), shots, 0.001, holder);
+  if (droid) {
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(0.019, 32), m.black);
+    hole.position.set(0, SH / 2 - 0.036, 0.0018);
+    holder.add(hole);
+  } else {
+    const island = new THREE.Mesh(face(0.172, 0.05, 0.025), m.black);
+    island.position.set(0, SH / 2 - 0.047, 0.0018);
+    holder.add(island);
+  }
+  const glass = new THREE.Mesh(face(W - 0.01, H - 0.01, R - 0.005), m.glass);
   glass.position.z = 0.0024;
   holder.add(glass);
 
-  const btnGeo = (len: number) => new RoundedBoxGeometry(0.014, len, 0.03, 2, 0.006);
   const btn = (x: number, y: number, len: number) => {
-    const b = new THREE.Mesh(btnGeo(len), m.metal);
+    const b = new THREE.Mesh(new RoundedBoxGeometry(0.014, len, droid ? 0.024 : 0.03, 2, 0.006), frameM);
     b.position.set(x, y, 0);
     body.add(b);
   };
-  btn(-W / 2 - 0.002, H / 2 - 0.36, 0.06);
-  btn(-W / 2 - 0.002, H / 2 - 0.5, 0.12);
-  btn(-W / 2 - 0.002, H / 2 - 0.66, 0.12);
-  btn(W / 2 + 0.002, H / 2 - 0.55, 0.18);
+  if (droid) {
+    btn(W / 2 + 0.002, H / 2 - 0.42, 0.2);
+    btn(W / 2 + 0.002, H / 2 - 0.62, 0.1);
+  } else {
+    btn(-W / 2 - 0.002, H / 2 - 0.36, 0.06);
+    btn(-W / 2 - 0.002, H / 2 - 0.5, 0.12);
+    btn(-W / 2 - 0.002, H / 2 - 0.66, 0.12);
+    btn(W / 2 + 0.002, H / 2 - 0.55, 0.18);
+  }
 
-  // camera on the back, seen when it turns round
-  const cam = new THREE.Mesh(slab(0.3, 0.3, 0.014, 0.075, 0.005, 12), m.back);
-  cam.position.set(-W / 2 + 0.2, H / 2 - 0.2, -T / 2 - 0.006);
-  body.add(cam);
-  const ringGeo = new THREE.CylinderGeometry(0.056, 0.056, 0.022, 32).rotateX(PI / 2);
-  const lensGeo = new THREE.CircleGeometry(0.04, 32);
-  for (const [dx, dy] of [[-0.066, 0.066], [0.066, -0.066]]) {
-    const ring = new THREE.Mesh(ringGeo, m.metal);
-    ring.position.set(cam.position.x + dx, cam.position.y + dy, -T / 2 - 0.016);
+  // cameras on the back, seen when it turns over
+  const lensGeo = new THREE.CircleGeometry(droid ? 0.036 : 0.04, 32);
+  const ringGeo = new THREE.CylinderGeometry(droid ? 0.05 : 0.056, droid ? 0.05 : 0.056, 0.022, 32).rotateX(PI / 2);
+  const lensAt = (x: number, y: number, z: number) => {
+    const ring = new THREE.Mesh(ringGeo, frameM);
+    ring.position.set(x, y, z);
     const lens = new THREE.Mesh(lensGeo, m.lens);
     lens.rotation.y = PI;
-    lens.position.set(ring.position.x, ring.position.y, -T / 2 - 0.0275);
+    lens.position.set(x, y, z - 0.0115);
     body.add(ring, lens);
+  };
+  if (droid) {
+    for (let i = 0; i < 3; i++) lensAt(-W / 2 + 0.13, H / 2 - 0.14 - i * 0.125, -T / 2 - 0.01);
+    const flash = new THREE.Mesh(new THREE.CircleGeometry(0.014, 20), m.flash);
+    flash.rotation.y = PI;
+    flash.position.set(-W / 2 + 0.24, H / 2 - 0.14, -T / 2 - 0.0012);
+    body.add(flash);
+  } else {
+    const cam = new THREE.Mesh(slab(0.3, 0.3, 0.014, 0.075, 0.005, 12), backM);
+    cam.position.set(-W / 2 + 0.2, H / 2 - 0.2, -T / 2 - 0.006);
+    body.add(cam);
+    for (const [dx, dy] of [[-0.066, 0.066], [0.066, -0.066]]) lensAt(cam.position.x + dx, cam.position.y + dy, -T / 2 - 0.016);
+    const flash = new THREE.Mesh(new THREE.CircleGeometry(0.016, 20), m.flash);
+    flash.rotation.y = PI;
+    flash.position.set(cam.position.x + 0.07, cam.position.y + 0.07, -T / 2 - 0.0135);
+    body.add(flash);
   }
   return { body, screen };
 }
@@ -386,8 +422,9 @@ type Part = {
   vyaw: number;
   held: boolean;
   letGo: number;
-  spin: number; // seconds into a full turn, -1 when not spinning
+  act: number; // seconds into the tap move (laptop: close, turn, open; phone: show the back, then the front), -1 when idle
   hover: number;
+  kind: "laptop" | "phone";
 };
 
 export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail: () => void): () => void {
@@ -432,7 +469,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
   let elev = 0.22;
   let alive = true;
 
-  const hands = () => ({ yaw: 0, pitch: 0, vyaw: 0, held: false, letGo: 0, spin: -1, hover: 0 });
+  const hands = () => ({ yaw: 0, pitch: 0, vyaw: 0, held: false, letGo: 0, act: -1, hover: 0 });
 
   const laptopPart = (shots: Shot[], at: [number, number, number], rest: [number, number, number], floor: number): Part => {
     const l = buildLaptop(m, shots);
@@ -444,7 +481,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
     world.add(rig);
     l.hinge.rotation.x = PI / 2;
     return {
-      rig, body: l.body, shadow: sh, rest: new THREE.Euler(...rest), floatY: 0, phase: 0, screen: l.screen, hinge: l.hinge, keyboard: l.keyboard, ...hands(),
+      rig, body: l.body, shadow: sh, rest: new THREE.Euler(...rest), floatY: 0, phase: 0, screen: l.screen, hinge: l.hinge, keyboard: l.keyboard, ...hands(), kind: "laptop",
       enter: (t, p) => {
         const open = ease(clamp((t - 0.35) / 1.7));
         p.hinge!.rotation.x = lerp(PI / 2, -0.3, open);
@@ -456,8 +493,8 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
     };
   };
 
-  const phonePart = (shots: Shot[], at: [number, number, number], rest: [number, number, number], scale: number, floor: number, delay: number, spin = 0.9): Part => {
-    const ph = buildPhone(m, shots);
+  const phonePart = (shots: Shot[], at: [number, number, number], rest: [number, number, number], scale: number, floor: number, delay: number, spin = 0.9, style: "iphone" | "android" = "iphone"): Part => {
+    const ph = buildPhone(m, shots, style);
     const rig = new THREE.Group();
     rig.position.set(...at);
     ph.body.scale.setScalar(scale);
@@ -466,7 +503,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
     rig.add(ph.body, sh);
     world.add(rig);
     return {
-      rig, body: ph.body, shadow: sh, rest: new THREE.Euler(...rest), floatY: 0, phase: 1.3 + delay * 5, screen: ph.screen, ...hands(),
+      rig, body: ph.body, shadow: sh, rest: new THREE.Euler(...rest), floatY: 0, phase: 1.3 + delay * 5, screen: ph.screen, ...hands(), kind: "phone",
       enter: (t, p) => {
         const k = easeOut(clamp((t - delay) / 1.5));
         p.body.rotation.set(p.rest.x, p.rest.y + (1 - k) * spin, p.rest.z);
@@ -476,8 +513,8 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
   };
 
   /* the first screen of each device first; the others come in quietly afterwards */
-  const later: { screen: Screen; names: string[]; kind: "phone" | "laptop" }[] = [];
-  const first = async (names: string[], kind: "phone" | "laptop") => [await loadShot(names[0], kind, kind === "phone" || big, aniso)];
+  const later: { screen: Screen; names: string[]; kind: Kind }[] = [];
+  const first = async (names: string[], kind: Kind) => [await loadShot(names[0], kind, kind !== "laptop" || big, aniso)];
 
   const ready = (async () => {
     const want = SHOTS[scene];
@@ -492,10 +529,10 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
       frame = { w: 5.0, h: 3.05 };
       elev = 0.2;
     } else if (scene === "phones") {
-      const [a, b] = await Promise.all([first(want.a, "phone"), first(want.b, "phone")]);
+      const [a, b] = await Promise.all([first(want.a, "phone"), first(want.b, "android")]);
       if (!alive) return;
       const A = phonePart(a, [-0.46, 0.06, 0.1], [0.06, 0.4, 0.16], 1, -1.0, 0, 1.1);
-      const B = phonePart(b, [0.5, 0.3, -0.25], [0.02, -0.42, -0.14], 1, -1.24, 0.25, -1.1);
+      const B = phonePart(b, [0.5, 0.3, -0.25], [0.02, -0.42, -0.14], 1, -1.24, 0.25, -1.1, "android");
       parts.push(A, B);
       later.push({ screen: A.screen, names: want.a, kind: "phone" });
       frame = { w: 2.25, h: 2.35 };
@@ -522,7 +559,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
     for (const l of later) {
       for (const name of l.names.slice(1)) {
         if (!alive) return;
-        const s = await loadShot(name, l.kind, l.kind === "phone" || big, aniso).catch(() => null);
+        const s = await loadShot(name, l.kind, l.kind !== "laptop" || big, aniso).catch(() => null);
         if (!s || !alive) continue;
         renderer.initTexture(s.tex);
         l.screen.shots.push(s);
@@ -548,6 +585,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
   /* ---------- her hands: drag to turn, tap to spin, hover to lift ---------- */
   const ray = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
+  const box3 = new THREE.Box3(), mid = new THREE.Vector3();
   const hit = (e: PointerEvent): Part | null => {
     const r = cv.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
@@ -558,6 +596,23 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
       if (h && h.distance < bestD) {
         best = p;
         bestD = h.distance;
+      }
+    }
+    if (best) return best;
+    // a finger is not a mouse: a tap near a device (its outline on screen, a little bigger) still counts
+    let near = 0.0;
+    for (const p of parts) {
+      box3.setFromObject(p.body);
+      const pts = [box3.min, box3.max].flatMap((a) => [box3.min, box3.max].flatMap((b) => [box3.min, box3.max].map((c) => new THREE.Vector3(a.x, b.y, c.z).project(camera))));
+      const xs = pts.map((v) => v.x), ys = pts.map((v) => v.y);
+      const pad = 0.06;
+      const [x0, x1, y0, y1] = [Math.min(...xs) - pad, Math.max(...xs) + pad, Math.min(...ys) - pad, Math.max(...ys) + pad];
+      if (ndc.x < x0 || ndc.x > x1 || ndc.y < y0 || ndc.y > y1) continue;
+      box3.getCenter(mid).project(camera);
+      const score = 1 / (0.01 + Math.hypot(ndc.x - mid.x, ndc.y - mid.y));
+      if (score > near) {
+        near = score;
+        best = p;
       }
     }
     return best;
@@ -571,10 +626,9 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
   const onMoveCv = (e: PointerEvent) => {
     if (grab && e.pointerId === grab.id) {
       const dx = e.clientX - grab.x, dy = e.clientY - grab.y;
-      if (!grab.moved && Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) {
+      if (!grab.moved && grab.part.act < 0 && Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) {
         grab.moved = true;
         grab.part.held = true;
-        grab.part.spin = -1;
         cv.setPointerCapture(e.pointerId);
       }
       if (grab.moved) {
@@ -601,8 +655,8 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
     if (grab.moved) {
       p.held = false;
       p.letGo = 0;
-    } else if (p.spin < 0) {
-      p.spin = 0; // a tap: turn all the way round and face her again
+    } else if (p.act < 0) {
+      p.act = 0; // a tap: the laptop closes, turns and opens; a phone shows its back, then its front
     }
     grab = null;
   };
@@ -637,7 +691,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
       e.preventDefault();
     }
     if (document.activeElement === cv && (e.key === "Enter" || e.key === " ")) {
-      for (const p of parts) if (p.spin < 0) p.spin = 0;
+      for (const p of parts) if (p.act < 0) p.act = 0;
       e.preventDefault();
     }
   };
@@ -666,6 +720,18 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
     ty = (e.clientY / window.innerHeight - 0.5) * 2;
   };
   if (fine && !reduce) window.addEventListener("pointermove", onMove, { passive: true });
+  // on a phone, tilting it leans the devices (the motion sensor plays the part of the mouse)
+  const onTilt = (e: DeviceOrientationEvent) => {
+    if (e.gamma == null || e.beta == null) return;
+    tx = clamp(e.gamma / 25, -1, 1);
+    ty = clamp((e.beta - 50) / 30, -1, 1);
+  };
+  if (!fine && !reduce) window.addEventListener("deviceorientation", onTilt, { passive: true });
+  const askTilt = () => {
+    const D = window.DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
+    if (!fine && D?.requestPermission) D.requestPermission().catch(() => {}); // iPhones ask once, on her first touch
+  };
+  cv.addEventListener("pointerdown", askTilt, { once: true });
 
   let visible = false, started = -1, last = 0, raf = 0, shown = false;
   const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting), { threshold: 0.05 });
@@ -704,12 +770,25 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
         p.pitch = lerp(p.pitch, 0, 1 - Math.exp(-dt * 5));
       }
       let spinYaw = 0, hop = 0;
-      if (p.spin >= 0) {
-        p.spin += dt;
-        const f = clamp(p.spin / 1.25);
-        spinYaw = ease(f) * TAU;
-        hop = Math.sin(f * PI) * 0.18;
-        if (f >= 1) p.spin = -1;
+      if (p.act >= 0) {
+        p.act += dt;
+        const a = p.act;
+        if (p.kind === "laptop") {
+          // close the lid, turn all the way round closed, open again facing her (like the film)
+          const shut = a < 0.7 ? ease(a / 0.7) : a < 1.95 ? 1 : 1 - ease(clamp((a - 1.95) / 0.85));
+          p.hinge!.rotation.x = lerp(-0.3, PI / 2, shut);
+          p.screen.power = Math.min(p.screen.power, 1 - ease(clamp(shut / 0.6)));
+          const turn = clamp((a - 0.6) / 1.35);
+          spinYaw = ease(turn) * TAU;
+          hop = Math.sin(turn * PI) * 0.22;
+          if (a >= 2.8) p.act = -1;
+        } else {
+          // turn over to show the back and camera, stay a moment, then come round to the front
+          const f1 = ease(clamp(a / 0.75)), f2 = ease(clamp((a - 1.9) / 0.75));
+          spinYaw = f1 * PI + f2 * PI;
+          hop = Math.sin(clamp(a / 2.65) * PI) * 0.12;
+          if (a >= 2.65) p.act = -1;
+        }
       }
       p.body.rotation.y += p.yaw + spinYaw;
       p.body.rotation.x += p.pitch;
@@ -743,6 +822,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
     ro.disconnect();
     io.disconnect();
     window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("deviceorientation", onTilt);
     window.removeEventListener("keydown", onKey);
     cv.removeEventListener("webglcontextlost", lost);
     const geos = new Set<THREE.BufferGeometry>(), mats = new Set<THREE.Material>(), texs = new Set<THREE.Texture>();
