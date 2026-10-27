@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { answer, giveSecret } from "@/lib/engine";
 import { celebrate } from "./Effects";
+import { DocCard } from "./DocView";
 import type { Lang } from "@/lib/i18n";
 import { t } from "@/lib/i18n";
 import { useApp, type Msg, type Task } from "@/lib/store";
@@ -74,6 +75,8 @@ function Item({ m, task }: { m: Msg; task: Task }) {
       return <Explain m={m} />;
     case "result":
       return <Result m={m} />;
+    case "doc":
+      return <DocCard d={m.doc} />;
   }
 }
 

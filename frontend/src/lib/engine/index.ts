@@ -11,9 +11,10 @@ const TITLES: Record<demo.Intent, string> = {
   register: "Skills Fair registration",
   scam: "Message check",
   paper: "Letter explained",
+  research: "Research and write-up",
   help: "New task",
 };
-const KIND: Record<demo.Intent, Task["kind"]> = { register: "browse", scam: "scam", paper: "paper", help: "chat" };
+const KIND: Record<demo.Intent, Task["kind"]> = { register: "browse", scam: "scam", paper: "paper", research: "chat", help: "chat" };
 
 /** She asked for something: start a new task (or continue the active one if Jagora is waiting for her words). */
 /** "Show me the browser": she wants to watch, not talk. Five languages, loose on purpose. */

@@ -273,6 +273,7 @@ function Hello({ lang }: { lang: Lang }) {
     { en: "Register me for the Skills Fair", pcm: "Register me for Skills Fair", yo: "Forúkọ mi sílẹ̀ fún Skills Fair", ha: "Yi mini rajista don Skills Fair", ig: "Debanye m aha maka Skills Fair" },
     { en: "Is this bank message real?", pcm: "This bank message na real?", yo: "Ṣé ọ̀rọ̀ báǹkì yìí jẹ́ òótọ́?", ha: "Shin wannan saƙon banki gaskiya ne?", ig: "Ozi ụlọ akụ a ọ bụ eziokwu?" },
     { en: "Check my JAMB result", pcm: "Check my JAMB result", yo: "Ẹ wo èsì JAMB mi", ha: "Duba sakamakon JAMB dina", ig: "Lelee nsonaazụ JAMB m" },
+    { en: "Find free courses with certificates and write it up", pcm: "Find free courses wey get certificate, write am down", yo: "Wá àwọn ẹ̀kọ́ ọ̀fẹ́ tó ní ìwé-ẹ̀rí kí o kọ ọ́ sílẹ̀", ha: "Nemo kwasa-kwasai kyauta masu takardar shaida ka rubuta", ig: "Chọta ọmụmụ ihe n'efu nwere asambodo ma dee ya" },
   ];
   return (
     <div className="flex flex-col gap-2 pb-2 pt-3">

@@ -8,6 +8,7 @@ import { checkMessage } from "../scam";
 import { useApp, uid, type Msg, type Profile } from "../store";
 import { doc, navigate, placeOf, waitForFrame } from "./frame";
 import { readablePhone, spokenPhone } from "../fields";
+import { freeCoursesDoc } from "../docs/sample";
 
 const S = () => useApp.getState();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -178,12 +179,13 @@ const SKILL_WORDS: [RegExp, string][] = [
   [/solar|oòrùn|rana/i, "Solar installation"], [/market|digital/i, "Digital marketing"],
 ];
 
-export type Intent = "register" | "scam" | "paper" | "help";
+export type Intent = "register" | "scam" | "paper" | "research" | "help";
 
 export function intentOf(text: string, hasImage: boolean): Intent {
   if (hasImage) return "paper";
   if (/https?:\/\/|www\.|\.(com|ng|xyz|top|info|link)\b|scam|jìbìtì|jibiti|zamba|aghụghọ|aghughọ|aghugho|fake|bvn|otp/i.test(text)) return "scam";
   if (/letter|paper|ìwé|iwe|takarda|akwụkwọ|akwukwo|bill|notice|explain|read/i.test(text)) return "paper";
+  if (/research|write (it|this|me|a)|document|report|course|find (me )?(free|the best|cheap)|compare|look for|search for|ẹ̀kọ́|kwasa|ọmụmụ|write am down/i.test(text)) return "research";
   if (/regist|skills? fair|forúkọ|foruko|rajista|ndebanye|sign me|enrol/i.test(text)) return "register";
   return "help";
 }
@@ -196,6 +198,7 @@ export async function run(taskId: string, intent: Intent, text: string) {
     if (intent === "register") await register(taskId, text, my);
     else if (intent === "scam") await scam(taskId, text, my);
     else if (intent === "paper") await paper(taskId, text, my);
+    else if (intent === "research") await research(taskId, text, my);
     else await help(taskId, my);
   } catch (e) {
     if (!(e instanceof Stopped)) {
@@ -235,6 +238,40 @@ export async function prompt(taskId: string, kind: "scam" | "paper") {
     if (my === runId) S().setOrb("idle");
   }
 }
+
+/** Research and a written document: search, open a few sources, read them, then write it up. */
+async function research(taskId: string, _text: string, my: number) {
+  const lang = S().lang;
+  await say(taskId, RESEARCH_SAY.start[lang], my);
+  const sources = ["Google Skillshop", "Microsoft Learn", "freeCodeCamp", "Alison", "Coursera", "edX"];
+  const s1 = step(taskId, RESEARCH_SAY.search[lang], "doing");
+  await sleep(900);
+  guard(my);
+  S().update(taskId, s1, { status: "done" } as Partial<Msg>);
+  for (const src of sources) {
+    const id = step(taskId, `${RESEARCH_SAY.reading[lang]} ${src}`, "doing");
+    await sleep(380);
+    guard(my);
+    S().update(taskId, id, { status: "done" } as Partial<Msg>);
+  }
+  const w = step(taskId, RESEARCH_SAY.writing[lang], "doing");
+  await sleep(1100);
+  guard(my);
+  S().update(taskId, w, { status: "done" } as Partial<Msg>);
+  S().push(taskId, { id: uid(), kind: "doc", doc: freeCoursesDoc() });
+  dispatchEvent(new Event("jagora:done"));
+  S().setSheet(true);
+  await say(taskId, RESEARCH_SAY.done[lang], my);
+  S().setStatus(taskId, "done");
+}
+
+const RESEARCH_SAY: Record<"start" | "search" | "reading" | "writing" | "done", L> = {
+  start: { en: "I'll look this up and write it up for you.", pcm: "I go find am and write am down for you.", yo: "Màá wá a, màá sì kọ ọ́ sílẹ̀ fún yín.", ha: "Zan nemo shi in rubuta maka.", ig: "M ga-achọ ya ma dee ya maka gị." },
+  search: { en: "Searching the web", pcm: "Dey search the web", yo: "Mò ń wá a lórí íńtánẹ́ẹ̀tì", ha: "Ina bincike a yanar gizo", ig: "Ana m achọ na ịntanetị" },
+  reading: { en: "Reading", pcm: "Dey read", yo: "Mò ń ka", ha: "Ina karanta", ig: "Ana m agụ" },
+  writing: { en: "Writing your document", pcm: "Dey write your document", yo: "Mò ń kọ ìwé yín", ha: "Ina rubuta takardarka", ig: "Ana m ede akwụkwọ gị" },
+  done: { en: "Your document is ready. You can open it, or download it as PDF, Word or Markdown.", pcm: "Your document don ready. You fit open am, or download am as PDF, Word or Markdown.", yo: "Ìwé yín ti ṣetán. Ẹ lè ṣí i, tàbí ẹ gbà á sílẹ̀ bí PDF, Word tàbí Markdown.", ha: "Takardarka ta shirya. Za ka iya buɗe ta, ko ka sauke ta a PDF, Word ko Markdown.", ig: "Akwụkwọ gị adịla njikere. Ị nwere ike imepe ya, ma ọ bụ budata ya dịka PDF, Word ma ọ bụ Markdown." },
+};
 
 async function help(taskId: string, my: number) {
   const lang = S().lang;
