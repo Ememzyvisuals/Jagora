@@ -1,0 +1,98 @@
+"""The server end to end: sign up (with the ALTCHA puzzle), then a research run over the WebSocket with a scripted
+model: open the school site, find the brochure, open the PDF, show evidence, write a document, download the file."""
+
+import base64
+import hashlib
+import json
+import os
+
+import pytest
+
+os.environ.update({"JAGORA_NO_INGEST": "1", "REQUIRE_ACCOUNT": "true", "ACCESS_CODES": "JUDGE-1", "ALLOWED_ORIGINS": ""})
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from jagora.llm import Model, Reply, ToolCall, Usage  # noqa: E402
+from tests.test_research import site  # noqa: E402,F401  (the local school site fixture)
+
+
+def solve(ch: dict) -> str:
+    for n in range(ch["maxnumber"] + 1):
+        if hashlib.sha256(f"{ch['salt']}{n}".encode()).hexdigest() == ch["challenge"]:
+            return base64.b64encode(json.dumps({**ch, "number": n}).encode()).decode()
+    raise AssertionError("no solution")
+
+
+class Research(Model):
+    def __init__(self, base):
+        self.base, self.turn, self.usage = base, 0, Usage()
+
+    async def chat(self, messages, tools=None, effort="low", max_tokens=4000, kind="agent"):
+        b = self.base
+        plan = [
+            [("tell_user", {"message": "I'll check the official brochure."}),
+             ("go_to", {"url": b + "/admissions.html", "step": "Opening the admissions page"})],
+            [("list_links", {"match": "brochure"})],
+            [("go_to", {"url": b + "/files/brochure-2026.pdf"})],
+            [("find_text", {"query": "UTME subjects"})],
+            [("show_evidence", {"quote": "English Language, Mathematics, Physics", "claim": "Your UTME subjects", "near_page": 2})],
+            [("write_document", {"title": "Computer Science requirements", "summary": ["English, Maths, Physics"],
+                                 "blocks": [{"t": "p", "text": "From the brochure."}], "sources": [{"title": "Brochure", "url": b}]}),
+             ("download", {"name": "Admission brochure"})],
+            [("finish", {"summary": "Done. Your subjects are English, Mathematics, Physics and one more.", "success": True})],
+        ]
+        calls = plan[min(self.turn, len(plan) - 1)]
+        self.turn += 1
+        r = Reply("", [ToolCall(str(i), n, a) for i, (n, a) in enumerate(calls)], "tool_calls", 100, 10)
+        self.usage.add(r, kind)
+        return r
+
+
+@pytest.fixture()
+def client(tmp_path, monkeypatch):
+    monkeypatch.setenv("SQLITE_PATH", str(tmp_path / "t.db"))
+    import importlib
+
+    import jagora.config as cfg
+
+    importlib.reload(cfg)
+    import jagora.auth, jagora.db, jagora.server  # noqa: E401
+
+    for m in (jagora.db, jagora.auth, jagora.server):
+        importlib.reload(m)
+    with TestClient(jagora.server.app) as c:
+        yield c, jagora.server
+
+
+def test_signup_and_research_run(client, site):  # noqa: F811
+    c, server = client
+    assert c.post("/auth/signup", json={"email": "a@b.co", "password": "longenough", "altcha": "x"}).status_code == 400
+    out = c.post("/auth/signup", json={"email": "a@b.co", "password": "longenough", "code": "judge-1",
+                                       "altcha": solve(c.get("/altcha").json())}).json()
+    token = out["token"]
+    assert out["user"]["plan"] == "code"
+    assert c.post("/auth/signin", json={"email": "a@b.co", "password": "wrong", "altcha": solve(c.get("/altcha").json())}).status_code == 401
+    assert c.get("/me", headers={"Authorization": f"Bearer {token}"}).json()["email"] == "a@b.co"
+
+    server._model = lambda: Research(site)
+    got = []
+    with c.websocket_connect(f"/ws?token={token}") as ws:
+        ws.send_text(json.dumps({"type": "start", "task": "t1", "goal": "UNILAG computer science subjects", "lang": "en", "mode": "do", "profile": {}}))
+        while True:
+            ev = json.loads(ws.receive_text())
+            got.append(ev)
+            if ev["type"] == "status" and ev["status"] in ("done", "stopped"):
+                break
+    kinds = [e["msg"]["kind"] for e in got if e["type"] == "msg"]
+    assert "step" in kinds and "evidence" in kinds and "doc" in kinds and "file" in kinds
+    ev = next(e["msg"] for e in got if e["type"] == "msg" and e["msg"]["kind"] == "evidence")
+    assert ev["page"] == 2 and ev["image"] and ev["claim"] == "Your UTME subjects"
+    f = next(e["msg"] for e in got if e["type"] == "msg" and e["msg"]["kind"] == "file")
+    assert f["name"] == "Admission brochure.pdf"
+    path = f["url"].split("/files/", 1)[1]
+    assert c.get(f"/files/{path}").content.startswith(b"%PDF")
+    assert got[-1]["status"] == "done"
+    assert any(e["type"] == "msg" and e["msg"]["kind"] == "agent" and "Done." in e["msg"]["text"] for e in got)
+    # chat memory kept on the server
+    hist = c.get("/chats/t1", headers={"Authorization": f"Bearer {token}"}).json()
+    assert hist[0]["role"] == "user" and any("evidence" in h["text"] for h in hist)

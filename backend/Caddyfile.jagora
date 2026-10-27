@@ -1,0 +1,4 @@
+agent-3-223-28-209.sslip.io {
+	encode gzip
+	reverse_proxy jagora-agent:8000
+}

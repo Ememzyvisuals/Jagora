@@ -1,0 +1,7 @@
+.env
+secrets.txt
+data/
+runs/
+tests/
+__pycache__/
+.pytest_cache/

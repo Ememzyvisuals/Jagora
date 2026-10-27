@@ -1,0 +1,21 @@
+# Runs beside Speech Studio without touching it: own container, no published ports, reached through Caddy on the
+# shared network. Secrets live in ./.env, made on the host from secrets.txt by `python3 -m jagora.config`
+# (which also deletes secrets.txt); data in ./data.
+services:
+  jagora-agent:
+    build: .
+    container_name: jagora-agent
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      JAGORA_NO_INGEST: "1"
+    volumes:
+      - ./data:/app/data
+      - ./runs:/app/runs
+    shm_size: "1gb"
+    mem_limit: 3g
+    cpus: 2.0
+    networks: [backend_default]
+networks:
+  backend_default:
+    external: true

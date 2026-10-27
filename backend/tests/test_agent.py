@@ -109,7 +109,7 @@ async def test_jagora_never_types_a_password():
         await agent.run("log in", html)
         value = await b.page.locator("#p").input_value()
     assert value == ""
-    assert "hand_over" in agent.history[0] and io.handoffs == ["Ẹ tẹ ọ̀rọ̀ aṣínà yín síbí."]
+    assert "is private" in agent.history[0] and io.handoffs == ["Ẹ tẹ ọ̀rọ̀ aṣínà yín síbí."]
 
 
 async def test_guide_mode_never_acts():
