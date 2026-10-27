@@ -1,15 +1,15 @@
 "use client";
 
-/* The footer of every public page: what Jagora is, where to go next, who made it and with what, the legal pages,
-   and a huge cloud-glass "Jagora" across the bottom, sized to the screen it is on. */
+/* The footer of every public page, laid out like Emmanuel's portfolio footer: Jagora and what it is, the link
+   columns, the credits (voice, intelligence, builder with his profiles as app-style icons), a bottom line, and a
+   huge cloud-glass "Jagora" in Boiling across the end of the page. */
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { siGithub, siMeta, siTiktok, siX } from "simple-icons";
-import { Mark } from "./Brand";
-import { startPageWars } from "./PageWars";
-import { CloudWordmark } from "./glass/CloudWordmark";
+import { useEffect, useRef, useState } from "react";
+import { siMeta } from "simple-icons";
 import { BUILDER, PLOTWEAVER, REPO } from "@/lib/credits";
+import { CloudWordmark } from "./glass/CloudWordmark";
 import { Glass } from "./glass/Glass";
+import { startPageWars } from "./PageWars";
 
 const COLUMNS: { title: string; links: { label: string; href: string; ext?: boolean }[] }[] = [
   {
@@ -41,72 +41,78 @@ const COLUMNS: { title: string; links: { label: string; href: string; ext?: bool
   },
 ];
 
-/** his profiles, each in its own real colours, no chips behind them */
-const SOCIALS: { label: string; href: string; icon: ReactNode }[] = [
-  { label: "X", href: "https://x.com/ememzyvisuals", icon: <span className="text-black dark:text-white"><Brand path={siX.path} size={22} /></span> },
+/* his profiles, drawn as app-style tiles in each brand's own colours (same set as his portfolio) */
+const Tile = ({ bg, children }: { bg: string; children: React.ReactNode }) => (
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+    <rect width="36" height="36" rx="8" fill={bg} />
+    {children}
+  </svg>
+);
+const TT = "M24.5 14.069a5.483 5.483 0 01-3.203-1.024v4.662a4.96 4.96 0 11-4.297-4.906v2.727a2.24 2.24 0 102.24 2.179v-9.207h2.662a3.203 3.203 0 003.598 2.867v2.702z";
+const SOCIALS = [
+  {
+    label: "GitHub",
+    href: "https://github.com/ememzyvisuals",
+    icon: (
+      <Tile bg="#24292e">
+        <path d="M18 8.5C12.477 8.5 8 12.977 8 18.5c0 4.42 2.865 8.166 6.839 9.49.5.09.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.607.069-.607 1.003.07 1.531 1.03 1.531 1.03.892 1.528 2.341 1.087 2.91.832.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.09.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.026A9.578 9.578 0 0118 13.84a9.6 9.6 0 012.504.337c1.909-1.294 2.747-1.026 2.747-1.026.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.308.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C25.138 26.663 28 22.918 28 18.5 28 12.977 23.523 8.5 18 8.5z" fill="white" />
+      </Tile>
+    ),
+  },
   {
     label: "LinkedIn",
     href: "https://www.linkedin.com/in/ememzyvisuals",
     icon: (
-      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-        <rect width="24" height="24" rx="4" fill="#0A66C2" />
-        <path fill="#fff" d="M7.1 9.6H4.7V19h2.4V9.6ZM5.9 5.4a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8Zm13.4 8.3c0-2.5-.5-4.4-3.4-4.4-1.4 0-2.3.8-2.7 1.5V9.6h-2.3V19h2.4v-4.6c0-1.2.2-2.4 1.7-2.4 1.5 0 1.5 1.4 1.5 2.5V19h2.4l.4-5.3Z" />
-      </svg>
+      <Tile bg="#0A66C2">
+        <path d="M13.5 14.5H10.5V25.5H13.5V14.5ZM12 13.25C13.1 13.25 14 12.35 14 11.25C14 10.15 13.1 9.25 12 9.25C10.9 9.25 10 10.15 10 11.25C10 12.35 10.9 13.25 12 13.25ZM25.5 25.5H22.5V20.1C22.5 18.9 22.5 17.35 20.85 17.35C19.15 17.35 18.9 18.65 18.9 20V25.5H15.9V14.5H18.75V15.85H18.8C19.2 15.1 20.2 14.3 21.7 14.3C24.75 14.3 25.5 16.3 25.5 18.9V25.5Z" fill="white" />
+      </Tile>
     ),
   },
-  { label: "GitHub", href: "https://github.com/ememzyvisuals", icon: <span className="text-[#181717] dark:text-white"><Brand path={siGithub.path} size={23} /></span> },
+  {
+    label: "X",
+    href: "https://x.com/ememzyvisuals",
+    icon: (
+      <Tile bg="#000">
+        <path d="M19.776 16.895L25.4 10H24.01L19.153 16.01 15.29 10H10.5L16.408 18.884 10.5 26H11.89L17.03 19.765 21.11 26H25.9L19.776 16.895ZM17.726 18.96L17.11 18.058 12.38 11.05H14.61L18.27 16.847L18.886 17.75L24.011 25.002H21.781L17.726 18.96Z" fill="white" />
+      </Tile>
+    ),
+  },
   {
     label: "TikTok",
     href: "https://tiktok.com/@ememzyvisuals",
     icon: (
-      <svg viewBox="0 0 24 24" width="23" height="23" aria-hidden="true">
-        <path d={siTiktok.path} fill="#25F4EE" transform="translate(-0.9 -0.7)" />
-        <path d={siTiktok.path} fill="#FE2C55" transform="translate(0.9 0.7)" />
-        <path d={siTiktok.path} className="fill-black dark:fill-white" />
-      </svg>
+      <Tile bg="#000">
+        <path d={TT} fill="#25F4EE" transform="translate(-.7 -.5)" />
+        <path d={TT} fill="#FE2C55" transform="translate(.7 .5)" />
+        <path d={TT} fill="white" />
+      </Tile>
     ),
   },
-  { label: "Kaggle", href: "https://www.kaggle.com/ememzyvisuals", icon: (
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-        <path fill="#20BEFF" d="M7.2 2h3.3v11.1l5.6-6.2h4.2l-6.2 6.5L20.6 22h-4.3l-5.8-7.5V22H7.2z" />
-      </svg>
-    ) },
+  {
+    label: "Kaggle",
+    href: "https://www.kaggle.com/ememzyvisuals",
+    icon: (
+      <Tile bg="#20BEFF">
+        <path d="M24.825 25.859c-.022.092-.117.141-.281.141h-3.139c-.187 0-.351-.082-.492-.248l-5.178-6.589-1.448 1.374v5.111c0 .235-.117.352-.351.352H11.505c-.236 0-.354-.117-.354-.352V10.353c0-.233.118-.353.354-.353h2.431c.234 0 .351.12.351.353v8.343l6.203-6.272c.165-.165.33-.246.495-.246h3.239c.144 0 .236.06.285.18.046.149.034.255-.036.315l-6.555 6.344 6.836 8.507c.095.104.117.208.07.334z" fill="white" />
+      </Tile>
+    ),
+  },
   {
     label: "Website",
-    href: "https://ememzyvisuals.vercel.app",
+    href: BUILDER.site,
     icon: (
-      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="#1d63ed" strokeWidth="1.8" aria-hidden="true">
-        <circle cx="12" cy="12" r="9.2" />
-        <path d="M2.8 12h18.4M12 2.8c2.6 2.6 3.9 5.6 3.9 9.2s-1.3 6.6-3.9 9.2M12 2.8C9.4 5.4 8.1 8.4 8.1 12s1.3 6.6 3.9 9.2" />
-      </svg>
+      <Tile bg="#1d63ed">
+        <g stroke="white" strokeWidth="1.7" fill="none">
+          <circle cx="18" cy="18" r="8.2" />
+          <path d="M9.8 18h16.4M18 9.8c2.3 2.3 3.4 5 3.4 8.2s-1.1 5.9-3.4 8.2M18 9.8c-2.3 2.3-3.4 5-3.4 8.2s1.1 5.9 3.4 8.2" />
+        </g>
+      </Tile>
     ),
   },
 ];
 
-function Brand({ path, size = 16, color = "currentColor" }: { path: string; size?: number; color?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill={color} aria-hidden="true">
-      <path d={path} />
-    </svg>
-  );
-}
-
-/** PlotWeaver's mark: their logo file when present, their name otherwise */
-function PlotWeaverMark() {
-  // their logo file when it has been added to /brand, their name otherwise
-  const [ok, setOk] = useState(false);
-  useEffect(() => {
-    const im = new Image();
-    im.onload = () => setOk(true);
-    im.src = "/brand/plotweaver.png";
-  }, []);
-  return ok ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src="/brand/plotweaver.png" alt="PlotWeaver" className="h-[26px] w-auto self-start" />
-  ) : (
-    <span className="font-display text-[18px] font-bold tracking-[-0.03em] text-white">PlotWeaver</span>
-  );
-}
+const head = "font-head text-[17px] leading-none text-ink";
+const link = "w-fit text-[15px] text-ink-2 transition-colors hover:text-ink";
 
 export function SiteFooter() {
   const box = useRef<HTMLDivElement>(null);
@@ -118,101 +124,100 @@ export function SiteFooter() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  const year = new Date().getFullYear();
 
   return (
-    <footer className="relative mt-16 px-3 pb-3 sm:px-5 sm:pb-5">
-      <Glass radius={36} bezel={20} tint="rgba(255,255,255,.72)" interactive={false} className="mx-auto max-w-[1360px] overflow-hidden">
-        <div className="grid gap-10 px-6 pb-8 pt-10 sm:px-10 md:grid-cols-[1.3fr_2fr] md:gap-14 md:pt-14 lg:px-14">
-          {/* what Jagora is */}
-          <div>
-            <div className="flex items-center gap-3">
-              <Mark size={40} />
-              <span className="font-display text-[28px] font-bold tracking-[-0.035em] text-ink">Jagora</span>
+    <footer className="relative mt-16 px-3 sm:px-5">
+      <Glass radius={32} bezel={18} tint="rgba(255,255,255,.8)" interactive={false} className="mx-auto max-w-[1360px]">
+        <div className="space-y-10 px-6 py-12 sm:px-10 md:py-16 lg:px-14">
+          <div className="grid grid-cols-2 gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr_1.6fr] md:gap-8">
+            {/* brand */}
+            <div className="col-span-2 space-y-4 md:col-span-1">
+              <Link href="/" className="block font-head text-[30px] leading-none text-ink">
+                Jagora
+              </Link>
+              <p className="max-w-[30ch] text-[15px] leading-relaxed text-ink-2">
+                A voice-first browser for Nigeria. Speak Yorùbá, Hausa, Igbo, Pidgin or English, and Jagora does the browsing with you.
+              </p>
             </div>
-            <p className="mt-4 max-w-[34ch] text-[16px] leading-relaxed text-ink-2">
-              A voice-first browser for Nigeria. Speak Yorùbá, Hausa, Igbo, Pidgin or English, and Jagora searches, checks, fills and finishes the task with you.
-            </p>
-            <Link href="/app" className="btn btn-ink mt-6 h-12 px-6 text-[15.5px] font-semibold">
-              Open Jagora
-            </Link>
-          </div>
 
-          {/* links */}
-          <nav className="grid grid-cols-2 gap-8 sm:grid-cols-3" aria-label="Footer">
+            {/* link columns */}
             {COLUMNS.map((c) => (
-              <div key={c.title}>
-                <p className="font-display text-[13px] font-bold uppercase tracking-[0.12em] text-ink-3">{c.title}</p>
-                <ul className="mt-4 space-y-3">
-                  {c.links.map((l) => (
-                    <li key={l.label}>
-                      {l.ext ? (
-                        <a href={l.href} target="_blank" rel="noreferrer" className="text-[15.5px] text-ink transition hover:text-accent">
-                          {l.label}
-                        </a>
-                      ) : (
-                        <Link href={l.href} className="text-[15.5px] text-ink transition hover:text-accent">
-                          {l.label}
-                        </Link>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+              <div key={c.title} className="space-y-4">
+                <p className={head}>{c.title}</p>
+                <nav className="flex flex-col gap-3">
+                  {c.links.map((l) =>
+                    l.ext ? (
+                      <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer" className={link}>
+                        {l.label}
+                      </a>
+                    ) : (
+                      <Link key={l.label} href={l.href} className={link}>
+                        {l.label}
+                      </Link>
+                    ),
+                  )}
+                </nav>
               </div>
             ))}
-          </nav>
-        </div>
 
-        {/* credits */}
-        <div className="mx-6 grid gap-3 border-t border-ink/10 py-8 sm:mx-10 md:grid-cols-3 lg:mx-14">
-          <a href={PLOTWEAVER.url} target="_blank" rel="noreferrer" className="group flex flex-col gap-3 rounded-[24px] bg-[#061113] p-5 text-white ring-1 ring-white/5 transition hover:bg-[#0a1b1e]">
-            <span className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-white/55">Voice by</span>
-            <PlotWeaverMark />
-            <span className="text-[14px] leading-snug text-white/75">
-              STORM speech recognition and voices for Yorùbá, Hausa, Igbo, Pidgin and English. {PLOTWEAVER.line}.
-            </span>
-            <span className="mt-auto text-[13.5px] font-semibold text-[#c8f31d] group-hover:underline">developer.plotweaver.app</span>
-          </a>
-          <div className="flex flex-col gap-3 rounded-[24px] bg-gradient-to-br from-[#0866FF] to-[#0a4fd6] p-5 text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.25)]">
-            <span className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-white/65">Intelligence by</span>
-            <span className="flex items-center gap-2 font-display text-[18px] font-bold tracking-[-0.03em] text-white">
-              <span className="text-white">
-                <Brand path={siMeta.path} size={22} />
-              </span>
-              Meta Muse
-            </span>
-            <span className="text-[14px] leading-snug text-white/80">Muse Spark runs the browsing agent. Muse Wonder reads photos, videos and voice notes. Muse Image draws picture guides.</span>
-          </div>
-          <div id="builder" className="flex flex-col gap-3 rounded-[24px] bg-white p-5 ring-1 ring-black/5 dark:bg-white/10">
-            <span className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-ink-3">Designed and built by</span>
-            <a href={BUILDER.site} target="_blank" rel="noreferrer" className="font-display text-[18px] font-bold tracking-[-0.03em] text-ink">
-              {BUILDER.name}
-              <span className="ml-2 font-sans text-[14px] font-normal text-ink-3">{BUILDER.handle}</span>
-            </a>
-            <span className="text-[14px] leading-snug text-ink-2">AI and machine learning engineer. Builder of speech AI for African languages.</span>
-            <div className="mt-auto flex flex-wrap items-center gap-4 pt-1">
-              {SOCIALS.map(({ label, href, icon }) => (
-                <a key={label} href={href} target="_blank" rel="noreferrer" aria-label={label} title={label} className="transition hover:-translate-y-0.5 hover:opacity-80">
-                  {icon}
+            {/* credits */}
+            <div id="builder" className="col-span-2 space-y-5 md:col-span-1">
+              <div className="space-y-2">
+                <p className={head}>Voice by</p>
+                <a href={PLOTWEAVER.url} target="_blank" rel="noopener noreferrer" className="block w-fit transition-opacity hover:opacity-75" aria-label="PlotWeaver">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/brand/plotweaver-dark.png" alt="PlotWeaver" className="h-[22px] w-auto dark:hidden" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/brand/plotweaver.png" alt="PlotWeaver" className="hidden h-[22px] w-auto dark:block" />
                 </a>
-              ))}
+                <a href={PLOTWEAVER.url} target="_blank" rel="noopener noreferrer" className="block w-fit text-[13.5px] text-ink-3 hover:text-ink">
+                  STORM speech AI, developer.plotweaver.app
+                </a>
+              </div>
+              <div className="space-y-2">
+                <p className={head}>Intelligence by</p>
+                <span className="flex items-center gap-2 font-display text-[17px] font-bold tracking-[-0.02em] text-ink">
+                  <svg viewBox="0 0 24 24" width="24" height="24" fill="#0866FF" aria-hidden="true">
+                    <path d={siMeta.path} />
+                  </svg>
+                  Meta Muse
+                </span>
+              </div>
+              <div className="space-y-3">
+                <p className={head}>Designed and built by</p>
+                <a href={BUILDER.site} target="_blank" rel="noopener noreferrer" className="block w-fit text-[15px] text-ink hover:text-accent">
+                  {BUILDER.name} <span className="text-ink-3">({BUILDER.handle})</span>
+                </a>
+                <a href={`mailto:${BUILDER.email}`} className="block w-fit text-[14px] text-ink-3 hover:text-ink">
+                  {BUILDER.email}
+                </a>
+                <div className="flex flex-wrap gap-2.5 pt-1">
+                  {SOCIALS.map(({ label, href, icon }) => (
+                    <a key={label} href={href} target="_blank" rel="noopener noreferrer" aria-label={label} title={label} className="transition hover:scale-105 hover:opacity-85">
+                      {icon}
+                    </a>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* bottom line */}
-        <div className="mx-6 flex flex-col gap-2 border-t border-ink/10 py-5 text-[13.5px] text-ink-3 sm:mx-10 sm:flex-row sm:items-center sm:justify-between lg:mx-14">
-          <span>© {new Date().getFullYear()} Jagora. Made in Nigeria, for everyone who speaks its languages.</span>
-          <span className="flex items-center gap-3">
-            Built for the Meta Global AI Developer Hackathon 2026
-            <button onClick={startPageWars} className="rounded-full bg-black/5 px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10" title="Shift + G">
-              Bored? Play
-            </button>
-          </span>
+          {/* bottom */}
+          <div className="flex flex-col items-center justify-between gap-3 border-t border-ink/10 pt-6 sm:flex-row">
+            <p className="text-[13px] text-ink-3">© {year} Jagora. Built for the Meta Global AI Developer Hackathon 2026.</p>
+            <p className="flex items-center gap-3 text-[13px] text-ink-3">
+              Designed and built by {BUILDER.name}
+              <button onClick={startPageWars} className="shrink-0 whitespace-nowrap rounded-full bg-black/5 px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10" title="Shift + G">
+                Bored? Play
+              </button>
+            </p>
+          </div>
         </div>
-
       </Glass>
-      {/* the wordmark on the sky, as wide as the page */}
-      <div ref={box} className="mx-auto -mt-2 w-full max-w-[1360px] select-none" aria-hidden="true">
+
+      {/* the wordmark at the end of the page */}
+      <div ref={box} className="mx-auto mt-2 w-full max-w-[1360px] select-none" aria-hidden="true">
         {w > 0 && <CloudWordmark width={w} family="Jagora Boiling" weight={400} />}
       </div>
     </footer>
