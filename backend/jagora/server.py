@@ -54,6 +54,25 @@ push = Push(db)
 SESSIONS: dict[str, "Session"] = {}  # user id -> live session (one per signed-in user)
 
 
+def _muse_extras(model) -> dict:
+    """Muse Wonder for her photos and PDFs, Muse Image for picture guides, open weights for the safety checks."""
+    from jagora.llm import MuseSpark
+
+    if not isinstance(model, MuseSpark):
+        return {}
+    from jagora import muse
+
+    out: dict = {"images": muse.Images()}
+    try:
+        out["wonder"] = MuseSpark(settings.wonder_model)
+    except Exception:  # noqa: BLE001
+        pass
+    side = muse.open_model()
+    if side:
+        out["side_model"] = side
+    return out
+
+
 def _model():
     import os
 
@@ -358,6 +377,8 @@ class Session:
         elif kind == "audio":
             self.hush()  # she is talking: Jagora stops
             await self.on_audio(task, ev)
+        elif kind == "pictures":
+            asyncio.create_task(self.pictures_for(task, str(ev.get("text") or "")[:2500]))
         elif kind == "hush":
             self.hush()
             await self.send({"type": "speech_end", "task": task})
@@ -514,7 +535,8 @@ class Session:
             convo = convo[:-1]  # the last one is this request
         io = WsIO(self, r)
         try:
-            agent = Agent(_model(), self.browser, io, lang=self.lang, mode=self.mode, profile=self.profile,
+            model = _model()
+            agent = Agent(model, self.browser, io, **_muse_extras(model), lang=self.lang, mode=self.mode, profile=self.profile,
                           conversation=convo[-14:], attachment=attachment, browser_factory=self.get_browser,
                           steering=r.steer, user_id=self.user_id, on_watch=io.watch,
                           memory=DbMemory(self.user_id, task, self.lang, self.mode, self.profile), pause_gate=r.free.wait,
@@ -539,6 +561,26 @@ class Session:
             await self.send({"type": "highlight", "task": task, "box": None})
             if self._speech_q.empty():
                 await self.send({"type": "orb", "state": "idle"})
+
+    async def pictures_for(self, task: str, text: str) -> None:
+        """'Show me in pictures' on one of Jagora's answers: Muse Image draws it."""
+        model = _model()
+        extras = _muse_extras(model)
+        if not text or not extras.get("images"):
+            return
+        r = Run(task)
+        io = WsIO(self, r)
+        a = Agent(model, None, io, lang=self.lang, **extras)
+        await self.send({"type": "orb", "state": "thinking"})
+        try:
+            result, _, _ = await a._picture_guide({"text": text})
+            if result.startswith(("the pictures could not", "could not plan")):
+                await self.agent_says(task, {"yo": "Mi ò lè yà á báyìí. Ẹ jọ̀ọ́ ẹ gbìyànjú lẹ́ẹ̀kan sí i.", "ha": "Ban iya zana shi yanzu ba. Sake gwadawa.",
+                                             "ig": "Enweghị m ike ise ya ugbu a. Biko nwaa ọzọ.", "pcm": "I no fit draw am now. Try again."}
+                                      .get(self.lang, "I couldn't draw it right now. Please try again."))
+        finally:
+            await io.close_step()
+            await self.send({"type": "orb", "state": "idle"})
 
     async def agent_says(self, task: str, text: str) -> None:
         await self.send({"type": "msg", "task": task, "msg": {"id": mid(), "kind": "agent", "text": text}})
@@ -678,6 +720,18 @@ class WsIO:
             await db.remember(s.user_id, t, "agent", f"[file] {data.get('name')}")
         elif kind == "verdict":
             await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "verdict", **data}})
+        elif kind == "reading":
+            await self.close_step()
+            await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "reading", **data}})
+            await db.remember(s.user_id, t, "agent", f"[read {data.get('kind')} with {data.get('read_by')}] {data.get('summary', '')}")
+        elif kind == "pictures":
+            await self.close_step()
+            base = settings.public_url.rstrip("/")
+            panels = [{**p, "url": p["url"] if p["url"].startswith("http") else base + p["url"]} for p in data["panels"]]
+            await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "pictures", "title": data.get("title", ""), "panels": panels}})
+            await db.remember(s.user_id, t, "agent", f"[picture guide] {data.get('title', '')}: " + " | ".join(p["caption"] for p in panels))
+            for p in panels:
+                s.speak(t, p["caption"])
         elif kind == "pointer":
             await s.send({"type": "pointer", "task": t, "x": data["x"], "y": data["y"], "visible": True, "clicking": data.get("clicking", False)})
         elif kind == "highlight":

@@ -54,6 +54,9 @@ export type Msg =
   | { id: string; kind: "media"; name: string; url: string; type: string; size: number; source?: string }
   /** a task Jagora will do on its own later */
   /** a site's terms and privacy policy, read for her */
+  | { id: string; kind: "reading"; read_by: string; name?: string; from?: string; summary: string; risk: "low" | "medium" | "high";
+      facts: { label: string; value: string }[]; deadlines: { what: string; date: string }[]; asks_her_to: string[]; red_flags: string[]; next_steps: string[] }
+  | { id: string; kind: "pictures"; title: string; panels: { caption: string; url: string }[] }
   | { id: string; kind: "terms"; site: string; verdict: "ok" | "caution" | "red"; summary: string; points: { level: "caution" | "red"; text: string }[]; urls?: string[] }
   /** Jagora is not sure what she means: she taps it on the live page */
   | { id: string; kind: "pointask"; question: string; status: "waiting" | "done" }

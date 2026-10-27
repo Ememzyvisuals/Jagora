@@ -168,7 +168,7 @@ export function Composer() {
               <button className="btn h-10 w-10 shrink-0 text-ink-2 hover:bg-white" onClick={() => file.current?.click()} aria-label="Add a photo or document">
                 <Paperclip size={20} />
               </button>
-              <input ref={file} type="file" accept="image/*,application/pdf" capture="environment" hidden onChange={(e) => attach(e.target.files?.[0])} />
+              <input ref={file} type="file" accept="image/*,application/pdf,video/mp4,video/webm,video/quicktime" hidden onChange={(e) => attach(e.target.files?.[0])} />
               {text.trim() ? (
                 <button className="btn btn-ink h-10 w-10 shrink-0" data-send="composer" onClick={send} aria-label="Send">
                   <PaperPlaneRight size={18} weight="fill" />

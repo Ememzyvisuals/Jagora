@@ -340,6 +340,92 @@ const TERMS: Record<"title" | "ok" | "caution" | "red" | "read", L> = {
   read: { en: "Read the terms", pcm: "Read the terms", yo: "Ka òfin náà", ha: "Karanta ka'idojin", ig: "Gụọ usoro ahụ" },
 };
 /** a site's terms and privacy policy, read for her: what to watch out for */
+const READ: Record<string, L> = {
+  title: { en: "Read from what you shared", pcm: "Wetin I read from wetin you send", yo: "Ohun tí mo kà nínú ohun tí ẹ fi ránṣẹ́", ha: "Abin da na karanta daga abin da ka aiko", ig: "Ihe m gụrụ n'ihe i zitere" },
+  due: { en: "Deadlines", pcm: "Last day", yo: "Ọjọ́ ìparí", ha: "Ranar ƙarshe", ig: "Ụbọchị njedebe" },
+  next: { en: "What to do", pcm: "Wetin to do", yo: "Ohun tí ẹ máa ṣe", ha: "Abin da za a yi", ig: "Ihe ị ga-eme" },
+  flags: { en: "Be careful", pcm: "Shine your eye", yo: "Ẹ ṣọ́ra", ha: "Ka yi hankali", ig: "Kpachara anya" },
+};
+
+/** Muse Wonder's reading of her photo, PDF or video: the facts, the dates, what it asks, and any scam signs */
+export function ReadingCard({ m }: { m: Extract<Msg, { kind: "reading" }> }) {
+  const lang = useApp((s) => s.lang);
+  const risky = m.risk !== "low" || m.red_flags.length > 0;
+  return (
+    <div className="rounded-[22px] bg-white p-4 shadow-[0_10px_30px_-20px_rgba(10,30,70,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
+      <p className="text-[12.5px] font-semibold text-ink-3">
+        {READ.title[lang]}
+        {m.from ? ` · ${m.from}` : ""}
+      </p>
+      <p className="mt-1 text-[15.5px] leading-snug text-ink">{m.summary}</p>
+      {m.facts.length > 0 && (
+        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[14.5px]">
+          {m.facts.slice(0, 8).map((f, i) => (
+            <div key={i} className="contents">
+              <dt className="text-ink-3">{f.label}</dt>
+              <dd className="font-semibold text-ink [overflow-wrap:anywhere]">{f.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {m.deadlines.length > 0 && (
+        <div className="mt-3 rounded-[14px] bg-accent-soft px-3 py-2">
+          <p className="text-[12.5px] font-semibold text-accent">{READ.due[lang]}</p>
+          {m.deadlines.map((d, i) => (
+            <p key={i} className="text-[14.5px] text-ink">
+              <b>{d.date}</b> · {d.what}
+            </p>
+          ))}
+        </div>
+      )}
+      {risky && m.red_flags.length > 0 && (
+        <div className="mt-3 rounded-[14px] bg-danger-soft px-3 py-2">
+          <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-danger">
+            <Warning size={14} weight="bold" /> {READ.flags[lang]}
+          </p>
+          {m.red_flags.map((f, i) => (
+            <p key={i} className="text-[14.5px] leading-snug text-ink">{f}</p>
+          ))}
+        </div>
+      )}
+      {m.next_steps.length > 0 && (
+        <div className="mt-3">
+          <p className="text-[12.5px] font-semibold text-ink-3">{READ.next[lang]}</p>
+          <ol className="mt-1 flex flex-col gap-1">
+            {m.next_steps.map((s, i) => (
+              <li key={i} className="flex gap-2 text-[14.5px] leading-snug text-ink">
+                <span className="font-semibold text-accent">{i + 1}.</span> {s}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      <p className="mt-3 text-[11.5px] text-ink-3">Read by {m.read_by}</p>
+    </div>
+  );
+}
+
+/** Muse Image picture guide: the same woman in every picture, a short caption under each (also read aloud) */
+export function PicturesCard({ m }: { m: Extract<Msg, { kind: "pictures" }> }) {
+  return (
+    <div className="rounded-[22px] bg-white p-3 shadow-[0_10px_30px_-20px_rgba(10,30,70,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
+      {m.title && <p className="px-1 pb-2 text-[15px] font-semibold text-ink">{m.title}</p>}
+      <div className="no-scrollbar -mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 pb-1">
+        {m.panels.map((p, i) => (
+          <figure key={i} className="w-[78%] max-w-[300px] shrink-0 snap-start">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={p.url} alt={p.caption} loading="lazy" className="aspect-square w-full rounded-[16px] bg-mist object-cover" />
+            <figcaption className="mt-1.5 flex gap-1.5 px-0.5 text-[14.5px] font-semibold leading-snug text-ink">
+              <span className="text-accent">{i + 1}</span> {p.caption}
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+      <p className="px-1 pt-1 text-[11.5px] text-ink-3">Drawn by Muse Image</p>
+    </div>
+  );
+}
+
 export function TermsCard({ m }: { m: Extract<Msg, { kind: "terms" }> }) {
   const lang = useApp((s) => s.lang);
   const tone = m.verdict === "red" ? "text-danger" : m.verdict === "caution" ? "text-stop" : "text-ok";

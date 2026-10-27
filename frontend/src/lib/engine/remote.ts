@@ -285,6 +285,12 @@ export async function remoteTakeover(task: string, on: boolean) {
   (await connect()).send(JSON.stringify({ type: "takeover", task, on }));
 }
 
+/** "Show me in pictures": Muse Image draws one of Jagora's answers as a picture guide. */
+export async function remotePictures(task: string, text: string) {
+  S().setOrb("thinking");
+  (await connect()).send(JSON.stringify({ type: "pictures", task, text }));
+}
+
 /** Open the line when the app opens, so reminders and results that came while she was away arrive at once. */
 export async function remoteWake() {
   try {

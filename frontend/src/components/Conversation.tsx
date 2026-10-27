@@ -10,7 +10,10 @@ import type { Lang } from "@/lib/i18n";
 import { t } from "@/lib/i18n";
 import { useApp, type Msg, type Task } from "@/lib/store";
 import { IconLock, IconScam, IconShield } from "./icons";
-import { Evidence, FileCard, MediaCard, MomentCard, PlanCard, PointAskCard, ReminderCard, ScheduledCard, TermsCard, VoiceBubble } from "./ChatCards";
+import { Evidence, FileCard, MediaCard, MomentCard, PicturesCard, PlanCard, PointAskCard, ReadingCard, ReminderCard, ScheduledCard, TermsCard, VoiceBubble } from "./ChatCards";
+import { remotePictures } from "@/lib/engine/remote";
+
+const IN_PICTURES: Record<Lang, string> = { en: "Show me in pictures", pcm: "Show me for picture", yo: "Fi hàn mí ní àwòrán", ha: "Nuna mini a hotuna", ig: "Gosi m na foto" };
 
 const enter = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as const } };
 
@@ -21,13 +24,37 @@ export function Conversation({ task }: { task: Task }) {
   }, [task.messages.length, task.messages.at(-1)]);
   return (
     <div className="flex flex-col gap-3 px-4 pb-4 pt-2">
-      {task.messages.map((m) => (
+      {task.messages.map((m, i) => (
         <motion.div key={m.id} {...enter}>
           <Item m={m} task={task} />
+          {live && m.kind === "agent" && m.text.length > 90 && task.status !== "working" && i === lastAgent(task) && (
+            <PicturesButton task={task} text={m.text} />
+          )}
         </motion.div>
       ))}
       <div ref={end} />
     </div>
+  );
+}
+
+const lastAgent = (task: Task) => task.messages.map((x) => x.kind).lastIndexOf("agent");
+
+/** Muse Image: her answer as a few pictures, for when reading is hard */
+function PicturesButton({ task, text }: { task: Task; text: string }) {
+  const lang = useApp((s) => s.lang);
+  const [asked, setAsked] = useState(false);
+  if (task.messages.some((x) => x.kind === "pictures")) return null;
+  return (
+    <button
+      disabled={asked}
+      onClick={() => {
+        setAsked(true);
+        void remotePictures(task.id, text);
+      }}
+      className="mt-2 inline-flex h-9 items-center gap-1.5 rounded-full border border-ink/15 px-3.5 text-[13.5px] font-semibold text-ink transition hover:bg-black/5 disabled:opacity-50"
+    >
+      {asked ? <CircleNotch size={15} className="animate-spin" /> : <ImageIcon size={15} />} {IN_PICTURES[lang]}
+    </button>
   );
 }
 
@@ -98,6 +125,10 @@ function Item({ m, task }: { m: Msg; task: Task }) {
       return <PointAskCard m={m} />;
     case "terms":
       return <TermsCard m={m} />;
+    case "reading":
+      return <ReadingCard m={m} />;
+    case "pictures":
+      return <PicturesCard m={m} />;
   }
 }
 

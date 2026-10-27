@@ -95,7 +95,9 @@ class MuseSpark(Model):
         self.usage = Usage()
 
     async def chat(self, messages, tools=None, effort="low", max_tokens=4000, kind="agent") -> Reply:
-        body: dict[str, Any] = {"model": self.model, "messages": messages, "max_tokens": max_tokens, "reasoning_effort": effort}
+        body: dict[str, Any] = {"model": self.model, "messages": messages, "max_tokens": max_tokens}
+        if not getattr(self, "open_weights", False):
+            body["reasoning_effort"] = effort  # Muse Spark and Wonder think; open-weight servers may not take this
         if tools:
             body["tools"] = tools
             body["tool_choice"] = "required"
