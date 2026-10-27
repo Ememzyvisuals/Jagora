@@ -23,10 +23,10 @@ export function WorkOrb({ onOpen }: { onOpen: () => void }) {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 40, scale: 0.7 }}
           transition={{ type: "spring", stiffness: 220, damping: 22 }}
-          className="absolute bottom-[calc(max(10px,env(safe-area-inset-bottom))+58px)] left-1/2 z-40 -translate-x-1/2 rounded-full active:scale-95"
+          className="absolute bottom-[calc(max(10px,env(safe-area-inset-bottom))+30px)] left-1/2 z-40 -translate-x-1/2 active:scale-95"
         >
           <motion.span className="block" animate={{ y: [0, -5, 0] }} transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}>
-            <Orb size={124} state={orb} levelRef={pulse} />
+            <Orb size={168} state={orb} levelRef={pulse} />
           </motion.span>
         </motion.button>
       )}

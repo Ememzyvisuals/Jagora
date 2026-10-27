@@ -1,6 +1,6 @@
 "use client";
 
-/* Jagora's presence: a round, soft cloud. Drawn live by the GPU from a small shader, so nothing heavy downloads.
+/* Jagora's presence: a soft cloud made of puffs (wider than tall, never a perfect ball). Drawn live by the GPU from a small shader, so nothing heavy downloads.
    Resting it is almost still, with a lumpy, cloud-like surface. With a voice it swells, its edge billows and the
    mist inside churns in time with the sound. */
 import { useEffect, useRef, type MutableRefObject } from "react";
@@ -14,27 +14,40 @@ float n(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);
  return mix(mix(mix(h(i),h(i+vec3(1,0,0)),f.x),mix(h(i+vec3(0,1,0)),h(i+vec3(1,1,0)),f.x),f.y),
             mix(mix(h(i+vec3(0,0,1)),h(i+vec3(1,0,1)),f.x),mix(h(i+vec3(0,1,1)),h(i+vec3(1,1,1)),f.x),f.y),f.z);}
 float fbm(vec3 p){float v=0.,a=.5;for(int k=0;k<5;k++){v+=a*n(p);p=p*2.03+vec3(1.7,9.2,3.1);a*=.5;}return v;}
+// one puff of the cloud: a soft ball that breathes on its own rhythm and swells with the voice
+float puff(vec2 q,vec2 c,float r,float ph){
+ float drift=.015+.03*think;
+ c+=vec2(sin(t*.37+ph),cos(t*.29+ph*1.7))*drift;
+ r*=1.+.045*sin(t*.8+ph*2.1)+amp*(.16+.12*sin(t*7.+ph*3.));
+ vec2 d=(q-c)/r;return exp(-dot(d,d)*2.3);}
+// the cloud: several puffs, wider than tall, rounder on top, flatter underneath (not a ball)
+float field(vec2 q){
+ // a row of puffs along the bottom and three rounded bumps on top: a small cumulus
+ float f=puff(q,vec2(-.42,-.13),.25,0.)+puff(q,vec2(-.14,-.11),.29,1.3)+puff(q,vec2(.16,-.11),.29,2.6)+puff(q,vec2(.44,-.13),.24,3.9)
+  +puff(q,vec2(-.25,.1),.26,5.2)+puff(q,vec2(.05,.19),.31,6.5)+puff(q,vec2(.31,.09),.24,7.8);
+ f*=smoothstep(-.5,-.28,q.y);   // soft but flat underneath
+ return f;}
 void main(){
- vec2 q=uv; float r=length(q), ang=atan(q.y,q.x);
- vec2 dir=vec2(cos(ang),sin(ang));
- float slow=t*(.09+.6*amp+.14*think);
- float R=.56*(1.+.025*sin(t*.9)+.012*sin(t*2.3))*(1.+.26*amp);
- R+=(fbm(vec3(dir*2.7,slow))-.5)*(.1+.12*amp);          // lumpy, cloud-like outline
- R+=(fbm(vec3(dir*6.,slow*1.6))-.5)*(.025+.04*amp);
- float z=sqrt(max(R*R-r*r,0.));
- vec3 P=vec3(q,z)*2.4;
- float sp=.12+1.1*amp+.25*think;
- float d=fbm(P+vec3(t*sp*.5,-t*sp*.3,t*sp*.4));
- float bump=fbm(P*3.1+vec3(0.,0.,t*.03)+d);                // small puffs on the surface
- vec3 N=normalize(vec3(q,z+1e-3));
- float light=clamp(dot(N,normalize(vec3(-.5,.62,.6))),0.,1.);
- float shade=light*.62+d*.42+(bump-.5)*.42;
- vec3 low=vec3(.66,.71,.79), mid=vec3(.86,.89,.93), hi=vec3(.99,.995,1.);
- vec3 col=mix(low,mid,smoothstep(.18,.62,shade));
+ vec2 q=uv*1.08;
+ float slow=t*(.07+.5*amp+.12*think);
+ float wisp=(fbm(vec3(q*3.,slow))-.5)*(.1+.16*amp)+(fbm(vec3(q*9.,slow*1.7))-.5)*(.04+.05*amp);
+ float F=field(q)+wisp;
+ float e=.012;
+ vec2 g=vec2(field(q+vec2(e,0.))-field(q-vec2(e,0.)),field(q+vec2(0.,e))-field(q-vec2(0.,e)))/(2.*e);
+ float thr=.46;
+ float hgt=clamp((F-thr)*1.4,0.,1.);
+ vec3 N=normalize(vec3(-g*.22,.35+hgt));
+ float light=clamp(dot(N,normalize(vec3(-.45,.6,.65))),0.,1.);
+ float sp=.1+.9*amp+.2*think;
+ float d=fbm(vec3(q*2.6,0.)+vec3(t*sp*.5,-t*sp*.3,t*sp*.4));
+ float bump=fbm(vec3(q*7.,t*.04)+d);
+ float shade=light*.66+d*.36+(bump-.5)*.38+hgt*.12;
+ vec3 low=vec3(.64,.70,.79), mid=vec3(.86,.89,.93), hi=vec3(.99,.995,1.);
+ vec3 col=mix(low,mid,smoothstep(.2,.62,shade));
  col=mix(col,hi,smoothstep(.55,.98,shade)+amp*.1);
- float body=smoothstep(R,R-.13,r);
- float haze=exp(-max(r-R*.86,0.)*11.)*.28*(1.-body);
- float a=clamp(body*(.86+.14*d)+haze,0.,1.);
+ float body=smoothstep(thr-.18,thr+.16,F);
+ float haze=smoothstep(thr-.4,thr-.08,F)*.26*(1.-body);
+ float a=clamp(body*(.84+.16*d)+haze,0.,1.);
  gl_FragColor=vec4(col*a,a);
 }`;
 

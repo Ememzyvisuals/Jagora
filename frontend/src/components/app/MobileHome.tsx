@@ -202,28 +202,29 @@ export function AppIcon({ site, size = 46 }: { site: Site; size?: number }) {
   const { Icon, from, to, domain } = site;
   const [failed, setFailed] = useState(!domain);
   const logo = domain ? LOGO[domain] : undefined;
+  // real logos as they are, with no box behind them (the Instagram logo is its own rounded square)
+  const lift = { filter: "drop-shadow(0 6px 10px rgba(10,30,70,.22))" };
   if (logo)
-    return logo.fill ? (
+    return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={logo.src} alt="" width={size} height={size} draggable={false} style={{ width: size, height: size, borderRadius: size * 0.26, ...TILE }} />
-    ) : (
-      <span className="grid place-items-center overflow-hidden bg-white" style={{ width: size, height: size, borderRadius: size * 0.26, ...TILE }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={logo.src} alt="" draggable={false} style={{ width: size * 0.6, height: size * 0.6, objectFit: "contain" }} />
-      </span>
+      <img
+        src={logo.src}
+        alt=""
+        draggable={false}
+        style={logo.fill ? { width: size, height: size, borderRadius: size * 0.26, ...lift } : { width: size * 0.9, height: size * 0.9, margin: size * 0.05, objectFit: "contain", ...lift }}
+      />
     );
   if (!failed && domain)
     return (
-      <span className="grid place-items-center overflow-hidden bg-white" style={{ width: size, height: size, borderRadius: size * 0.26, ...TILE }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`https://www.google.com/s2/favicons?domain=${domain}&sz=128`}
-          alt=""
-          onError={() => setFailed(true)}
-          onLoad={(e) => e.currentTarget.naturalWidth <= 16 && setFailed(true)}
-          style={{ width: size * 0.62, height: size * 0.62 }}
-        />
-      </span>
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={`https://www.google.com/s2/favicons?domain=${domain}&sz=128`}
+        alt=""
+        draggable={false}
+        onError={() => setFailed(true)}
+        onLoad={(e) => e.currentTarget.naturalWidth <= 16 && setFailed(true)}
+        style={{ width: size * 0.84, height: size * 0.84, margin: size * 0.08, objectFit: "contain", ...lift }}
+      />
     );
   return (
     <span
@@ -519,14 +520,14 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
             {small ? (
               <button onClick={() => setSmall(false)} className="flex h-9 items-center gap-1.5 px-4 text-[13px] font-semibold text-ink">
                 {onPage && <LockSimple size={12} weight="bold" className="text-ink-2" />}
-                {onPage ? "skillsfair.ng" : "Jagora"}
+                {onPage ? host : "Jagora"}
               </button>
             ) : (
               <div className="flex h-[52px] items-center gap-2 pl-1.5 pr-1.5">
                 <button onClick={() => setSheet(!sheet)} aria-label="Talk to Jagora" className="shrink-0 transition active:scale-90" data-tour="orb">
                   <Orb size={42} state={orb} levelRef={pulse} />
                 </button>
-                <button onClick={() => setSheet(true)} className="min-w-0 flex-1 truncate text-left text-[15px] font-medium text-ink-2">
+                <button onClick={() => setSheet(true)} className="min-w-0 flex-1 truncate text-left text-[15px] font-semibold text-ink">
                   {label}
                 </button>
                 {onPage && <ArrowClockwise size={17} className="shrink-0 text-ink-2" />}
