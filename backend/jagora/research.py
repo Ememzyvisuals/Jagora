@@ -86,5 +86,58 @@ def check_official(url_or_site: str, claimed: str = "") -> dict:
     return {"site": site, "verdict": "not confirmed", "owner": "", "reasons": reasons}
 
 
+async def check_link(url: str) -> dict:
+    """Where a link really goes, without opening it in a browser: every redirect hop, shorteners, IP loggers (links that
+    record who opened them), tracking codes that identify her, and the guard's verdict on the final site."""
+    import httpx
+    from urllib.parse import parse_qsl, urlparse
+
+    from jagora.guard import SHORTENERS, TRACKING_PARAMS
+
+    if "://" not in url:
+        url = "https://" + url.strip()
+    hops, warnings = [url], []
+    final = url
+    try:
+        async with httpx.AsyncClient(timeout=12, follow_redirects=False, headers={"User-Agent": "Mozilla/5.0 Jagora link check"}) as c:
+            for _ in range(8):
+                v = guard.check(final)
+                if v.blocked:
+                    break  # never touch a dangerous address, even to follow it
+                r = await c.head(final)
+                if r.status_code in (405, 403, 400):
+                    r = await c.get(final)
+                loc = r.headers.get("location")
+                if r.status_code in (301, 302, 303, 307, 308) and loc:
+                    final = str(httpx.URL(final).join(loc))
+                    hops.append(final)
+                    continue
+                m = re.search(r'http-equiv=["\']?refresh["\']?[^>]*url=([^"\'>]+)', r.text[:4000] if r.request.method == "GET" else "", re.I)
+                if m:
+                    final = str(httpx.URL(final).join(m.group(1).strip()))
+                    hops.append(final)
+                    continue
+                break
+    except Exception as e:  # noqa: BLE001
+        warnings.append(f"could not follow the link all the way ({type(e).__name__})")
+    sites = [registrable(h) for h in hops]
+    for h, st in zip(hops, sites):
+        v = guard.check(h)
+        if v.category == "iplogger":
+            warnings.append(f"{st} is an IP logger: opening it records your IP address and rough location")
+        elif v.blocked:
+            warnings.append(f"{st}: {v.reason}")
+    if any(st in SHORTENERS for st in sites):
+        warnings.append("the link is shortened, which hides where it really goes")
+    tracking = sorted({k for h in hops for k, _ in parse_qsl(urlparse(h).query) if TRACKING_PARAMS.match(k)})
+    if tracking:
+        warnings.append("the link carries tracking codes (" + ", ".join(tracking[:6]) + ") that tell the sender you opened it")
+    fv = guard.check(final)
+    verdict = "dangerous" if any(guard.check(h).blocked for h in hops) else "tracking" if tracking or any(s in SHORTENERS for s in sites) else \
+        "official" if fv.official else "unknown site"
+    clean = final.split("?")[0] if tracking else final
+    return {"final": final, "clean": clean, "hops": hops, "verdict": verdict, "warnings": warnings, "owner": fv.owner}
+
+
 def same_site(a: str, b: str) -> bool:
     return registrable(a) == registrable(b)

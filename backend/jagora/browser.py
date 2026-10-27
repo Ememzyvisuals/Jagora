@@ -11,6 +11,7 @@ Every page goes through the guard (guard.py): blocked sites, ads, pop-ups and re
 from __future__ import annotations
 
 import asyncio
+import os
 import base64
 import difflib
 import html
@@ -144,7 +145,7 @@ class PdfView:
 
 @dataclass
 class Notice:
-    kind: str  # blocked | gambling | popup | ad | cookie | overlay | redirect | download
+    kind: str  # blocked | popup | ad | cookie | overlay | redirect | download | injection | hidden
     site: str
     reason: str
 
@@ -190,7 +191,10 @@ class Browser:
 
     async def start(self) -> "Browser":
         self._pw = await async_playwright().start()
-        self._browser = await self._pw.chromium.launch(headless=settings.headless, args=["--disable-notifications"])
+        args = ["--disable-notifications"]
+        if os.environ.get("JAGORA_HOST_RULES"):  # the attack test suite serves its fake sites from this machine
+            args.append(f"--host-resolver-rules={os.environ['JAGORA_HOST_RULES']}")
+        self._browser = await self._pw.chromium.launch(headless=settings.headless, args=args)
         self._ctx = await self._browser.new_context(
             viewport=self.viewport, locale="en-NG", timezone_id="Africa/Lagos", accept_downloads=True, permissions=[],
             is_mobile=self.mobile, has_touch=self.mobile, device_scale_factor=2 if self.mobile else 1,
@@ -237,6 +241,15 @@ class Browser:
         await self.close()
 
     # ---- guard hooks --------------------------------------------------------------------------------------------
+
+    async def _hide_traps(self, page) -> None:
+        """Text a person cannot see (the usual hiding place for instructions to AI agents) is hidden before reading."""
+        try:
+            n = await page.evaluate(guardmod.HIDE_TRAPS_JS)
+            if n:
+                self.notice("hidden", SiteVerdict(registrable(page.url), "ok", reason=f"{n} piece(s) of invisible text were ignored"))
+        except Exception:  # noqa: BLE001
+            pass
 
     def notice(self, kind: str, v: SiteVerdict) -> None:
         if self.notices and self.notices[-1].kind == kind and self.notices[-1].site == v.site:
@@ -293,6 +306,7 @@ class Browser:
         page = self._need_page()
         await self._settle()
         await self.show_original()  # the agent always reads the page as published
+        await self._hide_traps(page)
         data: dict[str, Any] = await page.evaluate(SNAPSHOT_JS, {"marks": marks})
         shot = b""
         if marks:
@@ -308,11 +322,18 @@ class Browser:
         for p in self.pages:
             pv = self.pdfs.get(id(p))
             tabs.append((pv.title if pv else (await _safe_title(p))) or p.url)
-        if not pdf and url.startswith("http") and guard.page_text_flag(text) == "adult":
-            v = SiteVerdict(registrable(url), "adult", reason="this page shows adult content")
+        v = guard.page_verdict(url, f"{title}\n{text}") if not pdf and url.startswith("http") else None
+        if v:
             self.notice("blocked", v)
-            await page.set_content(guardmod.BLOCK_PAGE.format(reason="This page shows adult content.", site=v.site))
+            await page.set_content(guardmod.BLOCK_PAGE.format(reason=v.reason[:1].upper() + v.reason[1:] + ".", site=v.site))
             return await self.snapshot(marks)
+        # text written to give orders to AI assistants is taken out before the model sees the page
+        text, cut = guardmod.defang(text)
+        for e in els:
+            e.label, c2 = guardmod.defang(e.label or "")
+            cut += c2
+        if cut:
+            self.notice("injection", SiteVerdict(registrable(url), "ok", reason=f"{cut} piece(s) of text on this page tried to give orders to AI assistants"))
         await self.show_translated()  # and she sees it in her language while the agent thinks
         return Snapshot(url=url, title=title, headings=data["headings"], errors=data["errors"], text=text,
                         scroll=data["scroll"], elements=els, screenshot=shot,
@@ -554,7 +575,8 @@ class Browser:
                     except Exception:  # noqa: BLE001
                         pass
                     await p.evaluate(guardmod.CLEAN_JS)
-                    text = await p.evaluate(READ_JS)
+                    await self._hide_traps(p)
+                    text = guardmod.defang(await p.evaluate(READ_JS))[0]
                     title = await p.title()
                     when = await p.evaluate(DATE_JS)
                     text = (f"[page dated {when}] " if when else "") + text
@@ -738,7 +760,8 @@ class Browser:
             start = (part - 1) * pages_per
             text = "\n\n".join(f"[page {i + 1}]\n" + pv.text(i + 1) for i in range(start, min(pv.pages, start + pages_per)))
             return {"text": re.sub(r"[ \t]+", " ", text)[:size * 2], "part": part, "parts": -(-pv.pages // pages_per)}
-        full: str = await self._need_page().evaluate(READ_JS)
+        await self._hide_traps(self._need_page())
+        full: str = guardmod.defang(await self._need_page().evaluate(READ_JS))[0]
         parts = max(1, -(-len(full) // size))
         part = max(1, min(parts, part))
         return {"text": full[(part - 1) * size: part * size], "part": part, "parts": parts}

@@ -4,7 +4,10 @@ The model proposes; this decides. It cannot be argued with by the model or by te
 - Jagora never types passwords, PINs, one-time codes, card details, BVN or NIN. She types those herself.
 - Anything that submits, pays, sends, agrees or deletes waits for her spoken or tapped "yes".
 - Leaving the site she started on is announced to her first.
-- Downloading app installers is refused outright.
+- Downloading app installers and programs is refused outright.
+- Her account's locks are hers: changing a password, turning off two-step login, changing the recovery email or
+  phone, deleting or closing an account, and adding a new person to send money to are done by her (Take over),
+  never by Jagora, whatever a page or a request says.
 """
 
 from __future__ import annotations
@@ -40,7 +43,12 @@ COMMIT = re.compile(
     r"withdraw|delete|remove|cancel (my|subscription|account)|sign ?up|create account|finish|complete|proceed|"
     r"make payment|accept|agree)\b", re.I)
 AGREE = re.compile(r"\b(agree|accept|consent|terms|conditions|privacy)\b", re.I)
-INSTALLER = re.compile(r"\.(apk|exe|msi|dmg|bat|cmd|scr|jar|xapk)(\?|$)", re.I)
+INSTALLER = re.compile(r"\.(apk|apks|xapk|exe|msi|msix|appx|dmg|pkg|deb|rpm|appimage|bat|cmd|scr|jar|ps1|vbs|hta|lnk|iso)(\?|#|$)", re.I)
+HER_LOCKS = re.compile(
+    r"\b(change|reset|update|set) (your |my |the )?(new )?(password|pin|passcode)\b|\b(disable|turn off|remove|deactivate) "
+    r"(the )?(two[- ]factor|2fa|two[- ]step|2-step|authenticator|login approvals?)|\b(change|update|edit) (the |your |my )?"
+    r"(recovery|backup|security) (email|phone|number|question)|\b(delete|close|deactivate|terminate) (my |your |this |the )?account\b|"
+    r"\badd (a )?(new )?(beneficiary|recipient|payee|trusted device|device)\b|\b(link|add) (a )?new (bank|card)\b", re.I)
 
 
 def site(url: str) -> str:
@@ -60,6 +68,9 @@ def check_click(el: Element, current_url: str, home_site: str) -> Decision:
     if el.href and INSTALLER.search(el.href):
         return Decision(Verdict.BLOCK, "that link downloads an app installer, which Jagora never opens")
     words = f"{el.label} {el.name}"
+    if el.kind in ("button", "link") and HER_LOCKS.search(words):
+        return Decision(Verdict.HANDOFF, f'"{el.label}" changes the locks on her account or who can receive her money; '
+                                         "she does this herself on the page")
     if el.kind == "checkbox" and AGREE.search(words) and not el.checked:
         return Decision(Verdict.CONFIRM, f'ticking "{el.label}" agrees to something on her behalf')
     if el.type == "reset":

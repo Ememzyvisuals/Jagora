@@ -657,6 +657,10 @@ class WsIO:
             await s.send({"type": "msg", "task": t, "msg": {"id": self.r.step_id, "kind": "step", "text": data["text"], "status": "doing"}})
             await s.send({"type": "orb", "state": "thinking"})
         elif kind == "guard":
+            if data.get("kind") in ("blocked", "injection", "refused"):
+                await db.log(s.user_id, data["kind"], f"{data.get('site', '')}: {data.get('text', '')}"[:300])
+            if data.get("kind") in ("blocked", "refused"):
+                return  # Jagora says it in words already
             await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "step", "text": data["text"][:1].upper() + data["text"][1:],
                                                              "status": "done", "guard": True}})
         elif kind == "evidence":
@@ -806,11 +810,13 @@ async def admin_overview(request: Request):
     users = await db.exec("select id, email, name, plan, code, created, last_seen, credits from users order by created desc limit 500")
     counts = {r["user_id"]: r for r in await db.exec(
         "select user_id, sum(case when kind='task' then 1 else 0 end) as tasks, "
-        "sum(case when kind='done' then 1 else 0 end) as done, max(t) as last from events group by user_id")}
+        "sum(case when kind='done' then 1 else 0 end) as done, sum(case when kind in ('blocked','refused') and t > ? then 1 else 0 end) as flags, "
+        "max(t) as last from events group by user_id", (time.time() - 86400,))}
     names = {u["id"]: u for u in users}
     for u in users:
         c = counts.get(u["id"]) or {}
         u["tasks"], u["done"], u["last_event"] = int(c.get("tasks") or 0), int(c.get("done") or 0), c.get("last") or 0
+        u["flags"] = int(c.get("flags") or 0)  # blocked sites and refused requests in the last day
         u["online"] = u["id"] in SESSIONS
     events = await db.exec("select t, user_id, kind, detail from events order by t desc limit 200")
     for e in events:

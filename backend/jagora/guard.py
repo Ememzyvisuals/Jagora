@@ -3,7 +3,11 @@
 - Adult, phishing and malware sites: blocked before they load. Daily-updated public lists, plus a lookalike check
   against the real sites of Nigerian banks, schools, exam bodies and government, plus a content check on pages no
   list knows.
-- Betting sites: held until she says yes (her choice, once per site per session).
+- Betting and gambling sites: blocked, whatever they call themselves ("trading", "a game").
+- Scams Nigerians meet every day: exam fraud ("expo", "runz", "JAMB score upgrade"), fixed-return investment
+  schemes, fake documents, hacking services, drugs and weapons, and pirated films, music and apps. Blocked by public
+  lists, by the site's name, and by what the page itself says.
+- Text hidden in a page to give instructions to AI assistants is removed before the model reads the page.
 - Ads and trackers: their requests are cut off; pop-up ads and full-screen overlays are closed; cookie banners
   are declined.
 - Pop-up tabs and redirects the agent did not ask for are closed or undone; installers never download; site
@@ -29,7 +33,10 @@ LISTS_DIR = DATA_DIR / "blocklists"
 # Public lists, refreshed once a day. Hosts format or one domain per line.
 FEEDS = {
     "adult": ["https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn-only/hosts"],
-    "gambling": ["https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-only/hosts"],
+    "gambling": ["https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-only/hosts",
+                 "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/gambling.txt"],
+    "piracy": ["https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/anti.piracy.txt"],
+    "scam": ["https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/fake.txt"],
     "malicious": ["https://urlhaus.abuse.ch/downloads/hostfile/",
                   "https://raw.githubusercontent.com/mitchellkrogza/Phishing.Database/master/phishing-domains-ACTIVE.txt"],
     "ads": ["https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"],
@@ -47,7 +54,121 @@ SEED = {
                  "accessbet.com", "surebet247.com", "livescorebet.com", "betano.ng", "frapapa.com", "betwinner.com"},
     "adult": set(),
     "malicious": set(),
+    "piracy": {"thepiratebay.org", "1337x.to", "yts.mx", "rarbg.to", "fmovies.to", "123movies.to", "putlocker.vip", "soap2day.to",
+               "gomovies.sx", "9anime.to", "fzmovies.net", "o2tvseries.com", "tooxclusive.com", "naijaloaded.com.ng"},
+    "scam": set(),
+    "fraud": set(),
+    # links that record the IP address (and so the rough location) of whoever opens them
+    "iplogger": {"grabify.link", "grabify.org", "iplogger.org", "iplogger.com", "iplogger.ru", "iplogger.co", "iplogger.info", "2no.co",
+                 "yip.su", "iplis.ru", "02ip.ru", "ezstat.ru", "ipgrabber.ru", "ipgraber.ru", "blasze.com", "blasze.tk", "ps3cfw.com",
+                 "bmwforum.co", "leancoding.co", "quickmessage.us", "spottyfly.com", "stopify.co", "freegiftcards.co", "headshot.monster",
+                 "gaming-at-my.best", "progaming.monster", "yourmy.monster", "imageshare.best", "screenshot.best", "gamingfun.me",
+                 "catsnthing.com", "curiouscat.club", "joinmy.site", "fortnitechat.site", "fortnite.space", "canarytokens.com",
+                 "canarytokens.org", "iplogger.me", "lovebird.guru", "trulove.guru", "dateing.club", "otherhalf.life", "shrekis.life",
+                 "datasig.io", "datauth.io", "headshot.monster", "xn--yutube-iqc.com", "xn--discrd-zxa.com"},
 }
+SHORTENERS = {"bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd", "buff.ly", "cutt.ly", "rebrand.ly", "shorturl.at", "tiny.cc",
+              "rb.gy", "s.id", "bl.ink", "short.io", "linktr.ee", "lnkd.in", "t.ly", "v.gd", "qr.ae", "shorte.st", "adf.ly", "ouo.io"}
+TRACKING_PARAMS = re.compile(r"^(utm_\w+|fbclid|gclid|dclid|msclkid|mc_eid|mc_cid|igshid|yclid|_hsenc|_hsmi|mkt_tok|ref_?id|trk|tracking_?id|"
+                             r"clickid|click_id|affid|aff_id|subid|sub_id|uid|cid|email|e|recipient)$", re.I)
+
+# What a site calls itself in its address.
+FRAUD_HOST = re.compile(r"(waec|neco|jamb|nabteb|bece|utme|gce|ssce)[\w-]*(expo|runz|runs|upgrade|answers?|questions?leak)|"
+                        r"(expo|runz)[\w-]*(waec|neco|jamb|nabteb|gce)|scoreupgrade|resultupgrade|"
+                        r"fake[\w-]*(nin|id|certificate|passport|degree|receipt|alert)|novelty-?doc|"
+                        r"double[\w-]*(your)?[\w-]*money|(bvn|atm|whatsapp|facebook|instagram)[\w-]*hack|hack[\w-]*(bvn|atm|whatsapp|facebook|instagram)", re.I)
+PIRACY_HOST = re.compile(r"torrent|123movies|fmovies|putlocker|soap2day|gomovies|9anime|fzmovies|o2tv|waploaded|netnaija", re.I)
+GAMBLING_HOST = re.compile(r"(^|[.-])(bet|bets|betting|casino|slots?|jackpot|sportsbook|poker|lotto)([.-]|\d|$)|"
+                           r"\d(bet|xbet)|(naija|sure|merry|naira|access|bang|sporty|cash|super|smart|top|pro|win|mega|lucky)bet|"
+                           r"^bet(now|win|\d+|naija|ng|9ja|king|way|ano|pawa|winner|zone|land|hub|planet|casino|bonus|slip|ting|ika)|"
+                           r"msport|paripesa|melbet|aviator", re.I)
+
+# What a page says about itself (for pages no list knows yet). Each pattern counts once; two kinds of evidence or
+# one unmistakable phrase decides.
+PAGE_SIGNS: dict[str, tuple[str, list[re.Pattern], list[re.Pattern]]] = {
+    "gambling": ("this is a betting or gambling site", [
+        re.compile(r"\bbet ?slip\b|\bplace (a |your )?bet\b|\bsportsbook\b|\bcasino\b", re.I)], [
+        re.compile(r"\bodds\b", re.I), re.compile(r"\bjackpot\b", re.I), re.compile(r"\bdeposit bonus|welcome bonus|free bets?\b", re.I),
+        re.compile(r"\b(virtuals?|aviator|spin(s)? to win|slots?)\b", re.I), re.compile(r"\b(stake|cash ?out|accumulator|booking code)\b", re.I)]),
+    "fraud": ("this site sells exam leaks or fake results, a crime that also cancels results", [
+        re.compile(r"\b(waec|neco|jamb|nabteb|gce|ssce|bece|utme)\s+(expo|runz|runs)\b|\b(jamb|utme)\s+(score|result)\s+upgrade|"
+                   r"upgrade (your|my) (jamb|utme|waec|neco) (score|result)", re.I)], [
+        re.compile(r"\bexpo\b|\brunz\b", re.I), re.compile(r"(questions and answers|answers) (before|ahead of) the exam", re.I),
+        re.compile(r"\b(miracle|special) cent(er|re)\b", re.I), re.compile(r"\bsubscribe (now )?(for|to get) (the )?answers\b", re.I)]),
+    "scam": ("this looks like an investment scam: it promises fixed or doubled returns", [
+        re.compile(r"double your (money|investment)|guaranteed (daily|weekly|monthly) (returns?|profits?|roi)|"
+                   r"earn \d{1,3}% (daily|every day|per day|weekly)|\brecommit(ment)?\b|get help.{0,20}provide help", re.I)], [
+        re.compile(r"\b(roi|returns?) of \d{2,3}%", re.I), re.compile(r"\b(invest|deposit) .{0,30}(and|to) (get|receive|earn) .{0,20}(in|within|after) \d+ (hours?|days?)", re.I),
+        re.compile(r"\b(referral bonus|upline|downline|matching scheme)\b", re.I), re.compile(r"\brisk[- ]free\b|\bno risk\b", re.I)]),
+    "fakedocs": ("this site sells fake documents", [
+        re.compile(r"\b(buy|order|get) (a )?(fake|novelty|counterfeit) (nin|id|certificate|passport|degree|driver'?s licen[cs]e|receipt)|"
+                   r"\bfake (bank )?alert\b|\bcertificate without (writing|sitting|taking) (the )?exam", re.I)], []),
+    "hacking": ("this site offers hacking or carding, which is a crime", [
+        re.compile(r"\bhack (into )?(any |someone'?s |a )?(whatsapp|facebook|instagram|bank|bvn|atm|account|phone)|\bbvn hack|"
+                   r"\b(carding|cc dumps?|clone (a )?(sim|card)|spy on (his|her|their|someone'?s) (phone|whatsapp))\b", re.I)], []),
+    "drugs": ("this site sells drugs or weapons", [
+        re.compile(r"\bbuy (cocaine|heroin|meth|crack|codeine syrup|tramadol without prescription|guns?|pistols?|rifles?|ammunition)\b|"
+                   r"\bdark ?(web|net) market\b", re.I)], []),
+}
+BLOCKED_KINDS = ("iplogger", "adult", "malicious", "lookalike", "gambling", "piracy", "scam", "fraud", "fakedocs", "hacking", "drugs")
+
+# Text written to steer AI assistants ("prompt injection"). Removed from what the model reads, and noted.
+INJECTION = re.compile(
+    r"[^.\n]{0,160}(ignore (all |any )?(the )?(previous|prior|above|earlier|your) (instructions|rules|prompts?)|disregard (your|all|the|previous) "
+    r"(instructions|rules)|(new|updated|important) instructions? (for|to) (the )?(ai|assistant|agent|model)|you are (now )?(an? )?(ai|llm|language model|"
+    r"assistant|agent)\b|system prompt|as an ai (agent|assistant)|(ai|llm) (agents?|assistants?)[,:]? (please |must |should )|"
+    r"<\|?(im_start|system)\|?>|\[/?inst\]|developer mode|jailbreak|do not tell (the )?user|without (telling|asking) (the )?user)[^.\n]{0,240}[.\n]?", re.I)
+
+
+# Addresses that can run code or read the server's own files. Tests open local pages (JAGORA_ALLOW_FILE=1).
+import os as _os  # noqa: E402
+
+BAD_SCHEMES = ("javascript:", "data:text/html", "vbscript:") + (() if _os.environ.get("JAGORA_ALLOW_FILE") == "1" else ("file:",))
+
+
+def defang(text: str) -> tuple[str, int]:
+    """Text aimed at AI assistants, taken out. Returns the cleaned text and how many pieces were removed."""
+    if not text:
+        return text, 0
+    n = 0
+
+    def cut(_m):
+        nonlocal n
+        n += 1
+        return " [removed: text written to give orders to AI assistants] "
+
+    return INJECTION.sub(cut, text), n
+
+
+# Runs in the page before it is read: hides text a person cannot see (transparent, tiny, off-screen, clipped, or the
+# same colour as its background), the usual hiding place for instructions aimed at AI agents.
+HIDE_TRAPS_JS = r"""
+() => {
+  let hidden = 0;
+  const seen = new Set();
+  const lum = (c) => { const m = c.match(/[\d.]+/g); if (!m) return null; const [r, g, b, a = 1] = m.map(Number); if (a < 0.1) return null;
+    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+  const bgOf = (e) => { for (let x = e; x; x = x.parentElement) { const l = lum(getComputedStyle(x).backgroundColor); if (l !== null) return l; } return 1; };
+  const W = document.documentElement.scrollWidth, H = document.documentElement.scrollHeight;
+  const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+  let n = 0;
+  while (walker.nextNode() && n++ < 20000) {
+    const t = walker.currentNode; const e = t.parentElement;
+    if (!e || seen.has(e) || !t.nodeValue.trim() || t.nodeValue.trim().length < 12) continue;
+    seen.add(e);
+    const s = getComputedStyle(e); const r = e.getBoundingClientRect();
+    const tiny = parseFloat(s.fontSize) < 4;
+    const clear = +s.opacity < 0.08;
+    const off = r.right < -5 || r.bottom < -5 + (-scrollY) || r.left > W + 5 || r.top + scrollY > H + 5 || parseFloat(s.textIndent) < -500;
+    const clipped = /rect\(0(px)?,? ?0(px)?,? ?0(px)?,? ?0(px)?\)/.test(s.clip) || /inset\(\s*(50|100)%/.test(s.clipPath) ||
+                    ((r.width <= 1 || r.height <= 1) && s.overflow === 'hidden');
+    let same = false;
+    if (!tiny && !clear) { const fg = lum(s.color); const bg = bgOf(e); if (fg !== null) same = Math.abs(fg - bg) < 0.02; }
+    if (tiny || clear || off || clipped || same) { e.setAttribute('data-jg-hidden', '1'); e.style.setProperty('display', 'none', 'important'); hidden++; }
+  }
+  return hidden;
+}
+"""
 
 ADULT_WORDS = re.compile(r"porn|xxx|xvideo|xhamster|hentai|nsfw|onlyfans|camgirl|sexcam|redtube|youporn|brazzers|livejasmin|chaturbate|stripchat|nude", re.I)
 ADULT_TEXT = re.compile(r"\b(porn|xxx|nude|naked|sex ?videos?|hot ?girls|18\+ ?only|adult content|explicit|milf|hentai|webcam ?girls?|escort)\b", re.I)
@@ -124,13 +245,13 @@ def _levenshtein(a: str, b: str) -> int:
 @dataclass
 class SiteVerdict:
     site: str
-    category: str  # ok | official | adult | malicious | lookalike | gambling | ads
+    category: str  # ok | official | ads | one of BLOCKED_KINDS
     owner: str = ""
     reason: str = ""
 
     @property
     def blocked(self) -> bool:
-        return self.category in ("adult", "malicious", "lookalike")
+        return self.category in BLOCKED_KINDS
 
     @property
     def official(self) -> bool:
@@ -197,6 +318,8 @@ class Guard:
             return SiteVerdict(site, "lookalike", reason="the address uses look-alike letters, a common phishing trick")
         if site in OFFICIAL:
             return SiteVerdict(site, "official", OFFICIAL[site], f"{site} is the official site of {OFFICIAL[site]}")
+        if self._in("iplogger", host):
+            return SiteVerdict(site, "iplogger", reason="this link records the IP address and rough location of whoever opens it")
         if self._in("malicious", host):
             return SiteVerdict(site, "malicious", reason="this site is on public phishing and malware lists")
         if self._in("adult", host) or ADULT_WORDS.search(site):
@@ -204,8 +327,14 @@ class Guard:
         look = self.lookalike(site)
         if look:
             return SiteVerdict(site, "lookalike", reason=look)
-        if self._in("gambling", host):
-            return SiteVerdict(site, "gambling", reason="this is a betting site")
+        if self._in("gambling", host) or GAMBLING_HOST.search(host):
+            return SiteVerdict(site, "gambling", reason="this is a betting or gambling site, and Jagora does not open those")
+        if self._in("piracy", host) or PIRACY_HOST.search(site):
+            return SiteVerdict(site, "piracy", reason="this site shares pirated films, music or apps")
+        if self._in("scam", host):
+            return SiteVerdict(site, "scam", reason="this site is on public lists of fake shops and scams")
+        if FRAUD_HOST.search(site):
+            return SiteVerdict(site, "fraud", reason="the name of this site advertises exam fraud, fake documents, money doubling or hacking")
         if site.endswith(OFFICIAL_TLDS):
             kind = "government" if ".gov" in site or ".mil" in site else "school"
             return SiteVerdict(site, "official", site.split(".")[0].upper(), f"{site} is a registered {kind} address ({site.split('.', 1)[1]})")
@@ -233,6 +362,22 @@ class Guard:
         """For pages no list knows: lots of adult words means it is an adult page."""
         hits = len(ADULT_TEXT.findall(text[:6000]))
         return "adult" if hits >= 4 else ""
+
+    def page_verdict(self, url: str, text: str) -> SiteVerdict | None:
+        """What a page says about itself, for sites no list knows yet. Official sites are trusted (a news page on
+        WAEC's site may mention 'expo' to warn against it)."""
+        site = registrable(url)
+        if site in OFFICIAL or site.endswith(OFFICIAL_TLDS):
+            return None
+        t = text[:8000]
+        if self.page_text_flag(t) == "adult":
+            return SiteVerdict(site, "adult", reason="this page shows adult content")
+        for cat, (reason, strong, weak) in PAGE_SIGNS.items():
+            s = sum(1 for p in strong if p.search(t))
+            w = sum(1 for p in weak if p.search(t))
+            if s >= 1 and (w >= 1 or not weak) or w >= 3 or (s >= 1 and cat != "gambling"):
+                return SiteVerdict(site, cat, reason=reason)
+        return None
 
 
 def parse_list(text: str) -> set[str]:
@@ -309,6 +454,23 @@ CLEAN_JS = r"""
 """
 
 
+# Runs before any page script: notes when a site asks for her location, camera, microphone, clipboard, contacts,
+# notifications or screen. The browser refuses them all; she is told which site asked.
+ASKS_JS = r"""
+(() => {
+  const tell = (what) => { try { window.__jgAsked && window.__jgAsked(what); } catch (e) {} };
+  const wrap = (obj, name, what) => { if (!obj || !obj[name]) return; const f = obj[name].bind(obj);
+    obj[name] = function (...a) { tell(what); return f(...a); }; };
+  try { wrap(navigator.geolocation, 'getCurrentPosition', 'your location'); wrap(navigator.geolocation, 'watchPosition', 'your location'); } catch (e) {}
+  try { wrap(navigator.mediaDevices, 'getUserMedia', 'your camera or microphone'); wrap(navigator.mediaDevices, 'getDisplayMedia', 'your screen'); } catch (e) {}
+  try { wrap(navigator.clipboard, 'readText', 'what you copied (clipboard)'); wrap(navigator.clipboard, 'read', 'what you copied (clipboard)'); } catch (e) {}
+  try { if (window.Notification) wrap(Notification, 'requestPermission', 'to send you notifications'); } catch (e) {}
+  try { if (navigator.contacts) wrap(navigator.contacts, 'select', 'your contacts'); } catch (e) {}
+  try { wrap(navigator, 'requestMIDIAccess', 'your devices'); if (navigator.bluetooth) wrap(navigator.bluetooth, 'requestDevice', 'your Bluetooth devices'); } catch (e) {}
+})();
+"""
+
+
 async def install(context, session) -> None:
     """Wire the guard into a Playwright browser context. `session` supplies .allowed (set of sites she said yes
     to), .expect_site (where the agent is going), .notice(kind, text) and .pending_permission(site) for betting."""
@@ -322,19 +484,16 @@ async def install(context, session) -> None:
                 if guard.is_ad(url):
                     return await r.abort()
                 return await r.continue_()
+            if url.lower().startswith(BAD_SCHEMES) and req.is_navigation_request():
+                session.notice("blocked", SiteVerdict(url[:20], "malicious", reason="that kind of address can run code; Jagora never opens it"))
+                return await r.abort()
             v = guard.check(url)
-            if v.site in session.allowed:
-                return await r.continue_()
             if v.blocked:
                 session.notice("blocked", v)
                 if req.is_navigation_request() and req.frame == req.frame.page.main_frame:
                     return await r.fulfill(status=200, content_type="text/html",
                                            body=BLOCK_PAGE.format(reason=v.reason.capitalize() + ".", site=v.site))
                 return await r.abort()
-            if v.category == "gambling":
-                session.notice("gambling", v)
-                return await r.fulfill(status=200, content_type="text/html", body=BLOCK_PAGE.format(
-                    reason="This is a betting site. Jagora opens it only after you say yes.", site=v.site))
             if guard.is_ad(url) and req.frame != req.frame.page.main_frame:
                 return await r.abort()
             return await r.continue_()
@@ -345,6 +504,19 @@ async def install(context, session) -> None:
                 pass
 
     await context.route("**/*", route)
+
+    async def asked(source, what):
+        try:
+            site = registrable(source["page"].url) if source and source.get("page") else ""
+            session.notice("permission", SiteVerdict(site, "ok", reason=f"{site} asked for {what}; Jagora said no"))
+        except Exception:  # noqa: BLE001
+            pass
+
+    try:
+        await context.expose_binding("__jgAsked", asked)
+        await context.add_init_script(ASKS_JS)
+    except Exception:  # noqa: BLE001
+        pass
 
     def on_page(p):
         # a new tab the agent did not ask for (pop-under ads, redirect tricks) is closed at once

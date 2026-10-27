@@ -72,7 +72,7 @@ def test_secrets_are_never_typed_by_jagora():
 
 def test_anything_that_commits_waits_for_yes():
     btn = lambda label, type="": Element(id=2, kind="button", tag="button", type=type, label=label)
-    for label in ["Submit registration", "Pay ₦5,000", "Send money", "Confirm transfer", "Register", "Sign up", "Delete account"]:
+    for label in ["Submit registration", "Pay ₦5,000", "Send money", "Confirm transfer", "Register", "Sign up"]:
         assert safety.check_click(btn(label), "https://x.ng", "x.ng").verdict == Verdict.CONFIRM, label
     assert safety.check_click(btn("Next", type="submit"), "https://x.ng", "x.ng").verdict == Verdict.CONFIRM
     assert safety.check_click(btn("Clear form", type="reset"), "https://x.ng", "x.ng").verdict == Verdict.CONFIRM
@@ -91,3 +91,13 @@ def test_leaving_the_site_and_installers():
     assert safety.check_navigate("intent://x", "x.ng").verdict == Verdict.BLOCK
     assert safety.site("https://portal.jamb.gov.ng/a") == "jamb.gov.ng"
     assert safety.site("https://www.gtbank.com/") == "gtbank.com"
+
+
+def test_her_account_locks_are_hers():
+    """Passwords, two-step login, recovery details, closing accounts, new money recipients: she does these herself."""
+    btn = lambda label: Element(id=2, kind="button", tag="button", label=label)
+    for label in ["Delete account", "Change password", "Turn off two-factor authentication", "Change recovery email",
+                  "Add new beneficiary", "Close my account", "Disable 2FA"]:
+        assert safety.check_click(btn(label), "https://x.ng", "x.ng").verdict == Verdict.HANDOFF, label
+    for label in ["Forgot password?", "Sign in", "Check result"]:
+        assert safety.check_click(btn(label), "https://x.ng", "x.ng").verdict != Verdict.HANDOFF, label

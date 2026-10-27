@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { API } from "@/lib/account";
 
 type Live = { user_id: string; who: string; email: string; code: string; plan: string; since: number; doing: string; device: string };
-type User = { id: string; email: string; name: string; plan: string; code: string; created: number; last_seen: number; credits: number; tasks: number; done: number; online: boolean };
+type User = { id: string; email: string; name: string; plan: string; code: string; created: number; last_seen: number; credits: number; tasks: number; done: number; online: boolean; flags: number };
 type Ev = { t: number; user_id: string; kind: string; detail: string; who: string; code: string };
 type Overview = { now: number; live: Live[]; today: { tasks: number; done: number; people: number; usd: number }; users: User[]; events: Ev[]; model: boolean; speech: boolean };
 
@@ -65,7 +65,10 @@ function What({ e }: { e: Ev }) {
       </span>
     );
   }
-  const words: Record<string, string> = { signup: "Signed up", signin: "Signed in", open: "Opened Jagora", leave: "Left after", task: "Asked", error: "Error" };
+  const words: Record<string, string> = {
+    signup: "Signed up", signin: "Signed in", open: "Opened Jagora", leave: "Left after", task: "Asked", error: "Error",
+    blocked: "Jagora blocked", refused: "Jagora refused", injection: "Hijack attempt removed on", push: "Turned on",
+  };
   return (
     <span>
       {words[e.kind] || e.kind}
@@ -76,7 +79,7 @@ function What({ e }: { e: Ev }) {
 
 function Icon({ kind }: { kind: string }) {
   if (kind === "done") return <CheckCircle size={18} weight="fill" className="text-ok" />;
-  if (kind === "error" || kind === "stopped") return <WarningCircle size={18} weight="fill" className="text-danger" />;
+  if (kind === "error" || kind === "stopped" || kind === "blocked" || kind === "refused" || kind === "injection") return <WarningCircle size={18} weight="fill" className="text-danger" />;
   return <Circle size={9} weight="fill" className={kind === "task" ? "text-accent" : "text-ink-3"} />;
 }
 
@@ -276,6 +279,11 @@ export default function Admin() {
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 text-[15.5px] font-semibold">
                       <span className="truncate">{u.name || u.email}</span> <Tag code={u.code} plan={u.plan} />
+                      {u.flags >= 3 && (
+                        <span className="shrink-0 rounded-full bg-danger-soft px-2 py-0.5 text-[12px] font-semibold text-danger" title="Blocked sites or refused requests in the last day">
+                          {u.flags} blocked tries
+                        </span>
+                      )}
                     </p>
                     <p className="truncate text-[13.5px] text-ink-3">
                       {u.email} · joined {ago(u.created, now)} · seen {u.online ? "now" : ago(u.last_seen, now)}
