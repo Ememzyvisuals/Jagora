@@ -99,7 +99,7 @@ async def lifespan(app: FastAPI):
         log.warning("push not started: %s", e)
     guard.load_cached()
     tasks = [asyncio.create_task(_lists_daily()), asyncio.create_task(_watch_loop()), asyncio.create_task(_reminder_loop()),
-             asyncio.create_task(_job_loop())]
+             asyncio.create_task(_job_loop()), asyncio.create_task(_fresh_hellos())]
     yield
     for t in tasks:
         t.cancel()
@@ -225,35 +225,65 @@ HELLO = {  # exactly the lines shown in the languages section of the landing pag
 }
 
 
+HELLO_VERSION = 2  # raise this to throw away every hello recording and make them all again
+
+
+def _hello_file(lang: str) -> Path:
+    import hashlib
+
+    tag = hashlib.sha256(HELLO[lang].encode()).hexdigest()[:10]  # a new line makes a new file
+    return speech.TTS_CACHE / f"hello-v{HELLO_VERSION}-{settings.voice}-{lang}-{tag}.mp3"
+
+
+async def _make_hello(lang: str) -> Path | None:
+    """Record one hello line fresh from STORM (never from stored pieces) and save it as MP3."""
+    out = _hello_file(lang)
+    if out.exists():
+        return out
+    clips = [w async for w in speech.speak(HELLO[lang], lang, fresh=True)]
+    if not clips:
+        return None
+    import io
+    import wave
+
+    frames, rate = b"", 24000
+    for c in clips:
+        with wave.open(io.BytesIO(c)) as w:
+            rate = w.getframerate()
+            frames += w.readframes(w.getnframes()) + b"\0\0" * int(rate * 0.12)
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le", "-ar", str(rate), "-ac", "1", "-i", "pipe:0",
+        "-codec:a", "libmp3lame", "-b:a", "48k", "-f", "mp3", "pipe:1", stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
+    mp3, _ = await proc.communicate(frames)
+    if not mp3:
+        return None
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(mp3)
+    return out
+
+
+async def _fresh_hellos() -> None:
+    """On start: wipe every old hello recording, then record the five current lines again."""
+    if not speech.enabled():
+        return
+    keep = {_hello_file(lang).name for lang in HELLO}
+    gone = 0
+    for f in speech.TTS_CACHE.glob("hello-*.mp3"):
+        if f.name not in keep:
+            f.unlink(missing_ok=True)
+            gone += 1
+    made = [lang for lang in HELLO if await _make_hello(lang)]
+    log.info("hello voice: %d old recordings removed, ready: %s", gone, ", ".join(made))
+
+
 @app.get("/voice/hello/{lang}")
 async def voice_hello(lang: str, line: str = ""):
     """Jagora's own STORM voice saying hello, as a small MP3, made once and then served from disk."""
     if lang not in HELLO or not speech.enabled():
         raise HTTPException(404, "no such line")
-    import hashlib
-
-    tag = hashlib.sha256(HELLO[lang].encode()).hexdigest()[:10]  # a new line makes a new file
-    out = speech.TTS_CACHE / f"hello-{settings.voice}-{lang}-{tag}.mp3"
-    if not out.exists():
-        clips = [w async for w in speech.speak(HELLO[lang], lang)]
-        if not clips:
-            raise HTTPException(503, "voice not available")
-        import io
-        import wave
-
-        frames, rate = b"", 24000
-        for c in clips:
-            with wave.open(io.BytesIO(c)) as w:
-                rate = w.getframerate()
-                frames += w.readframes(w.getnframes()) + b"\0\0" * int(rate * 0.12)
-        proc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le", "-ar", str(rate), "-ac", "1", "-i", "pipe:0",
-            "-codec:a", "libmp3lame", "-b:a", "48k", "-f", "mp3", "pipe:1", stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
-        mp3, _ = await proc.communicate(frames)
-        if not mp3:
-            raise HTTPException(503, "voice not available")
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(mp3)
+    out = await _make_hello(lang)
+    if not out:
+        raise HTTPException(503, "voice not available")
     # the page sends the line it shows; only an exact match may be kept by the browser
     keep = "public, max-age=604800, immutable" if line == HELLO[lang] else "no-store"
     return FileResponse(out, media_type="audio/mpeg", headers={"Cache-Control": keep})

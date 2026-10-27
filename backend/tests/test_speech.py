@@ -105,7 +105,7 @@ def test_amina_hello_voice_is_a_small_mp3(monkeypatch, tmp_path):
 
     import jagora.server as server
 
-    async def fake_speak(text, lang):
+    async def fake_speak(text, lang, fresh=False):
         pcm = b"".join(int(8000 * math.sin(i / 8)).to_bytes(2, "little", signed=True) for i in range(24000))
         yield speech.pcm_to_wav(pcm, 24000)
 
@@ -123,3 +123,11 @@ def test_amina_hello_voice_is_a_small_mp3(monkeypatch, tmp_path):
     same = c.get("/voice/hello/yo", params={"line": server.HELLO["yo"]})
     assert "immutable" in same.headers["cache-control"]
     assert c.get("/voice/hello/yo", params={"line": "an old line"}).headers["cache-control"] == "no-store"
+    # on start the server wipes every old recording and makes all five again
+    old = tmp_path / "hello-storm-yo-0123456789.mp3"
+    old.write_bytes(b"old")
+    import asyncio
+
+    asyncio.run(server._fresh_hellos())
+    assert not old.exists()
+    assert sorted(f.name.split("-")[3] for f in tmp_path.glob("hello-v*.mp3")) == sorted(server.HELLO)

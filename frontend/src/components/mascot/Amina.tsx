@@ -148,31 +148,49 @@ function Stage({ app }: { app: boolean }) {
     const fetchClip = (lang: string) => {
       // the address carries the line itself, so when a line changes the browser can't replay an old recording
       if (!files.has(lang))
-        files.set(lang, fetch(`${API}/voice/hello/${lang}?line=${encodeURIComponent(document.querySelector<HTMLElement>(`[data-amina-lang="${lang}"]`)?.dataset.aminaSay ?? "")}`).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null));
+        files.set(lang, fetch(`${API}/voice/hello/${lang}?v=2&line=${encodeURIComponent(document.querySelector<HTMLElement>(`[data-amina-lang="${lang}"]`)?.dataset.aminaSay ?? "")}`).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null));
       return files.get(lang)!;
     };
-    const sayAloud = async (lang: string) => {
+    /* One line at a time: the bubble shows exactly the line her voice is saying. A newer line cancels an older one
+       that is still loading, so a late recording can never play over a different bubble. */
+    let voiceTurn = 0;
+    let loadingSince = 0;
+    let pendingText = "";
+    const hush = () => {
+      voiceTurn++;
+      loadingSince = 0;
+      try {
+        voiceSrc?.stop();
+      } catch {}
+      voiceSrc = null;
+      analyser = null;
+      if (stage) stage.mouth = null;
+    };
+    const sayAloud = async (lang: string, text: string) => {
       if (!API || calm || useApp.getState().muted || !LANGS.includes(lang)) return;
       if (!unlocked || !actx) {
         pending = lang;
+        pendingText = text;
         tapHint = true;
         return;
       }
       tapHint = false;
+      hush();
+      const turn = voiceTurn;
       const c = actx;
+      loadingSince = performance.now();
       if (c.state !== "running") await c.resume().catch(() => {});
       let buf = clips.get(lang);
       if (!buf) {
         const raw = await fetchClip(lang);
-        if (!raw) return;
+        if (!raw || turn !== voiceTurn) return;
         buf = await c.decodeAudioData(raw.slice(0)).catch(() => undefined);
         if (!buf) return;
         clips.set(lang, buf);
       }
-      if (dead) return;
-      try {
-        voiceSrc?.stop();
-      } catch {}
+      if (dead || turn !== voiceTurn) return;
+      loadingSince = 0;
+      speak(text, buf.duration * 1000 + 600); // the bubble stays exactly as long as she speaks
       const src = c.createBufferSource();
       src.buffer = buf;
       analyser = c.createAnalyser();
@@ -209,9 +227,9 @@ function Stage({ app }: { app: boolean }) {
         return;
       }
       if (pending) {
-        const l = pending;
+        const l = pending, tx = pendingText;
         pending = "";
-        void sayAloud(l);
+        void sayAloud(l, tx);
       }
     };
 
@@ -234,6 +252,10 @@ function Stage({ app }: { app: boolean }) {
     const leave = () => {
       dir = -1;
       say = "";
+      if (spot?.id === "languages") {
+        hush(); // she stops talking as she goes
+        lastLine = null;
+      }
     };
 
     /* choose where to be */
@@ -339,13 +361,18 @@ function Stage({ app }: { app: boolean }) {
         tx = (left ? -past : innerWidth + past) - hip.x + head.x;
         ty = sp.y ?? Math.min(innerHeight * 0.7, Math.max(innerHeight * 0.3, r.top + r.height / 2));
         if (sp.id === "languages") {
-          const line = langLine();
+          let line = langLine();
+          // while she is saying a line (or it is about to start), she stays with it, as long as it is on screen
+          const held = lastLine as HTMLElement | null;
+          const busyVoice = voiceSrc || (loadingSince && performance.now() - loadingSince < 1500);
+          if (held && line !== held && busyVoice && visible(held.getBoundingClientRect())) line = held;
           if (line) {
             ty = line.getBoundingClientRect().top + 10;
             if (line !== lastLine && phase > 0.8) {
               lastLine = line;
-              speak(line.dataset.aminaSay || "", 2400);
-              void sayAloud(line.dataset.aminaLang || "");
+              const text = line.dataset.aminaSay || "";
+              speak(text, 2400);
+              void sayAloud(line.dataset.aminaLang || "", text);
             }
           }
         }

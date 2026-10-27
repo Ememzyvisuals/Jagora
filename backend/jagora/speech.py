@@ -188,8 +188,8 @@ async def speak_stream(text: str, lang: str, ahead: int = 2) -> AsyncIterator[tu
         await client.aclose()
 
 
-async def speak(text: str, lang: str) -> AsyncIterator[bytes]:
-    """WAV clips, one per sentence."""
+async def speak(text: str, lang: str, fresh: bool = False) -> AsyncIterator[bytes]:
+    """WAV clips, one per sentence. `fresh`: ask STORM again instead of using stored clips."""
     if not enabled():
         return
     import httpx
@@ -199,7 +199,7 @@ async def speak(text: str, lang: str) -> AsyncIterator[bytes]:
         for s in sentences(speakable(text)):
             key = hashlib.sha256(f"{settings.voice}|{lang}|{s}".encode()).hexdigest()[:32]
             cached = TTS_CACHE / f"{key}.wav"
-            if cached.exists():
+            if cached.exists() and not fresh:
                 yield cached.read_bytes()
                 continue
             body = {"text": s, "language": LANG.get(lang, "en"), "voice_id": settings.voice, "model": "storm-v1"}
