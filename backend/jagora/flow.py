@@ -21,12 +21,12 @@ import re
 from urllib.parse import unquote, urlparse
 
 # things worth stealing: email addresses, numbers of five or more digits (codes, phone, account and ID numbers),
-# and mixed letter-and-number codes of six or more characters
-SECRET = re.compile(
-    r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"
-    r"|\+?\d(?:[\d \-]{3,}\d)"
-    r"|\b(?=[A-Za-z0-9]*\d)(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{6,}\b"
-)
+# and mixed letter-and-number codes of six or more characters. Every pattern is bounded, so scanning is linear time
+# however hostile the page text is.
+TOKEN = re.compile(r"[A-Za-z0-9_.+@-]{1,120}")
+EMAIL = re.compile(r"[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,5}")
+NUMBER = re.compile(r"\+?\d[\d \-]{3,24}\d")
+MAX_SCAN = 300_000
 SHINGLE = 8  # a run of this many words copied from another site counts as carried text
 PER_SITE = 300_000  # characters remembered per site
 
@@ -41,20 +41,28 @@ def _tok(t: str) -> str:
 
 
 def secrets_in(text: str) -> set[str]:
+    text = (text or "")[:MAX_SCAN]
     out = set()
-    for m in SECRET.finditer(text or ""):
-        t = _tok(m.group(0))
-        digits = sum(c.isdigit() for c in t)
-        if t.isdigit() and len(t) < 5:
+    for m in NUMBER.finditer(text):
+        t = re.sub(r"[ \-+]", "", m.group(0))
+        if len(t) >= 5:
+            out.add(t)
+    for m in TOKEN.finditer(text):
+        t = m.group(0).strip(".-_+").lower()
+        if "@" in t:
+            if EMAIL.fullmatch(t):
+                out.add(t)
             continue
-        if "@" not in t and digits < (5 if t.isdigit() else 3):
-            continue  # years, short numbers and word-like ids are not secrets
-        out.add(t)
+        t = t.replace("_", "").replace("-", "").replace(".", "")
+        if len(t) >= 6 and t.isalnum() and not t.isdigit():
+            digits = sum(c.isdigit() for c in t)
+            if digits >= 3 and digits < len(t):
+                out.add(t)
     return out
 
 
 def _shingles(text: str) -> set[str]:
-    w = _norm(text).split()
+    w = _norm(text[:MAX_SCAN]).split()
     return {" ".join(w[i:i + SHINGLE]) for i in range(0, max(0, len(w) - SHINGLE + 1))}
 
 

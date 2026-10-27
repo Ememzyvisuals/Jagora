@@ -114,11 +114,15 @@ PAGE_SIGNS: dict[str, tuple[str, list[re.Pattern], list[re.Pattern]]] = {
 BLOCKED_KINDS = ("iplogger", "adult", "malicious", "lookalike", "gambling", "piracy", "scam", "fraud", "fakedocs", "hacking", "drugs")
 
 # Text written to steer AI assistants ("prompt injection"). Removed from what the model reads, and noted.
-INJECTION = re.compile(
-    r"[^.\n]{0,160}(ignore (all |any )?(the )?(previous|prior|above|earlier|your) (instructions|rules|prompts?)|disregard (your|all|the|previous) "
-    r"(instructions|rules)|(new|updated|important) instructions? (for|to) (the )?(ai|assistant|agent|model)|you are (now )?(an? )?(ai|llm|language model|"
-    r"assistant|agent)\b|system prompt|as an ai (agent|assistant)|(ai|llm) (agents?|assistants?)[,:]? (please |must |should )|"
-    r"<\|?(im_start|system)\|?>|\[/?inst\]|developer mode|jailbreak|do not tell (the )?user|without (telling|asking) (the )?user)[^.\n]{0,240}[.\n]?", re.I)
+# Orders aimed at AI assistants. Only the trigger phrases are searched (a plain alternation, linear time); the
+# sentence around each hit is then found with simple string scans, never with open-ended regex repetition, so no page
+# can make this slow, however long or strangely punctuated it is.
+INJECTION_KEY = re.compile(
+    r"ignore (?:all |any )?(?:the )?(?:previous|prior|above|earlier|your) (?:instructions|rules|prompts?)|disregard (?:your|all|the|previous) "
+    r"(?:instructions|rules)|(?:new|updated|important) instructions? (?:for|to) (?:the )?(?:ai|assistant|agent|model)|you are (?:now )?(?:an? )?(?:ai|llm|language model|"
+    r"assistant|agent)\b|system prompt|as an ai (?:agent|assistant)|(?:ai|llm) (?:agents?|assistants?)[,:]? (?:please |must |should )|"
+    r"<\|?(?:im_start|system)\|?>|\[/?inst\]|developer mode|jailbreak|do not tell (?:the )?user|without (?:telling|asking) (?:the )?user", re.I)
+MAX_SCAN = 400_000  # characters of page text checked; longer text is cut (the model never reads that much anyway)
 
 
 # Addresses that can run code or read the server's own files. Tests open local pages (JAGORA_ALLOW_FILE=1).
@@ -128,17 +132,33 @@ BAD_SCHEMES = ("javascript:", "data:text/html", "vbscript:") + (() if _os.enviro
 
 
 def defang(text: str) -> tuple[str, int]:
-    """Text aimed at AI assistants, taken out. Returns the cleaned text and how many pieces were removed."""
+    """Text aimed at AI assistants, taken out (the whole sentence around the order). Returns the cleaned text and how
+    many pieces were removed. Linear time on any input."""
     if not text:
         return text, 0
-    n = 0
-
-    def cut(_m):
-        nonlocal n
-        n += 1
-        return " [removed: text written to give orders to AI assistants] "
-
-    return INJECTION.sub(cut, text), n
+    text = text[:MAX_SCAN]
+    spans: list[list[int]] = []
+    for m in INJECTION_KEY.finditer(text):
+        lo = max(m.start() - 160, text.rfind(".", max(0, m.start() - 160), m.start()) + 1, text.rfind("\n", max(0, m.start() - 160), m.start()) + 1)
+        hi = m.end() + 240
+        for stop in (".", "\n"):
+            k = text.find(stop, m.end(), hi)
+            if k != -1:
+                hi = min(hi, k + 1)
+        hi = min(hi, len(text))
+        if spans and lo <= spans[-1][1]:
+            spans[-1][1] = max(spans[-1][1], hi)
+        else:
+            spans.append([max(0, lo), hi])
+    if not spans:
+        return text, 0
+    out, at = [], 0
+    for lo, hi in spans:
+        out.append(text[at:lo])
+        out.append(" [removed: text written to give orders to AI assistants] ")
+        at = hi
+    out.append(text[at:])
+    return "".join(out), len(spans)
 
 
 # Runs in the page before it is read: hides text a person cannot see (transparent, tiny, off-screen, clipped, or the

@@ -23,7 +23,7 @@
   <img alt="Muse Wonder" src="https://img.shields.io/badge/Meta-Muse%20Wonder-0467DF?style=flat-square">
   <img alt="Muse Image" src="https://img.shields.io/badge/Meta-Muse%20Image-0467DF?style=flat-square">
   <img alt="Languages" src="https://img.shields.io/badge/languages-yo%20%C2%B7%20ha%20%C2%B7%20ig%20%C2%B7%20pcm%20%C2%B7%20en-111318?style=flat-square">
-  <img alt="Tests" src="https://img.shields.io/badge/backend%20tests-67%20passing-3f8f5c?style=flat-square">
+  <img alt="Tests" src="https://img.shields.io/badge/backend%20tests-75%20passing-3f8f5c?style=flat-square">
   <a href="#live-result-against-the-real-model"><img alt="Attacks resisted" src="https://img.shields.io/badge/live%20attack%20range-20%2F20%20resisted-3f8f5c?style=flat-square"></a>
 </p>
 
@@ -364,6 +364,7 @@ Every rule below is enforced in code, outside the model, so no web page or promp
 | **Private data lock** | Phone, email, address, ID numbers and logins go only to an official site, a site she named, or one she approves. Cards never go to unknown payment pages. | `agent.py` (`_may_share`, `_private`) |
 | **Secrets** | Passwords, PINs, OTPs, card details, NIN and BVN are typed by her through a private box. Values never reach the model, logs or speech. | `fields.py`, `vault.py` |
 | **Requests it declines** | "Help me bet", "get me WAEC expo", "hack his WhatsApp", "make a fake alert": declined kindly, with the honest alternative. Asking whether such a site is real is a scam check, and Jagora helps. | `agent.py` (`forbidden`) |
+| **Hostile text** | Every check that runs on page text is linear time with a size limit, so megabytes of crafted text cannot slow Jagora or stall the server for other people. Pages are parsed by Chromium; Python's `html.parser` (CVE-2026-15308) is never used. | `guard.py` (`defang`), `flow.py` |
 | **Browser hygiene** | Ads and trackers cut off, pop-up tabs closed, redirect tricks undone, stray downloads and installers cancelled, permission requests (location, camera, clipboard) refused and reported | `guard.py`, `browser.py` |
 
 Every blocked site, refused request and removed hijack attempt is logged to the owner's **admin page**, and
@@ -466,6 +467,7 @@ cd backend && pytest -q
 | Suite | Covers |
 |---|---|
 | `test_agent.py` | Full registration on the practice portal with every safety stop |
+| `test_hostile_text.py` | Megabytes of crafted page text are checked in milliseconds, and Python's html.parser is never loaded |
 | `test_attacks.py` | The **attack range** (below), with a *hijacked* model that obeys every trap |
 | `test_fields_safety.py` | Number and date reading in five languages, the approval gate, her account's locks |
 | `test_hands.py` | Hover menus, drag and drop, key combinations, canvas clicks, uploads, date pickers, pointing |
