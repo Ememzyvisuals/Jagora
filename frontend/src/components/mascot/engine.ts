@@ -137,6 +137,7 @@ export class AminaStage {
   leanTo = 0; // lean her upper body: + toward the right of the screen
   look: Look = null; // where to look, in canvas pixels
   talk = false;
+  mouth: number | null = null; // 0..1 from her real voice (an analyser), instead of the made-up talking motion
   mood: "calm" | "happy" | "fun" = "calm";
 
   constructor(canvas: HTMLCanvasElement, w: number, h: number) {
@@ -344,8 +345,13 @@ export class AminaStage {
       em.setValue("happy", lerp(em.getValue("happy") ?? 0, happy, k));
       em.setValue("relaxed", lerp(em.getValue("relaxed") ?? 0, this.mood === "fun" ? 0.6 : 0, k));
       this.talking = lerp(this.talking, this.talk ? 1 : 0, k);
-      em.setValue("aa", this.talking * (0.35 + 0.35 * Math.sin(this.t * 17)) );
-      em.setValue("oh", this.talking * Math.max(0, Math.sin(this.t * 7.7)) * 0.35);
+      if (this.mouth !== null) {
+        em.setValue("aa", Math.min(1, this.mouth));
+        em.setValue("oh", Math.min(0.5, this.mouth * 0.4));
+      } else {
+        em.setValue("aa", this.talking * (0.35 + 0.35 * Math.sin(this.t * 17)));
+        em.setValue("oh", this.talking * Math.max(0, Math.sin(this.t * 7.7)) * 0.35);
+      }
     }
     vrm.update(dt);
     if (render) this.renderer.render(this.scene, this.camera);

@@ -95,3 +95,26 @@ async def test_hush_stops_jagora_mid_sentence(monkeypatch):
     assert 0 < before and after - before <= 1  # at most the piece already on its way
     assert ws.out[-1]["type"] == "speech_end"
     s._speaker.cancel()
+
+
+def test_amina_hello_voice_is_a_small_mp3(monkeypatch, tmp_path):
+    """The landing page's hello lines: Jagora's voice, made once, served as MP3; unknown lines are refused."""
+    import math
+
+    from fastapi.testclient import TestClient
+
+    import jagora.server as server
+
+    async def fake_speak(text, lang):
+        pcm = b"".join(int(8000 * math.sin(i / 8)).to_bytes(2, "little", signed=True) for i in range(24000))
+        yield speech.pcm_to_wav(pcm, 24000)
+
+    monkeypatch.setattr(server.speech, "enabled", lambda: True)
+    monkeypatch.setattr(server.speech, "speak", fake_speak)
+    monkeypatch.setattr(server.speech, "TTS_CACHE", tmp_path)
+    c = TestClient(server.app)
+    r = c.get("/voice/hello/yo")
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg"
+    assert r.content[:3] == b"ID3" or r.content[0] == 0xFF  # an MP3
+    assert len(r.content) < 20_000  # about a second of voice in a few KB
+    assert c.get("/voice/hello/anything-else").status_code == 404

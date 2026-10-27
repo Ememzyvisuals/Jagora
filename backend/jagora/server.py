@@ -169,6 +169,45 @@ async def me(request: Request):
     return acc
 
 
+# Amina's hello in each language, for the landing page (a fixed set of lines, so nobody can use this to make speech)
+HELLO = {
+    "yo": "Ẹ n lẹ́! Mo wà níbí.",
+    "ha": "Sannu! Ina nan.",
+    "ig": "Ndeewo! Anọ m ebe a.",
+    "pcm": "How far! I dey here.",
+    "en": "Hello! I'm right here.",
+}
+
+
+@app.get("/voice/hello/{lang}")
+async def voice_hello(lang: str):
+    """Jagora's own STORM voice saying hello, as a small MP3, made once and then served from disk."""
+    if lang not in HELLO or not speech.enabled():
+        raise HTTPException(404, "no such line")
+    out = speech.TTS_CACHE / f"hello-{settings.voice}-{lang}.mp3"
+    if not out.exists():
+        clips = [w async for w in speech.speak(HELLO[lang], lang)]
+        if not clips:
+            raise HTTPException(503, "voice not available")
+        import io
+        import wave
+
+        frames, rate = b"", 24000
+        for c in clips:
+            with wave.open(io.BytesIO(c)) as w:
+                rate = w.getframerate()
+                frames += w.readframes(w.getnframes()) + b"\0\0" * int(rate * 0.12)
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le", "-ar", str(rate), "-ac", "1", "-i", "pipe:0",
+            "-codec:a", "libmp3lame", "-b:a", "48k", "-f", "mp3", "pipe:1", stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
+        mp3, _ = await proc.communicate(frames)
+        if not mp3:
+            raise HTTPException(503, "voice not available")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(mp3)
+    return FileResponse(out, media_type="audio/mpeg", headers={"Cache-Control": "public, max-age=604800"})
+
+
 @app.get("/push/key")
 async def push_key():
     return {"key": push.public}

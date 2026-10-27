@@ -13,6 +13,10 @@
 import { useEffect, useRef, useState } from "react";
 import { siMeta } from "simple-icons";
 import type { AminaStage, Gesture } from "./engine";
+import { useApp } from "@/lib/store";
+
+const API = process.env.NEXT_PUBLIC_BACKEND_HTTP || "";
+const LANGS = ["yo", "ha", "ig", "pcm", "en"];
 
 type Kind = "over" | "edgeL" | "edgeR" | "seat" | "corner";
 type Spot = { id: string; kind: Kind; gesture: Gesture; persistent?: boolean; el?: Element | null; say?: string };
@@ -122,6 +126,74 @@ function Stage() {
       gestureUntil = performance.now() + ms;
       holdUntil = Math.max(holdUntil, performance.now() + ms + 1200);
     };
+    /* her real voice (Jagora's STORM voice) for the hello lines. Browsers only allow sound after the visitor has
+       tapped or clicked the page once; until then the bubble invites a tap, and that tap plays the line. */
+    let actx: AudioContext | null = null;
+    const clips = new Map<string, Promise<AudioBuffer | null>>();
+    let voiceSrc: AudioBufferSourceNode | null = null;
+    let analyser: AnalyserNode | null = null;
+    const level = new Uint8Array(256);
+    let pending = "";
+    let tapHint = false;
+    let unlocked = false;
+    const audio = () => {
+      if (!actx) {
+        const C = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        actx = new C();
+      }
+      return actx;
+    };
+    const clip = (lang: string) => {
+      if (!clips.has(lang))
+        clips.set(lang, fetch(`${API}/voice/hello/${lang}`)
+          .then((r) => (r.ok ? r.arrayBuffer() : null))
+          .then((b) => (b ? audio().decodeAudioData(b) : null))
+          .catch(() => null));
+      return clips.get(lang)!;
+    };
+    const mayPlay = () => unlocked || !!(navigator as unknown as { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive;
+    const sayAloud = async (lang: string) => {
+      if (!API || calm || useApp.getState().muted || !LANGS.includes(lang)) return;
+      if (!mayPlay()) {
+        pending = lang;
+        tapHint = true;
+        return;
+      }
+      tapHint = false;
+      const c = audio();
+      await c.resume().catch(() => {});
+      const buf = await clip(lang);
+      if (!buf || dead) return;
+      try {
+        voiceSrc?.stop();
+      } catch {}
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      analyser = c.createAnalyser();
+      analyser.fftSize = 512;
+      src.connect(analyser);
+      analyser.connect(c.destination);
+      src.start();
+      voiceSrc = src;
+      sayUntil = Math.max(sayUntil, performance.now() + buf.duration * 1000 + 500);
+      src.onended = () => {
+        if (voiceSrc === src) {
+          voiceSrc = null;
+          analyser = null;
+          if (stage) stage.mouth = null;
+        }
+      };
+    };
+    const unlock = () => {
+      unlocked = true;
+      audio().resume().catch(() => {});
+      if (pending) {
+        const l = pending;
+        pending = "";
+        void sayAloud(l);
+      }
+    };
+
     const enter = (s: Spot) => {
       spot = s;
       dir = 1;
@@ -136,6 +208,7 @@ function Stage() {
         stage.mood = s.kind === "seat" ? "happy" : "calm";
       }
       if (s.say && !calm) setTimeout(() => spot === s && speak(s.say!), 650);
+      if (s.id === "languages" && API && !calm) LANGS.forEach((l) => void clip(l));
     };
     const leave = () => {
       dir = -1;
@@ -205,6 +278,7 @@ function Stage() {
             if (line !== lastLine && phase > 0.8) {
               lastLine = line;
               speak(line.dataset.aminaSay || "", 2400);
+              void sayAloud(line.dataset.aminaLang || "");
             }
           }
         }
@@ -307,12 +381,19 @@ function Stage() {
         el.style.display = "block";
         place(dt);
         el.style.transform = `translate3d(${Math.round(pos.x)}px, ${Math.round(pos.y)}px, 0) scale(${scale})`;
+        if (analyser && voiceSrc) {
+          analyser.getByteTimeDomainData(level);
+          let sum = 0;
+          for (let i = 0; i < level.length; i++) sum += (level[i] - 128) ** 2;
+          stage.mouth = Math.min(1, Math.sqrt(sum / level.length) / 22);
+          stage.talk = true;
+        }
         stage.frame(dt);
         // the speech bubble rides next to her head
         if (say) {
           const hp = stage.screenOf("head")!;
           const right = (spot?.kind === "edgeR");
-          bub.textContent = say;
+          bub.textContent = tapHint ? `${say}  (tap to hear her)` : say;
           bub.style.opacity = "1";
           const bw = bub.offsetWidth;
           const bx = pos.x + hp.x * scale + (right ? -bw - 34 : 34);
@@ -435,6 +516,8 @@ function Stage() {
     seat?.addEventListener("click", onSeatClick);
     addEventListener("pointermove", onMove, { passive: true });
     addEventListener("pointerdown", onDown, { capture: true });
+    addEventListener("pointerdown", unlock, { capture: true });
+    addEventListener("keydown", unlock, { capture: true });
     addEventListener("pointerup", onUp, { capture: true });
     addEventListener("click", onClick, { capture: true });
     addEventListener("resize", size);
@@ -447,6 +530,12 @@ function Stage() {
       seat?.removeEventListener("click", onSeatClick);
       removeEventListener("pointermove", onMove);
       removeEventListener("pointerdown", onDown, { capture: true });
+      removeEventListener("pointerdown", unlock, { capture: true });
+      removeEventListener("keydown", unlock, { capture: true });
+      try {
+        voiceSrc?.stop();
+      } catch {}
+      void actx?.close();
       removeEventListener("pointerup", onUp, { capture: true });
       removeEventListener("click", onClick, { capture: true });
       removeEventListener("resize", size);

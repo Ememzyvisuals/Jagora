@@ -251,7 +251,7 @@ export default function Landing() {
               ["How you dey, wetin I fit do for you?", "Naijá", "How far! I dey here."],
               ["Good day, what can I do for you?", "English", "Hello! I'm right here."],
             ].map(([line, name, hello], i) => (
-              <motion.div key={name} data-amina-say={hello} {...rise} transition={{ ...rise.transition, delay: i * 0.05 }} className="flex flex-wrap items-baseline gap-x-5 border-b border-ink/10 py-5">
+              <motion.div key={name} data-amina-say={hello} data-amina-lang={{ Yorùbá: "yo", Hausa: "ha", Igbo: "ig", Naijá: "pcm", English: "en" }[name]} {...rise} transition={{ ...rise.transition, delay: i * 0.05 }} className="flex flex-wrap items-baseline gap-x-5 border-b border-ink/10 py-5">
                 <span className="font-head text-[26px] leading-tight sm:text-[40px]">{line}</span>
                 <span className="text-[15px] font-semibold text-ink-3">{name}</span>
               </motion.div>
@@ -261,12 +261,14 @@ export default function Landing() {
       </section>
 
       {/* start */}
-      <section className="relative py-20 md:py-28">
-        <motion.div {...rise} className="liquid-glass mx-auto flex max-w-[860px] flex-col items-center rounded-[36px] px-6 py-12 text-center sm:px-12">
-          <Orb size={120} />
-          <h2 className="mt-4 text-[32px] leading-tight sm:text-[46px]">Try Jagora now.</h2>
-          <p className="mt-2 text-[17px] font-medium text-ink">No download. Works in the browser on any phone or computer.</p>
-          <button onClick={() => go("")} data-amina-point className="btn btn-ink mt-6 h-12 px-7 text-[16px]">
+      <section className="relative px-5 py-14 sm:px-0 md:py-28">
+        <motion.div {...rise} className="liquid-glass mx-auto flex max-w-[860px] flex-col items-center rounded-[28px] px-5 py-8 text-center sm:rounded-[36px] sm:px-12 sm:py-12">
+          <div className="-my-4 scale-[0.7] sm:my-0 sm:scale-100">
+            <Orb size={120} />
+          </div>
+          <h2 className="mt-3 text-[26px] leading-tight sm:mt-4 sm:text-[46px]">Try Jagora now.</h2>
+          <p className="mt-2 max-w-[30ch] text-[15px] font-medium text-ink sm:max-w-none sm:text-[17px]">No download. Works in the browser on any phone or computer.</p>
+          <button onClick={() => go("")} data-amina-point className="btn btn-ink mt-5 h-11 px-6 text-[15px] sm:mt-6 sm:h-12 sm:px-7 sm:text-[16px]">
             Start
           </button>
         </motion.div>
