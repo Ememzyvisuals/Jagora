@@ -10,6 +10,7 @@ import { ask, live } from "@/lib/engine";
 import { remoteWake } from "@/lib/engine/remote";
 import { refreshPush } from "@/lib/push";
 import { syncAccount } from "@/lib/sync";
+import { Amina } from "@/components/mascot/Amina";
 
 export default function AppPage() {
   const ready = useHydrated();
@@ -63,5 +64,10 @@ export default function AppPage() {
   }, [ready, onboarded, router]);
 
   if (!ready || desktop === null || !onboarded) return <div className="h-dvh bg-mist" />;
-  return desktop ? <DesktopApp /> : <MobileApp />;
+  return (
+    <>
+      {desktop ? <DesktopApp /> : <MobileApp />}
+      <Amina app />
+    </>
+  );
 }

@@ -19,7 +19,7 @@ const API = process.env.NEXT_PUBLIC_BACKEND_HTTP || "";
 const LANGS = ["yo", "ha", "ig", "pcm", "en"];
 
 type Kind = "over" | "edgeL" | "edgeR" | "seat" | "corner";
-type Spot = { id: string; kind: Kind; gesture: Gesture; persistent?: boolean; el?: Element | null; say?: string };
+type Spot = { id: string; kind: Kind; gesture: Gesture; persistent?: boolean; el?: Element | null; say?: string; y?: number };
 
 const PLAN: Record<string, Omit<Spot, "id" | "el">> = {
   hero: { kind: "over", gesture: "wave", say: "Hi, I'm Amina!" },
@@ -29,6 +29,9 @@ const PLAN: Record<string, Omit<Spot, "id" | "el">> = {
   languages: { kind: "edgeR", gesture: "none", persistent: true },
 };
 const HIDE_KEY = "jagora:amina";
+/* now and then she drops by on her own: a short peek from a screen edge with a word or two */
+const VISIT_LINES = ["Hi, I'm Amina!", "Ẹ n lẹ́!", "Sannu!", "Ndeewo!", "How far?", "Just ask, I dey here.", "Need a hand?"];
+const VISIT_GESTURES: Gesture[] = ["wave", "hello", "none"];
 const sm = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 export function aminaHidden() {
@@ -45,7 +48,9 @@ export function setAminaHidden(off: boolean) {
   window.dispatchEvent(new Event("amina:toggle"));
 }
 
-export function Amina() {
+/** `app`: inside Jagora itself. There she only drops by now and then, and never while a task is working or
+    waiting for an answer. */
+export function Amina({ app = false }: { app?: boolean }) {
   const [on, setOn] = useState(false);
   useEffect(() => {
     const sync = () => setOn(!aminaHidden());
@@ -53,10 +58,10 @@ export function Amina() {
     window.addEventListener("amina:toggle", sync);
     return () => window.removeEventListener("amina:toggle", sync);
   }, []);
-  return on ? <Stage /> : null;
+  return on ? <Stage app={app} /> : null;
 }
 
-function Stage() {
+function Stage({ app }: { app: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   const cvs = useRef<HTMLCanvasElement>(null);
   const bubble = useRef<HTMLDivElement>(null);
@@ -101,6 +106,9 @@ function Stage() {
     let seatStage: "drop" | "land" | "sat" = "drop";
     let landAt = 0;
     let flat: SVGElement | null = null;
+    const gap = () => performance.now() + (app ? 90_000 + Math.random() * 90_000 : 30_000 + Math.random() * 40_000);
+    let nextVisit = gap();
+    const busy = () => app && useApp.getState().tasks.some((t) => t.status === "working" || t.status === "waiting");
 
     const anchors = () => {
       const list: Spot[] = [];
@@ -245,7 +253,7 @@ function Stage() {
     };
 
     const choose = () => {
-      const seat = seatEl();
+      const seat = app ? null : seatEl();
       if (seat && visible(seat.getBoundingClientRect())) {
         if (spot?.kind !== "seat") {
           if (spot && phase > 0.05) return leave();
@@ -272,9 +280,10 @@ function Stage() {
         if (!talking && dir !== -1) leave();
         return;
       }
+      if (spot?.id === "visit" && busy() && dir !== -1) return leave(); // Jagora got to work: she makes way
       if (spot) {
         const r = spot.el?.getBoundingClientRect();
-        const stillHere = spot.kind === "corner" || (r && visible(r) && (spot.persistent ? inView(r, 0.15) : true));
+        const stillHere = spot.kind === "corner" || spot.id === "visit" || (r && visible(r) && (spot.persistent ? inView(r, 0.15) : true));
         if (!stillHere || performance.now() > holdUntil) {
           if (dir !== -1) {
             done.add(spot.id);
@@ -283,10 +292,20 @@ function Stage() {
         }
         return;
       }
-      for (const s of anchors()) {
-        if (s.persistent || done.has(s.id)) continue;
-        const r = s.el!.getBoundingClientRect();
-        if (s.persistent ? inView(r, 0.15) : inView(r)) return enter(s);
+      if (!app)
+        for (const s of anchors()) {
+          if (s.persistent || done.has(s.id)) continue;
+          const r = s.el!.getBoundingClientRect();
+          if (s.persistent ? inView(r, 0.15) : inView(r)) {
+            nextVisit = gap();
+            return enter(s);
+          }
+        }
+      if (performance.now() > nextVisit && !document.hidden && !drag) {
+        nextVisit = gap();
+        if (busy()) return;
+        const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
+        enter({ id: "visit", kind: Math.random() < 0.5 ? "edgeL" : "edgeR", gesture: pick(VISIT_GESTURES), say: pick(VISIT_LINES), y: innerHeight * (0.3 + Math.random() * 0.35) });
       }
     };
 
@@ -313,9 +332,12 @@ function Stage() {
       } else if (sp.kind === "edgeL" || sp.kind === "edgeR") {
         el.style.opacity = "1";
         const left = sp.kind === "edgeL";
-        const inX = small ? 34 : 52;
-        tx = left ? -150 + (150 + inX) * e : innerWidth + 150 - (150 + inX) * e;
-        ty = Math.min(innerHeight * 0.7, Math.max(innerHeight * 0.3, r.top + r.height / 2));
+        // a peek round the edge of the screen: her hips stay just past the edge, so only her head, shoulders and
+        // the hand holding the edge come out onto the page
+        const hip = stage.screenOf("hips") ?? { x: W / 2, y: H * 0.55 };
+        const past = (small ? 12 : 16) + 160 * (1 - e);
+        tx = (left ? -past : innerWidth + past) - hip.x + head.x;
+        ty = sp.y ?? Math.min(innerHeight * 0.7, Math.max(innerHeight * 0.3, r.top + r.height / 2));
         if (sp.id === "languages") {
           const line = langLine();
           if (line) {
@@ -327,7 +349,7 @@ function Stage() {
             }
           }
         }
-        stage.yaw = left ? 0.5 : -0.5;
+        stage.yaw = left ? 0.35 : -0.35;
         stage.leanTo = left ? 1.4 : -1.4;
       } else if (sp.kind === "seat") {
         // she drops onto the 3D Meta logo, lands on her feet, then lowers herself to sit, legs over the front
@@ -389,7 +411,7 @@ function Stage() {
             if (flat) flat.style.visibility = "";
             seatStage = "drop";
           }
-          if (spot.kind !== "seat" && !spot.persistent) done.add(spot.id);
+          if (spot.kind !== "seat" && !spot.persistent && spot.id !== "visit") done.add(spot.id);
           spot = null;
           dir = 0;
           stage.talk = false;
@@ -530,6 +552,8 @@ function Stage() {
       if (spot) {
         react("hello", 1800);
         speak("Welcome back!", 2000);
+      } else if (app) {
+        if (!busy()) enter({ id: "visit", kind: "edgeR", gesture: "hello", say: "Welcome back!", y: innerHeight * 0.4 });
       } else enter({ id: "corner", kind: "corner", gesture: "hello", say: "Welcome back!" });
     };
     const onTilt = (e: DeviceOrientationEvent) => stage?.setTilt(e.gamma ?? 0);
@@ -588,7 +612,7 @@ function Stage() {
       document.documentElement.style.cursor = "";
       stage?.dispose();
     };
-  }, []);
+  }, [app]);
 
   return (
     <>

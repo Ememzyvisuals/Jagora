@@ -29,7 +29,6 @@ import { Devices3D } from "@/components/Devices3D";
 import { CardStack } from "@/components/CardStack";
 import { Orb } from "@/components/Orb";
 import { SiteFooter } from "@/components/SiteFooter";
-import { Amina } from "@/components/mascot/Amina";
 import { useApp } from "@/lib/store";
 
 const ASKS = [
@@ -84,7 +83,7 @@ export default function Landing() {
 
       {/* hero */}
       <section className="relative">
-        <nav className="relative z-10 mx-auto flex max-w-[1200px] items-center gap-3 px-5 pt-[max(16px,env(safe-area-inset-top))] md:px-8">
+        <nav className="relative z-10 wrap flex items-center gap-3 pt-[max(16px,env(safe-area-inset-top))]">
           <Link href="/" className="flex items-center gap-2.5">
             <Mark size={34} />
             <span className="font-display text-[24px] font-bold tracking-[-0.03em] text-ink">Jagora</span>
@@ -99,7 +98,7 @@ export default function Landing() {
           </Link>
         </nav>
 
-        <div className="relative mx-auto flex max-w-[1200px] flex-col items-center px-5 pb-16 pt-10 text-center md:px-8 md:pt-14">
+        <div className="wrap relative flex flex-col items-center pb-16 pt-10 text-center md:pt-14">
           <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9 }}>
             <Orb size={150} />
           </motion.div>
@@ -108,7 +107,7 @@ export default function Landing() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.05, ease: [0.2, 0.7, 0.2, 1] }}
-            className="mt-2 max-w-[16ch] text-[40px] leading-[1.02] sm:text-[60px] lg:text-[76px]"
+            className="mt-2 max-w-[16ch] text-[40px] leading-[1.02] sm:text-[60px] lg:text-[76px] 2xl:text-[104px]"
           >
             The internet, in your own words.
           </motion.h1>
@@ -116,7 +115,7 @@ export default function Landing() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.12 }}
-            className="mt-5 max-w-[36rem] text-[17.5px] font-medium leading-relaxed text-ink sm:text-[19px]"
+            className="mt-5 max-w-[36rem] text-[17.5px] font-medium leading-relaxed text-ink sm:text-[19px] 2xl:max-w-[44rem] 2xl:text-[22px]"
           >
             Say what you need in Yorùbá, Hausa, Igbo, Pidgin or English. Jagora uses any website for you, shows proof from official sources, and stops to ask before anything that matters.
           </motion.p>
@@ -127,7 +126,7 @@ export default function Landing() {
             transition={{ duration: 0.9, delay: 0.2, ease: [0.2, 0.7, 0.2, 1] }}
             onSubmit={(e) => (e.preventDefault(), go())}
             data-amina="hero"
-            className="liquid-glass mt-9 w-full max-w-[680px] rounded-[30px] p-2.5 text-left"
+            className="liquid-glass mt-9 w-full max-w-[680px] rounded-[30px] 2xl:max-w-[860px] p-2.5 text-left"
           >
             <div className="flex items-center gap-2">
               <label className="relative min-w-0 flex-1 pl-4">
@@ -158,7 +157,7 @@ export default function Landing() {
           </motion.form>
         </div>
 
-        <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1.1, delay: 0.3 }} className="relative mx-auto max-w-[1200px] px-5 pb-20 md:px-8">
+        <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1.1, delay: 0.3 }} className="wrap relative pb-20">
           <Devices3D
             scene="hero"
             className="aspect-[5/4] w-full sm:aspect-[16/9]"
@@ -169,10 +168,10 @@ export default function Landing() {
 
       {/* what it does */}
       <section id="powers" className="relative bg-[var(--color-white)]/85 py-20 backdrop-blur-xl md:py-28">
-        <div className="mx-auto max-w-[1200px] px-5 md:px-8">
+        <div className="wrap">
           <motion.div {...rise} className="max-w-[40rem]">
             <p className="text-[15px] font-semibold text-accent">What Jagora does</p>
-            <h2 className="mt-3 text-[34px] leading-[1.05] sm:text-[50px]">A browser that works for you.</h2>
+            <h2 className="mt-3 text-[34px] leading-[1.05] sm:text-[50px] xl:text-[64px] 2xl:text-[76px]">A browser that works for you.</h2>
           </motion.div>
           <div data-amina="cards" className="-mx-5 mt-6 md:mx-0 md:mt-10">
             <CardStack cards={POWERS} />
@@ -182,8 +181,8 @@ export default function Landing() {
           <div className="mt-20 grid items-center gap-10 md:grid-cols-[1fr_1.1fr]">
             <motion.div {...rise}>
               <p className="text-[15px] font-semibold text-accent">See it work</p>
-              <h2 className="mt-3 text-[32px] leading-[1.06] sm:text-[44px]">The live page, on your screen.</h2>
-              <p className="mt-4 max-w-[30rem] text-[17px] leading-relaxed text-ink-2">
+              <h2 className="mt-3 text-[32px] leading-[1.06] sm:text-[44px] xl:text-[56px] 2xl:text-[64px]">The live page, on your screen.</h2>
+              <p className="mt-4 max-w-[30rem] text-[17px] xl:max-w-[36rem] xl:text-[19px] leading-relaxed text-ink-2">
                 You watch Jagora work on the real website, full screen on your phone. Want to do a step yourself? Tap Take over. Not sure what it means? It asks you to point.
               </p>
               <ul className="mt-6 flex flex-col gap-3 text-[16px] font-medium">
@@ -210,13 +209,13 @@ export default function Landing() {
 
       {/* safety */}
       <section id="safe" className="relative py-20 md:py-28">
-        <div className="mx-auto grid max-w-[1200px] items-center gap-12 px-5 md:grid-cols-[1fr_1.2fr] md:px-8">
+        <div className="wrap grid items-center gap-12 md:grid-cols-[1fr_1.2fr] xl:gap-24">
           <motion.div {...rise}>
             <span className="liquid-glass grid h-14 w-14 place-items-center rounded-[16px] text-ink">
               <ShieldCheck size={28} />
             </span>
-            <h2 className="mt-6 max-w-[14ch] text-[34px] leading-[1.05] sm:text-[50px]">Safe on every page.</h2>
-            <p className="mt-4 max-w-[30rem] text-[17px] font-medium leading-relaxed text-ink">
+            <h2 className="mt-6 max-w-[14ch] text-[34px] leading-[1.05] sm:text-[50px] xl:text-[64px] 2xl:text-[76px]">Safe on every page.</h2>
+            <p className="mt-4 max-w-[30rem] text-[17px] xl:max-w-[36rem] xl:text-[19px] font-medium leading-relaxed text-ink">
               The safety rules are written into the code, not left to the AI. Private numbers go in a private box that only the website sees.
             </p>
             <ul data-amina="safety" className="mt-6 grid gap-2.5">
@@ -239,7 +238,7 @@ export default function Landing() {
 
       {/* languages */}
       <section id="languages" className="relative bg-[var(--color-white)]/85 py-20 backdrop-blur-xl md:py-28">
-        <div className="mx-auto max-w-[1200px] px-5 md:px-8">
+        <div className="wrap">
           <motion.p {...rise} className="text-[15px] font-semibold text-accent">
             Five languages, spoken and written
           </motion.p>
@@ -251,9 +250,9 @@ export default function Landing() {
               ["How you dey, wetin I fit do for you?", "Naijá"],
               ["Good day, what can I do for you?", "English"],
             ].map(([line, name], i) => (
-              <motion.div key={name} data-amina-say={line} data-amina-lang={{ Yorùbá: "yo", Hausa: "ha", Igbo: "ig", Naijá: "pcm", English: "en" }[name]} {...rise} transition={{ ...rise.transition, delay: i * 0.05 }} className="flex flex-wrap items-baseline gap-x-5 border-b border-ink/10 py-5">
-                <span className="font-head text-[26px] leading-tight sm:text-[40px]">{line}</span>
-                <span className="text-[15px] font-semibold text-ink-3">{name}</span>
+              <motion.div key={name} data-amina-say={line} data-amina-lang={{ Yorùbá: "yo", Hausa: "ha", Igbo: "ig", Naijá: "pcm", English: "en" }[name]} {...rise} transition={{ ...rise.transition, delay: i * 0.05 }} className="flex flex-wrap items-baseline gap-x-5 border-b border-ink/10 py-5 xl:justify-between xl:py-7">
+                <span className="font-head text-[26px] leading-tight sm:text-[40px] xl:text-[56px] 2xl:text-[68px]">{line}</span>
+                <span className="text-[15px] font-semibold text-ink-3 xl:text-[18px]">{name}</span>
               </motion.div>
             ))}
           </div>
@@ -262,7 +261,7 @@ export default function Landing() {
 
       {/* start */}
       <section className="relative px-5 py-14 sm:px-0 md:py-28">
-        <motion.div {...rise} className="liquid-glass mx-auto flex max-w-[860px] flex-col items-center rounded-[28px] px-5 py-8 text-center sm:rounded-[36px] sm:px-12 sm:py-12">
+        <motion.div {...rise} className="liquid-glass mx-auto flex max-w-[1400px] flex-col items-center rounded-[28px] px-5 py-8 text-center sm:rounded-[36px] sm:px-12 sm:py-12">
           <div className="-my-4 scale-[0.7] sm:my-0 sm:scale-100">
             <Orb size={120} />
           </div>
@@ -274,8 +273,7 @@ export default function Landing() {
         </motion.div>
       </section>
 
-      <SiteFooter amina />
-      <Amina />
+      <SiteFooter />
     </div>
   );
 }

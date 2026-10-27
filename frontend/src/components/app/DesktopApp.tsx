@@ -3,6 +3,7 @@
 /* Desktop: the sky, and one big liquid-glass browser window. Tabs and address bar on top; tasks on the left;
    the page in the middle (Jagora's start page or the live site she is working on); Jagora on the right. */
 import {
+  PersonSimple,
   ArrowClockwise,
   PaperPlaneRight,
   CaretDown,
@@ -34,6 +35,7 @@ import { setAutoFullscreen, toggleFullscreen, useAutoFullscreen } from "../Pwa";
 import { Starters, openSite, useTopSites } from "./NewTabBits";
 import { TranslateButton } from "../PageView";
 import { startPageWars } from "../PageWars";
+import { aminaHidden, setAminaHidden } from "../mascot/Amina";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -291,6 +293,7 @@ export function DesktopApp() {
           {/* Jagora */}
           <motion.section layout transition={{ type: "spring", stiffness: 260, damping: 32 }} className={`flex w-[372px] shrink-0 flex-col overflow-hidden rounded-[24px] bg-white/45 shadow-[inset_0_1px_1px_rgba(255,255,255,1)] ${showPage ? "order-first" : ""}`}>
             <div className="flex justify-end gap-1 px-3 pt-3 text-ink-2">
+              <AminaToggle />
               <DataSaverToggle />
               <VoiceToggle />
             </div>
@@ -467,6 +470,24 @@ function TakeOver({ taskId }: { taskId: string }) {
 
 /** Data saver: Auto (follows the phone's own connection report), On, Off. On, the voice comes compressed and the
     live page smaller, for slow or costly networks. */
+/** Amina drops by now and then; this hides or shows her (the same switch as "Hide Amina" in the site footer). */
+function AminaToggle() {
+  const [off, setOff] = useState(false);
+  useEffect(() => {
+    const sync = () => setOff(aminaHidden());
+    sync();
+    window.addEventListener("amina:toggle", sync);
+    return () => window.removeEventListener("amina:toggle", sync);
+  }, []);
+  const label = off ? "Amina is hidden. Tap to show her." : "Amina drops by now and then. Tap to hide her.";
+  return (
+    <button onClick={() => setAminaHidden(!off)} className={`flex h-8 items-center gap-1 rounded-full px-2 text-[12px] font-semibold hover:bg-white/60 ${off ? "text-ink-3" : ""}`} aria-label={label} title={label}>
+      <PersonSimple size={17} />
+      <span>Amina</span>
+    </button>
+  );
+}
+
 function DataSaverToggle() {
   const mode = useApp((s) => s.dataSaver);
   const set = useApp((s) => s.setDataSaver);

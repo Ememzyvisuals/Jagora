@@ -106,16 +106,16 @@ export default function Start() {
   return (
     <div className="relative min-h-dvh overflow-x-hidden">
       <Backdrop />
-      <div className="relative mx-auto grid min-h-dvh max-w-[1360px] items-center gap-6 px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-[max(16px,env(safe-area-inset-top))] md:grid-cols-[1.15fr_1fr] md:gap-16 md:px-14">
+      <div className="wrap relative grid min-h-dvh items-center gap-6 pb-[max(20px,env(safe-area-inset-bottom))] pt-[max(16px,env(safe-area-inset-top))] md:grid-cols-[1.15fr_1fr] md:gap-16 2xl:gap-32">
         {/* Jagora and her languages */}
         <section className="flex flex-col items-center">
-          <div className="flex origin-center flex-col items-center md:scale-[1.3] lg:scale-[1.65]">
+          <div className="flex origin-center flex-col items-center md:scale-[1.3] lg:scale-[1.65] 2xl:scale-[2]">
             <Orb size={120} state="idle" />
             <CloudWordmark width={280} className="-mt-6" />
             <p className="-mt-2 text-center text-[15.5px] font-medium text-ink-2 dark:text-ink dark:[text-shadow:0_1px_10px_rgba(0,0,0,.55)]">{TAGLINE[lang]}</p>
           </div>
-          <p className="mt-5 text-[12.5px] font-semibold uppercase tracking-[0.14em] text-ink-2 md:mt-14 md:text-[14px] lg:mt-24 dark:text-ink">{T.pick[lang]}</p>
-          <div className="relative mt-3 h-[86px] w-full max-w-[340px] lg:mt-6 lg:scale-[1.3]">
+          <p className="mt-5 text-[12.5px] font-semibold uppercase tracking-[0.14em] text-ink-2 md:mt-14 md:text-[14px] lg:mt-24 2xl:mt-36 dark:text-ink">{T.pick[lang]}</p>
+          <div className="relative mt-3 h-[86px] w-full max-w-[340px] lg:mt-6 lg:scale-[1.3] 2xl:mt-12 2xl:scale-[1.6]">
             {TAGS.map((t, i) => {
               const on = t.id === lang;
               return (
@@ -140,7 +140,7 @@ export default function Start() {
         </section>
 
         {/* the card */}
-        <section className="w-full md:max-w-[520px] md:justify-self-end">
+        <section className="w-full md:max-w-[520px] md:justify-self-end 2xl:max-w-[620px]">
           <Glass radius={32} bezel={18} tint="rgba(255,255,255,.72)" className="p-5 shadow-[0_30px_70px_-34px_rgba(10,30,70,.55)] md:p-10">
             <div className="hidden items-center gap-2.5 md:flex">
               <Mark size={44} />

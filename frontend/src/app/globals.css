@@ -194,6 +194,13 @@ h3,
 }
 
 @layer components {
+  /* the page width: content runs across the whole screen, with a side margin that grows with the screen */
+  .wrap {
+    width: 100%;
+    margin-inline: auto;
+    max-width: 2400px;
+    padding-inline: clamp(20px, 5vw, 120px);
+  }
   /* CSS glass, matching the lens slabs: frosted body, bright rim on top, soft inner glow, gentle drop shadow */
   .glass,
   .glass-2,
@@ -396,6 +403,16 @@ h3,
   color: var(--color-ink);
   font-size: 17px;
   line-height: 1.72;
+}
+@media (min-width: 1280px) {
+  .prose-jagora {
+    font-size: 18.5px;
+  }
+}
+@media (min-width: 1536px) {
+  .prose-jagora {
+    font-size: 20px;
+  }
 }
 .prose-jagora > * + * {
   margin-top: 1.1em;

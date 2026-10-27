@@ -10,7 +10,7 @@ import { BUILDER, PLOTWEAVER, REPO } from "@/lib/credits";
 import { CloudWordmark } from "./glass/CloudWordmark";
 import { Glass } from "./glass/Glass";
 import { startPageWars } from "./PageWars";
-import { aminaHidden, setAminaHidden } from "./mascot/Amina";
+import { Amina, aminaHidden, setAminaHidden } from "./mascot/Amina";
 
 const COLUMNS: { title: string; links: { label: string; href: string; ext?: boolean }[] }[] = [
   {
@@ -160,7 +160,9 @@ const POWERS = [
 const head = "font-head text-[17px] leading-none text-ink";
 const link = "w-fit text-[15px] text-ink-2 transition-colors hover:text-ink";
 
-export function SiteFooter({ amina = false }: { amina?: boolean }) {
+/** Every public page ends with this footer, so Amina comes with it: she sits on the Meta logo here and peeks at
+    whatever the page marks for her. */
+export function SiteFooter() {
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
   useEffect(() => {
@@ -181,7 +183,7 @@ export function SiteFooter({ amina = false }: { amina?: boolean }) {
 
   return (
     <footer className="relative mt-16 px-3 sm:px-5">
-      <Glass radius={32} bezel={18} tint="rgba(255,255,255,.8)" interactive={false} className="mx-auto max-w-[1360px]">
+      <Glass radius={32} bezel={18} tint="rgba(255,255,255,.8)" interactive={false} className="mx-auto max-w-[2400px]">
         <div className="space-y-10 px-6 py-12 sm:px-10 md:py-16 lg:px-14">
           <div className="grid grid-cols-2 gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr_1.6fr] md:gap-8">
             {/* brand */}
@@ -256,11 +258,9 @@ export function SiteFooter({ amina = false }: { amina?: boolean }) {
             <p className="text-[13px] text-ink-3">© {year} Jagora. Built for the Meta Global AI Developer Hackathon 2026.</p>
             <p className="flex items-center gap-3 text-[13px] text-ink-3">
               Designed and built by {BUILDER.name}
-              {amina && (
-                <button onClick={() => setAminaHidden(!aminaOff)} className="shrink-0 whitespace-nowrap rounded-full bg-black/5 px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10">
-                  {aminaOff ? "Show Amina" : "Hide Amina"}
-                </button>
-              )}
+              <button onClick={() => setAminaHidden(!aminaOff)} className="shrink-0 whitespace-nowrap rounded-full bg-black/5 px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10">
+                {aminaOff ? "Show Amina" : "Hide Amina"}
+              </button>
               <button onClick={startPageWars} className="shrink-0 whitespace-nowrap rounded-full bg-black/5 px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10" title="Shift + G">
                 Bored? Play
               </button>
@@ -270,9 +270,10 @@ export function SiteFooter({ amina = false }: { amina?: boolean }) {
       </Glass>
 
       {/* the wordmark at the end of the page */}
-      <div ref={box} className="mx-auto mt-2 w-full max-w-[1360px] select-none" aria-hidden="true">
+      <div ref={box} className="mx-auto mt-2 w-full max-w-[2400px] select-none" aria-hidden="true">
         {w > 0 && <CloudWordmark width={w} family="Jagora Boiling" weight={400} />}
       </div>
+      <Amina />
     </footer>
   );
 }

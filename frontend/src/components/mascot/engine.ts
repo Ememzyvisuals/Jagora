@@ -301,16 +301,19 @@ export class AminaStage {
        is spread up the back (a little at the waist, more at the chest and neck), and the head tips back toward
        level. When she talks she leans a little further out and nods on her words. */
     const B = (n: (typeof BONES)[number]) => vrm.humanoid.getNormalizedBoneNode(n)!;
-    const out = Math.max(-1, Math.min(1, this.leanTo / 1.4)) * (1 + this.talking * 0.3); // tilting the phone no longer bends her
+    const out = Math.max(-1, Math.min(1, this.leanTo / 1.4)) * (1 + this.talking * 0.12); // tilting the phone no longer bends her
     this.lean = lerp(this.lean, out, 1 - Math.exp(-dt * 4));
     const L = this.lean, a = Math.abs(L);
-    B("hips").rotation.z += L * 0.05;
-    B("leftUpperLeg").rotation.z -= L * 0.05; // feet stay under her
-    B("rightUpperLeg").rotation.z -= L * 0.05;
-    B("spine").rotation.z += L * 0.09;
-    B("spine").rotation.x += a * 0.06;
-    B("chest").rotation.z += L * 0.13;
-    B("neck").rotation.z += L * 0.06;
+    B("hips").rotation.z += L * 0.12;
+    B("leftUpperLeg").rotation.z -= L * 0.12; // her legs stay straight down, out of sight past the edge
+    B("rightUpperLeg").rotation.z -= L * 0.12;
+    B("spine").rotation.z += L * 0.3;
+    B("spine").rotation.x += a * 0.05;
+    B("chest").rotation.z += L * 0.34;
+    B("neck").rotation.z += L * 0.16;
+    // her arms hang straight down under gravity instead of following the lean
+    if (!gp.rightUpperArm) B("rightUpperArm").rotation.z += L * 0.9;
+    if (!gp.leftUpperArm) B("leftUpperArm").rotation.z += L * 0.9;
     const nod = this.mouth !== null ? this.mouth * 0.12 : this.talking * Math.max(0, Math.sin(this.t * 6)) * 0.06;
     B("neck").rotation.x += nod;
     // a scroll shove only swings her arms a little; her body stays steady
@@ -347,7 +350,7 @@ export class AminaStage {
     }
     this.headLook.x = lerp(this.headLook.x, lx, k * 0.8);
     this.headLook.y = lerp(this.headLook.y, ly, k * 0.8);
-    head.rotation.set(-this.headLook.y * 0.35, this.headLook.x * 0.6 - this.faceYaw * 0.5, -this.lean * 0.17); // head tips back toward level
+    head.rotation.set(-this.headLook.y * 0.35, this.headLook.x * 0.6 - this.faceYaw * 0.5, -this.lean * 0.45); // head tips back toward level
 
     // face: blink, mood, talking
     const em = vrm.expressionManager;
