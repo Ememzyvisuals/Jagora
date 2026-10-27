@@ -528,6 +528,43 @@ class Browser:
         await self._restart_screencast()
         await self.goto(url)
 
+    async def read_many(self, urls: list[str], chars: int = 3500) -> list[dict]:
+        """Open several sources at the same time, each in its own tab, and read their main text. The tabs stay open
+        so the agent can switch to one and show evidence from it."""
+        async def one(u: str) -> dict:
+            v = guard.check(u)
+            if v.blocked:
+                return {"url": u, "error": v.reason}
+            p = await self._own_page()
+            self._wire(p)
+            self.pages.append(p)
+            idx = len(self.pages) - 1
+            try:
+                if u.lower().split("?")[0].endswith(".pdf"):
+                    import pymupdf
+
+                    data, _, _ = await self.fetch(u)
+                    doc = pymupdf.open(stream=data, filetype="pdf")
+                    text = " ".join(doc[i].get_text() for i in range(min(doc.page_count, 6)))
+                    title = (doc.metadata or {}).get("title") or u.split("/")[-1]
+                else:
+                    await p.goto(u, wait_until="domcontentloaded", timeout=30000)
+                    try:
+                        await p.wait_for_load_state("networkidle", timeout=4000)
+                    except Exception:  # noqa: BLE001
+                        pass
+                    await p.evaluate(guardmod.CLEAN_JS)
+                    text = await p.evaluate(READ_JS)
+                    title = await p.title()
+                    when = await p.evaluate(DATE_JS)
+                    text = (f"[page dated {when}] " if when else "") + text
+                return {"tab": idx, "url": p.url if not u.lower().endswith(".pdf") else u, "title": title[:120],
+                        "official": v.official, "owner": v.owner, "text": re.sub(r"\s+", " ", text)[:chars]}
+            except Exception as e:  # noqa: BLE001
+                return {"tab": idx, "url": u, "error": str(e).splitlines()[0][:120]}
+
+        return await asyncio.gather(*(one(u) for u in urls[:5]))
+
     async def switch_tab(self, i: int) -> None:
         if not 0 <= i < len(self.pages):
             raise ActionError(f"there is no tab {i}")

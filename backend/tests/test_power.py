@@ -172,3 +172,64 @@ async def test_busy_site_is_retried_later(db, monkeypatch):
     await server.fire_jobs()
     j = await db.one("select * from jobs")
     assert calls == [False] and j["status"] == "waiting" and j["at"] > time.time() + 25 * 60 and j["tries"] == 1
+
+
+class Checked(Model):
+    """Reads two sources at once, claims done too early, is stopped by the checker, then finishes properly."""
+
+    def __init__(self, base):
+        self.base, self.turn, self.usage, self.pages = base, 0, Usage(), []
+
+    async def chat(self, messages, tools=None, effort="low", max_tokens=4000, kind="agent"):
+        if kind == "check":
+            text = messages[1]["content"][0]["text"]
+            done = "remember" in text.split("What actually happened:")[1]
+            r = Reply("DONE" if done else "NOT DONE: nothing was remembered yet", [], "stop", 0, 0)
+            self.usage.add(r, kind)
+            return r
+        page = messages[1]["content"][0]["text"]
+        self.pages.append(page)
+        plan = [
+            [("read_sources", {"urls": [self.base + "/article.html", self.base + "/login.html"]})],
+            [("finish", {"summary": "Done.", "success": True})],  # stopped: no evidence shown
+            [("finish", {"summary": "Done.", "success": True})],  # stopped by the checker
+            [("remember_about_her", {"fact": "She is interested in the Oyo Empire"})],
+            [("finish", {"summary": "Done, and I will remember your interest.", "success": True})],
+        ]
+        calls = plan[min(self.turn, len(plan) - 1)]
+        self.turn += 1
+        r = Reply("", [ToolCall(str(i), n, a) for i, (n, a) in enumerate(calls)], "tool_calls", 0, 0)
+        self.usage.add(r, kind)
+        return r
+
+
+class Mem:
+    def __init__(self):
+        self.kept = []
+
+    async def remember_fact(self, f): self.kept.append(f)
+    async def facts(self): return list(self.kept)
+
+
+async def test_parallel_sources_checker_and_memory(portal):
+    class IO:
+        said = []
+        async def say(self, t): self.said.append(t)
+        async def ask(self, q, c): return ""
+        async def confirm(self, q, d): return True
+        async def point(self, r, t): return ""
+        async def handoff(self, r, t): return ""
+        async def event(self, k, d): pass
+
+    from jagora.agent import Agent
+
+    model, mem = Checked(portal), Mem()
+    async with Browser() as b:
+        agent = Agent(model, b, IO(), memory=mem)
+        res = await agent.run("tell me about the Oyo Empire")
+        assert res.success and res.summary.startswith("Done, and I will remember")
+        assert len(b.pages) == 3  # the first tab plus one per source, read at the same time
+    hist = "\n".join(agent.history)
+    assert "[tab 1]" in hist and "Oyo-Ile" in hist and "Candidate portal" in hist
+    assert "checker does not agree" in hist
+    assert mem.kept == ["She is interested in the Oyo Empire"]

@@ -628,6 +628,12 @@ class DbMemory:
                        max(0, min(240, retry_min))))
         return jid
 
+    async def remember_fact(self, fact: str) -> None:
+        await db.exec("insert into facts (id, user_id, t, fact) values (?,?,?,?)", (uuid.uuid4().hex[:10], self.u, time.time(), fact))
+
+    async def facts(self) -> list[str]:
+        return [r["fact"] for r in await db.exec("select fact from facts where user_id=? order by t desc limit 25", (self.u,))]
+
     async def jobs(self) -> list[dict]:
         return await db.exec("select id, at, goal, repeat from jobs where user_id=? and status='waiting' order by at", (self.u,))
 
