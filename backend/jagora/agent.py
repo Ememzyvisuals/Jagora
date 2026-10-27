@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Protocol
 
-from jagora import fields, research, services
+from jagora import fields, research, services, terms
 from jagora.browser import ActionError, Browser, Snapshot
 from jagora.config import FILES_DIR, settings
 from jagora.guard import guard, registrable
@@ -192,6 +192,8 @@ COMMON = [
     tool("remember_about_her", "Remember a lasting fact about her for future chats (her school, course, state, exam "
          "year, preferences), only when she says it or agrees. Never private numbers or passwords.",
          {"fact": {"type": "string"}}, ["fact"]),
+    tool("review_terms", "Read this site's terms and privacy policy now and tell her plainly if anything is worrying. "
+         "(Jagora also does this by itself in the background on sites where she may sign up, pay or agree.)", {}, []),
     tool("ask_point", "When you are not sure which thing on the page she means, ask her to tap it on the live page. You get "
          "back what she tapped.", {"question": {"type": "string", "description": "in her language, e.g. 'Tap the button you mean'"}},
          ["question"]),
@@ -326,6 +328,7 @@ class Agent:
     _checks: int = 0
     _goal: str = ""
     _fails: int = 0
+    _terms: dict = field(default_factory=dict)  # site -> review, or "busy" / "none"
     evidence: int = 0
     searched: int = 0
     _nudged_evidence: bool = False
@@ -365,6 +368,7 @@ class Agent:
             if snap:
                 await self.io.event("page", {"url": snap.url, "title": snap.title})
                 await self._report_notices()
+                await self._maybe_review_terms(snap)
             wrap = turns >= self.max_turns - 2
             tools = self._tools(snap, wrap)
             reply = await self.model.chat(self._messages(goal, snap, heard, wrap), tools,
@@ -410,7 +414,8 @@ class Agent:
             page_only = {"click", "type_text", "choose", "set_checkbox", "press_key", "point_at", "hand_over", "ask_private",
                          "find_text", "list_links", "pdf_page", "show_evidence", "scroll", "go_back", "switch_tab", "close_tab",
                          "read_page", "page_tables", "find_media", "use_saved_login", "page_theme", "save_page", "fetch_code",
-                         "hover", "double_click", "right_click", "drag", "click_at", "upload_file", "set_date", "ask_point"}
+                         "hover", "double_click", "right_click", "drag", "click_at", "upload_file", "set_date", "ask_point",
+                         "review_terms"}
             return [t for t in base if t["function"]["name"] not in page_only]
         return base
 
@@ -626,6 +631,13 @@ class Agent:
                     return "in Guide me mode you do not act on the page", False, None
                 await b.keys(str(a.get("key", "Enter")))
                 return f"pressed {a.get('key')}", True, None
+            if name == "review_terms":
+                here = registrable(b.page.url)
+                rv = await self._review_now(here)
+                if not rv:
+                    return "this site shows no terms or privacy policy to read (that itself is worth telling her)", False, None
+                await self._tell_terms(rv, always=True)
+                return f"terms reviewed: {rv['verdict']}. {rv['summary']}", False, None
             if name == "ask_point":
                 pick = getattr(self.io, "ask_point", None)
                 if not pick:
@@ -898,6 +910,85 @@ class Agent:
         await self._give_file(name, data, ctype, url, play)
         return (f"playing {name} for her in the app" if play else f"downloaded {name} ({len(data) // 1024} KB) and gave it to her"), False, None
 
+    # ---- terms and conditions, read for her ------------------------------------------------------------------------------
+
+    async def _maybe_review_terms(self, snap: Snapshot) -> None:
+        """On a site where she may sign up, sign in, pay or agree: review its terms once, in the background."""
+        if not snap.url.startswith("http") or self.browser is None or self.browser.pdf:
+            return
+        here = registrable(snap.url)
+        if here in self._terms:
+            return
+        engaged = any(e.kind in ("text box", "checkbox") for e in snap.elements) or any(
+            terms.LINK_RE.search(e.label or "") for e in snap.elements if e.kind == "link")
+        if not engaged:
+            return
+        self._terms[here] = "busy"
+        cached = None
+        if self.memory and hasattr(self.memory, "terms_get"):
+            try:
+                cached = await self.memory.terms_get(here)
+            except Exception:  # noqa: BLE001
+                cached = None
+        if cached:
+            self._terms[here] = cached
+            return
+        try:
+            urls = await terms.find_terms(self.browser)
+        except Exception:  # noqa: BLE001
+            urls = []
+        if not urls:
+            self._terms[here] = "none"
+            return
+        asyncio.ensure_future(self._review_bg(here, urls))
+
+    async def _review_bg(self, here: str, urls: list[str]) -> None:
+        try:
+            text = await terms.read_terms(self.browser, urls)
+            if len(text) < 400:
+                self._terms[here] = "none"
+                return
+            r = await self.model.chat([{"role": "user", "content": terms.PROMPT.format(lang=terms.LANGS.get(self.lang, "English"),
+                                                                                          site=here, text=text)}],
+                                      None, effort="low", max_tokens=2500, kind="terms")
+            rv = terms.parse(r.text)
+            if not rv:
+                self._terms[here] = "none"
+                return
+            rv.update({"site": here, "urls": urls, "t": time.time(), "lang": self.lang})
+            self._terms[here] = rv
+            if self.memory and hasattr(self.memory, "terms_put"):
+                await self.memory.terms_put(rv)
+            await self._tell_terms(rv)
+        except Exception as e:  # noqa: BLE001
+            log.info("terms review failed for %s: %s", here, e)
+            self._terms[here] = "none"
+
+    async def _review_now(self, here: str) -> dict | None:
+        rv = self._terms.get(here)
+        if isinstance(rv, dict):
+            return rv
+        rv = await terms.review(self.model, self.browser, self.lang)
+        self._terms[here] = rv or "none"
+        if rv and self.memory and hasattr(self.memory, "terms_put"):
+            await self.memory.terms_put(rv)
+        return rv
+
+    async def _tell_terms(self, rv: dict, always: bool = False) -> None:
+        if rv["verdict"] == "ok" and not always:
+            await self.io.event("guard", {"kind": "terms", "site": rv["site"], "text": {
+                "yo": f"Mo ka òfin {rv['site']}: kò sí ohun tó burú", "ha": f"Na karanta ka'idodin {rv['site']}: babu matsala",
+                "ig": f"Agụrụ m usoro {rv['site']}: ọ dịghị nsogbu", "pcm": f"I don read {rv['site']} terms: nothing wey bad"}.get(
+                self.lang, f"Read {rv['site']}'s terms: nothing unusual")})
+            return
+        await self.io.event("terms", rv)
+
+    def _terms_note(self, url: str) -> str:
+        rv = self._terms.get(registrable(url)) if url else None
+        if not isinstance(rv, dict) or rv["verdict"] == "ok":
+            return ""
+        return "Terms warning: " + "; ".join(p["text"] for p in rv["points"][:3])
+
     async def _check(self, goal: str, summary: str, snap: Snapshot | None) -> str:
         """A second look by a strict checker that sees only the evidence (the page and what happened), not the
         agent's reasoning. Returns "" when it agrees the task is done, otherwise what is missing."""
@@ -983,6 +1074,9 @@ class Agent:
 
     async def _approve(self, a: dict, label: str, reason: str) -> bool:
         question = (a.get("ask") or "").strip() or SAY["confirm"].get(self.lang, SAY["confirm"]["en"]).format(x=label)
+        note = self._terms_note(self.browser.page.url) if self.browser and self.browser.page else ""
+        if note and re.search(r"agree|terms|sign ?up|register|create|pay|subscribe|accept|consent|submit", f"{label} {reason}", re.I):
+            reason = f"{reason}. {note}"
         yes = await self.io.confirm(question, reason)
         self._record("confirm", {"question": question, "reason": reason, "yes": yes})
         return yes
@@ -1005,6 +1099,11 @@ class Agent:
         parts.append(f"Her saved details: {self._profile_summary()}")
         if self._facts:
             parts.append("What you know about her from before: " + "; ".join(self._facts))
+        if snap and snap.url.startswith("http"):
+            rv = self._terms.get(registrable(snap.url))
+            if isinstance(rv, dict):
+                parts.append(f"This site's terms (already reviewed, she has been told): {rv['verdict']}. {rv['summary']} "
+                             + " ".join(f"[{p['level']}] {p['text']}" for p in rv["points"]))
         if self._vault_names:
             parts.append("Her saved logins (typed by code with use_saved_login, only on their own site; you never see them): "
                          + "; ".join(f'"{v["name"]}" for {v["site"]}' for v in self._vault_names))

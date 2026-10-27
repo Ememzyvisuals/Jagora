@@ -571,6 +571,11 @@ class WsIO:
                 await s.send({"type": "msg", "task": t, "msg": {"id": self.r.plan_id, "kind": "plan", "steps": data["steps"]}})
         elif kind == "reminder":
             await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "reminder", **data}})
+        elif kind == "terms":
+            await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "terms", **data}})
+            await db.remember(s.user_id, t, "agent", f"[terms of {data.get('site')}] {data.get('verdict')}: {data.get('summary')}")
+            if data.get("verdict") != "ok":
+                s.speak(t, data.get("summary", ""))
         elif kind == "media":
             await self.close_step()
             url = data["url"] if data["url"].startswith("http") else settings.public_url.rstrip("/") + data["url"]
@@ -627,6 +632,17 @@ class DbMemory:
                       (jid, self.u, self.c, at, goal, ",".join(allow), repeat, self.lang, self.mode, json.dumps(self.profile),
                        max(0, min(240, retry_min))))
         return jid
+
+    async def terms_get(self, site: str) -> dict | None:
+        row = await db.one("select t, data from terms where site=?", (site,))
+        if not row or time.time() - row["t"] > 30 * 86400:
+            return None
+        d = json.loads(row["data"])
+        return d if d.get("lang") == self.lang else None  # reviewed in another language: read again in hers
+
+    async def terms_put(self, rv: dict) -> None:
+        await db.exec("insert into terms (site, t, data) values (?,?,?) on conflict(site) do update set t=excluded.t, data=excluded.data",
+                      (rv["site"], time.time(), json.dumps(rv, ensure_ascii=False)))
 
     async def remember_fact(self, fact: str) -> None:
         await db.exec("insert into facts (id, user_id, t, fact) values (?,?,?,?)", (uuid.uuid4().hex[:10], self.u, time.time(), fact))
@@ -852,7 +868,7 @@ class JobIO:
         return {"value": "", "save": False}
 
     async def event(self, kind: str, data: dict) -> None:
-        if kind in ("evidence", "verdict", "reminder", "moment", "scheduled"):
+        if kind in ("evidence", "verdict", "reminder", "moment", "scheduled", "terms"):
             self._add({"kind": kind, **data})
         elif kind == "doc":
             self._add({"kind": "doc", "doc": data})

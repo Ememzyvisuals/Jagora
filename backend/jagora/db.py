@@ -44,6 +44,7 @@ SCHEMA = [
          last text not null default '', retry_min integer not null default 0, tries integer not null default 0)""",
     "create index if not exists jobs_due on jobs(status, at)",
     """create table if not exists facts (id text primary key, user_id text not null, t real not null, fact text not null)""",
+    """create table if not exists terms (site text primary key, t real not null, data text not null)""",
     """create table if not exists notices (
          id text primary key, user_id text not null, t real not null, chat_id text not null, title text not null,
          text text not null, delivered integer not null default 0, payload text not null default '')""",

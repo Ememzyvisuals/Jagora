@@ -297,3 +297,45 @@ export function PointAskCard({ m }: { m: Extract<Msg, { kind: "pointask" }> }) {
     </div>
   );
 }
+
+const TERMS: Record<"title" | "ok" | "caution" | "red" | "read", L> = {
+  title: { en: "Terms and privacy, read for you", pcm: "Terms and privacy, I don read am for you", yo: "Òfin àti àṣírí, mo ti kà á fún yín", ha: "Ka'idoji da sirri, na karanta maka", ig: "Usoro na nzuzo, agụrụ m ya maka gị" },
+  ok: { en: "Nothing unusual", pcm: "Nothing wey bad", yo: "Kò sí ohun tó burú", ha: "Babu matsala", ig: "Ọ dịghị nsogbu" },
+  caution: { en: "Be careful", pcm: "Shine your eye", yo: "Ẹ ṣọ́ra", ha: "A yi hankali", ig: "Kpachara anya" },
+  red: { en: "Warning", pcm: "Warning", yo: "Ìkìlọ̀", ha: "Gargadi", ig: "Ịdọ aka na ntị" },
+  read: { en: "Read the terms", pcm: "Read the terms", yo: "Ka òfin náà", ha: "Karanta ka'idojin", ig: "Gụọ usoro ahụ" },
+};
+/** a site's terms and privacy policy, read for her: what to watch out for */
+export function TermsCard({ m }: { m: Extract<Msg, { kind: "terms" }> }) {
+  const lang = useApp((s) => s.lang);
+  const tone = m.verdict === "red" ? "text-danger" : m.verdict === "caution" ? "text-stop" : "text-ok";
+  return (
+    <div className="rounded-[22px] bg-white p-4 shadow-[0_10px_30px_-20px_rgba(10,30,70,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
+      <div className="flex items-center gap-2">
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border border-current ${tone}`}>
+          {m.verdict === "ok" ? <SealCheck size={18} /> : <Warning size={18} />}
+        </span>
+        <div className="min-w-0">
+          <p className="text-[12.5px] font-semibold text-ink-3">{TERMS.title[lang]} · {m.site}</p>
+          <p className={`text-[15px] font-semibold ${tone}`}>{TERMS[m.verdict][lang]}</p>
+        </div>
+      </div>
+      <p className="mt-2.5 text-[15px] leading-snug text-ink">{m.summary}</p>
+      {m.points.length > 0 && (
+        <ul className="mt-2 flex flex-col gap-1.5">
+          {m.points.map((p, i) => (
+            <li key={i} className="flex items-start gap-2 text-[14.5px] leading-snug text-ink-2">
+              <span className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${p.level === "red" ? "bg-danger" : "bg-stop"}`} />
+              {p.text}
+            </li>
+          ))}
+        </ul>
+      )}
+      {m.urls?.[0] && (
+        <a href={m.urls[0]} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-[13px] font-semibold text-accent hover:underline">
+          {TERMS.read[lang]} <ArrowSquareOut size={13} />
+        </a>
+      )}
+    </div>
+  );
+}

@@ -233,3 +233,87 @@ async def test_parallel_sources_checker_and_memory(portal):
     assert "[tab 1]" in hist and "Oyo-Ile" in hist and "Candidate portal" in hist
     assert "checker does not agree" in hist
     assert mem.kept == ["She is interested in the Oyo Empire"]
+
+
+SIGNUP = """<!doctype html><title>QuickLoan</title><h1>Get a loan in 5 minutes</h1>
+<label for=n>Full name</label><input id=n>
+<label><input type=checkbox id=agree> I agree to the <a href="/terms.html">Terms and Conditions</a></label>
+<button type=submit>Create account</button>"""
+TERMS = "<h1>Terms and Conditions</h1>" + "<p>By using QuickLoan you allow us to read your contacts and SMS. We may share your personal data with our partners and advertisers. Late repayment attracts a daily penalty of 5% and we may contact your family and friends to recover the debt.</p>" * 6
+
+
+class TermsModel(Model):
+    def __init__(self):
+        self.turn, self.usage, self.terms_seen = 0, Usage(), ""
+
+    async def chat(self, messages, tools=None, effort="low", max_tokens=4000, kind="agent"):
+        if kind == "terms":
+            self.terms_seen = messages[0]["content"]
+            r = Reply('{"verdict": "red", "summary": "This loan app takes your contacts and charges heavy daily penalties.", '
+                      '"points": [{"level": "red", "text": "Reads your contacts and SMS"}, {"level": "red", "text": "5% penalty every day"}]}', [], "stop", 0, 0)
+            self.usage.add(r, kind)
+            return r
+        if kind == "check":
+            r = Reply("DONE", [], "stop", 0, 0)
+            self.usage.add(r, kind)
+            return r
+        page = messages[1]["content"][0]["text"]
+
+        def num(label):
+            line = next(ln for ln in page.splitlines() if label in ln and ln.startswith("["))
+            return int(line[1:line.index("]")])
+
+        await asyncio.sleep(0.6)  # the review runs in the background meanwhile
+        if self.turn == 0:
+            calls = [("type_text", {"element": num('"Full name"'), "source": "spoken", "text": "Bisi Ade"})]
+        elif self.turn == 1:
+            calls = [("set_checkbox", {"element": num("I agree"), "checked": True})]
+        else:
+            calls = [("finish", {"summary": "Stopped before agreeing.", "success": False})]
+        self.turn += 1
+        r = Reply("", [ToolCall(str(i), n, a) for i, (n, a) in enumerate(calls)], "tool_calls", 0, 0)
+        self.usage.add(r, kind)
+        return r
+
+
+async def test_terms_are_read_for_her(tmp_path):
+    import functools as ft
+
+    (tmp_path / "signup.html").write_text(SIGNUP)
+    (tmp_path / "terms.html").write_text(TERMS)
+
+    class Quiet(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), ft.partial(Quiet, directory=str(tmp_path)))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+
+    class IO:
+        def __init__(self):
+            self.events, self.confirms = [], []
+        async def say(self, t): pass
+        async def ask(self, q, c): return ""
+        async def confirm(self, q, d): self.confirms.append(d); return False
+        async def point(self, r, t): return ""
+        async def handoff(self, r, t): return ""
+        async def event(self, k, d): self.events.append((k, d))
+
+    class TermsMem:
+        kept = {}
+        async def terms_get(self, site): return None
+        async def terms_put(self, rv): self.kept[rv["site"]] = rv
+
+    from jagora.agent import Agent
+
+    io, model, mem = IO(), TermsModel(), TermsMem()
+    async with Browser() as b:
+        agent = Agent(model, b, io, memory=mem)
+        await agent.run("sign me up for a loan", base + "/signup.html")
+    srv.shutdown()
+    assert "daily penalty of 5%" in model.terms_seen
+    card = next(d for k, d in io.events if k == "terms")
+    assert card["verdict"] == "red" and card["points"][0]["text"] == "Reads your contacts and SMS"
+    assert mem.kept["127.0.0.1"]["verdict"] == "red"
+    assert any("Terms warning" in c for c in io.confirms)  # the warning is in front of her when she is asked to agree

@@ -125,8 +125,8 @@ export default function Landing() {
                 <span className="sr-only">Tell Jagora what you need</span>
                 <input value={text} onChange={(e) => setText(e.target.value)} className="h-[56px] w-full bg-transparent text-[17px] font-medium text-ink outline-none sm:text-[19px]" />
                 {!text && (
-                  <motion.span key={k} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="pointer-events-none absolute inset-y-0 left-4 right-0 flex items-center truncate text-[17px] text-ink-2 sm:text-[19px]">
-                    {ASKS[k].text}
+                  <motion.span key={k} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="pointer-events-none absolute inset-y-0 left-4 right-1 flex min-w-0 items-center overflow-hidden text-[17px] text-ink-2 sm:text-[19px]">
+                    <span className="block min-w-0 truncate">{ASKS[k].text}</span>
                   </motion.span>
                 )}
               </label>
