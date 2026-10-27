@@ -4,9 +4,11 @@
    the five languages, and the footer. Same design as the app: Boiling headings, Vollkorn text, portfolio glass. */
 import {
   CalendarCheck,
+  Camera,
   CursorClick,
   FileText,
   Globe,
+  ImagesSquare,
   LockKey,
   MagnifyingGlass,
   PaperPlaneRight,
@@ -24,6 +26,7 @@ import { Mark } from "@/components/Brand";
 import { Backdrop } from "@/components/glass/Backdrop";
 import { CloudWordmark } from "@/components/glass/CloudWordmark";
 import { Devices3D } from "@/components/Devices3D";
+import { CardStack } from "@/components/CardStack";
 import { Orb } from "@/components/Orb";
 import { SiteFooter } from "@/components/SiteFooter";
 import { useApp } from "@/lib/store";
@@ -45,12 +48,15 @@ const POWERS: { icon: ReactNode; title: string; body: string }[] = [
   { icon: <LockKey size={26} />, title: "Logins that stay yours", body: "Passwords and codes go in a private box. Saved logins are locked to their own site and never seen by the AI." },
   { icon: <CalendarCheck size={26} />, title: "Works while you sleep", body: "Portal too busy? Jagora tries again at midnight, signs in, downloads your printout and leaves it in the chat." },
   { icon: <FileText size={26} />, title: "Writes it up for you", body: "Research turns into a clean document with sources, ready as PDF, Word or Markdown." },
+  { icon: <Camera size={26} />, title: "Snap a letter, it reads it", body: "Photograph a bill, letter or result slip. Muse Wonder reads the amounts, dates and scam signs, then Jagora acts on it." },
+  { icon: <ImagesSquare size={26} />, title: "Shows you in pictures", body: "Reading is hard? Muse Image draws the steps as simple pictures with the same woman in each, and Jagora reads the captions." },
 ];
 
 const GUARD = [
-  "Adult, phishing and fake sites are blocked",
-  "Betting sites wait for your yes",
-  "Ads, pop-ups and redirect tricks are closed",
+  "Phishing, fake and adult sites are blocked",
+  "Betting, exam expo and money-doubling sites too",
+  "Hidden orders on a page can't take over Jagora",
+  "IP-logger and tracking links are unmasked",
   "It asks before it submits, pays or agrees",
 ];
 
@@ -72,7 +78,7 @@ export default function Landing() {
   };
 
   return (
-    <div className="relative min-h-dvh overflow-x-hidden text-ink">
+    <div className="relative min-h-dvh overflow-x-clip text-ink">
       <Backdrop />
 
       {/* hero */}
@@ -166,14 +172,8 @@ export default function Landing() {
             <p className="text-[15px] font-semibold text-accent">What Jagora does</p>
             <h2 className="mt-3 text-[34px] leading-[1.05] sm:text-[50px]">A browser that works for you.</h2>
           </motion.div>
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {POWERS.map((p, i) => (
-              <motion.article key={p.title} {...rise} transition={{ ...rise.transition, delay: (i % 3) * 0.06 }} className="rounded-[26px] border border-ink/10 bg-white/80 p-6 dark:bg-white/5">
-                <span className="grid h-12 w-12 place-items-center rounded-[14px] border border-ink/15 text-ink">{p.icon}</span>
-                <h3 className="mt-5 text-[22px] leading-tight">{p.title}</h3>
-                <p className="mt-2 text-[16px] leading-relaxed text-ink-2">{p.body}</p>
-              </motion.article>
-            ))}
+          <div className="-mx-5 mt-6 md:mx-0 md:mt-10">
+            <CardStack cards={POWERS} />
           </div>
 
           {/* real screens */}
