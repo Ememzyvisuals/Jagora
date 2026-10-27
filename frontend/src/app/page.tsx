@@ -29,6 +29,7 @@ import { Devices3D } from "@/components/Devices3D";
 import { CardStack } from "@/components/CardStack";
 import { Orb } from "@/components/Orb";
 import { SiteFooter } from "@/components/SiteFooter";
+import { Amina } from "@/components/mascot/Amina";
 import { useApp } from "@/lib/store";
 
 const ASKS = [
@@ -93,7 +94,7 @@ export default function Landing() {
             <a href="#safe" className="hover:opacity-70">Safety</a>
             <a href="#languages" className="hover:opacity-70">Languages</a>
           </div>
-          <Link href="/app" className="liquid-glass ml-auto rounded-full px-5 py-2.5 text-[15px] font-semibold text-ink md:ml-0">
+          <Link href="/app" data-amina-point className="liquid-glass ml-auto rounded-full px-5 py-2.5 text-[15px] font-semibold text-ink md:ml-0">
             Open Jagora
           </Link>
         </nav>
@@ -125,6 +126,7 @@ export default function Landing() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, delay: 0.2, ease: [0.2, 0.7, 0.2, 1] }}
             onSubmit={(e) => (e.preventDefault(), go())}
+            data-amina="hero"
             className="liquid-glass mt-9 w-full max-w-[680px] rounded-[30px] p-2.5 text-left"
           >
             <div className="flex items-center gap-2">
@@ -172,7 +174,7 @@ export default function Landing() {
             <p className="text-[15px] font-semibold text-accent">What Jagora does</p>
             <h2 className="mt-3 text-[34px] leading-[1.05] sm:text-[50px]">A browser that works for you.</h2>
           </motion.div>
-          <div className="-mx-5 mt-6 md:mx-0 md:mt-10">
+          <div data-amina="cards" className="-mx-5 mt-6 md:mx-0 md:mt-10">
             <CardStack cards={POWERS} />
           </div>
 
@@ -190,7 +192,7 @@ export default function Landing() {
                 <Li icon={<MagnifyingGlass size={20} />}>Reads five sources at once, then shows proof</Li>
               </ul>
             </motion.div>
-            <motion.div {...rise}>
+            <motion.div {...rise} data-amina="phones">
               <Devices3D
                 scene="phones"
                 className="aspect-[1/1] w-full"
@@ -217,7 +219,7 @@ export default function Landing() {
             <p className="mt-4 max-w-[30rem] text-[17px] font-medium leading-relaxed text-ink">
               The safety rules are written into the code, not left to the AI. Private numbers go in a private box that only the website sees.
             </p>
-            <ul className="mt-6 grid gap-2.5">
+            <ul data-amina="safety" className="mt-6 grid gap-2.5">
               {GUARD.map((g) => (
                 <li key={g} className="liquid-glass flex items-center gap-3 rounded-[18px] px-4 py-3 text-[16px] font-semibold">
                   <Prohibit size={20} className="shrink-0" /> {g}
@@ -241,15 +243,15 @@ export default function Landing() {
           <motion.p {...rise} className="text-[15px] font-semibold text-accent">
             Five languages, spoken and written
           </motion.p>
-          <div className="mt-6 flex flex-col">
+          <div data-amina="languages" className="mt-6 flex flex-col">
             {[
-              ["Ẹ n lẹ́, kí ni kí n bá yín ṣe?", "Yorùbá"],
-              ["Sannu, me kake so in yi maka?", "Hausa"],
-              ["Ndeewo, gịnị ka m ga-emere gị?", "Igbo"],
-              ["How you dey, wetin I fit do for you?", "Naijá"],
-              ["Good day, what can I do for you?", "English"],
-            ].map(([line, name], i) => (
-              <motion.div key={name} {...rise} transition={{ ...rise.transition, delay: i * 0.05 }} className="flex flex-wrap items-baseline gap-x-5 border-b border-ink/10 py-5">
+              ["Ẹ n lẹ́, kí ni kí n bá yín ṣe?", "Yorùbá", "Ẹ n lẹ́! Mo wà níbí."],
+              ["Sannu, me kake so in yi maka?", "Hausa", "Sannu! Ina nan."],
+              ["Ndeewo, gịnị ka m ga-emere gị?", "Igbo", "Ndeewo! Anọ m ebe a."],
+              ["How you dey, wetin I fit do for you?", "Naijá", "How far! I dey here."],
+              ["Good day, what can I do for you?", "English", "Hello! I'm right here."],
+            ].map(([line, name, hello], i) => (
+              <motion.div key={name} data-amina-say={hello} {...rise} transition={{ ...rise.transition, delay: i * 0.05 }} className="flex flex-wrap items-baseline gap-x-5 border-b border-ink/10 py-5">
                 <span className="font-head text-[26px] leading-tight sm:text-[40px]">{line}</span>
                 <span className="text-[15px] font-semibold text-ink-3">{name}</span>
               </motion.div>
@@ -264,13 +266,14 @@ export default function Landing() {
           <Orb size={120} />
           <h2 className="mt-4 text-[32px] leading-tight sm:text-[46px]">Try Jagora now.</h2>
           <p className="mt-2 text-[17px] font-medium text-ink">No download. Works in the browser on any phone or computer.</p>
-          <button onClick={() => go("")} className="btn btn-ink mt-6 h-12 px-7 text-[16px]">
+          <button onClick={() => go("")} data-amina-point className="btn btn-ink mt-6 h-12 px-7 text-[16px]">
             Start
           </button>
         </motion.div>
       </section>
 
-      <SiteFooter />
+      <SiteFooter amina />
+      <Amina />
     </div>
   );
 }

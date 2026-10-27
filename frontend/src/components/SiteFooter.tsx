@@ -10,6 +10,7 @@ import { BUILDER, PLOTWEAVER, REPO } from "@/lib/credits";
 import { CloudWordmark } from "./glass/CloudWordmark";
 import { Glass } from "./glass/Glass";
 import { startPageWars } from "./PageWars";
+import { aminaHidden, setAminaHidden } from "./mascot/Amina";
 
 const COLUMNS: { title: string; links: { label: string; href: string; ext?: boolean }[] }[] = [
   {
@@ -111,11 +112,14 @@ const SOCIALS = [
   },
 ];
 
-const Meta = ({ label }: { label: string }) => (
+const Meta = ({ label, seat }: { label: string; seat?: boolean }) => (
   <span className="flex items-center gap-2 font-display text-[16.5px] font-bold tracking-[-0.02em] text-ink">
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="#0866FF" aria-hidden="true">
-      <path d={siMeta.path} />
-    </svg>
+    {/* Amina sits on the Muse Spark mark (data-amina-seat); it looks exactly like the others */}
+    <span data-amina-seat={seat ? "" : undefined} className="inline-flex">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="#0866FF" aria-hidden="true">
+        <path d={siMeta.path} />
+      </svg>
+    </span>
     {label}
   </span>
 );
@@ -136,7 +140,7 @@ const POWERS = [
   {
     title: "The browsing agent",
     href: "https://ai.meta.com",
-    logo: <Meta label="Muse Spark" />,
+    logo: <Meta label="Muse Spark" seat />,
     body: "Understands what you asked, reads each page, decides the next step and works the website for you: searching, clicking, filling forms and checking every action before it moves on.",
   },
   {
@@ -156,7 +160,7 @@ const POWERS = [
 const head = "font-head text-[17px] leading-none text-ink";
 const link = "w-fit text-[15px] text-ink-2 transition-colors hover:text-ink";
 
-export function SiteFooter() {
+export function SiteFooter({ amina = false }: { amina?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
   useEffect(() => {
@@ -167,6 +171,13 @@ export function SiteFooter() {
     return () => ro.disconnect();
   }, []);
   const year = new Date().getFullYear();
+  const [aminaOff, setAminaOff] = useState(false);
+  useEffect(() => {
+    const sync = () => setAminaOff(aminaHidden());
+    sync();
+    window.addEventListener("amina:toggle", sync);
+    return () => window.removeEventListener("amina:toggle", sync);
+  }, []);
 
   return (
     <footer className="relative mt-16 px-3 sm:px-5">
@@ -245,6 +256,11 @@ export function SiteFooter() {
             <p className="text-[13px] text-ink-3">© {year} Jagora. Built for the Meta Global AI Developer Hackathon 2026.</p>
             <p className="flex items-center gap-3 text-[13px] text-ink-3">
               Designed and built by {BUILDER.name}
+              {amina && (
+                <button onClick={() => setAminaHidden(!aminaOff)} className="shrink-0 whitespace-nowrap rounded-full bg-black/5 px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10">
+                  {aminaOff ? "Show Amina" : "Hide Amina"}
+                </button>
+              )}
               <button onClick={startPageWars} className="shrink-0 whitespace-nowrap rounded-full bg-black/5 px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10" title="Shift + G">
                 Bored? Play
               </button>
