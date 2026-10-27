@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
-  "playwright>=1.47",
+  "playwright==1.63.0",  # must match the Docker base image (mcr.microsoft.com/playwright/python:v1.63.0)
   "openai>=1.40",
   "pydantic>=2.7",
   "python-dotenv>=1.0",
