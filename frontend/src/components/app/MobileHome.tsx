@@ -34,7 +34,7 @@ import { startPageWars } from "../PageWars";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useState, type ComponentType } from "react";
-import { ask, quick } from "@/lib/engine";
+import { ask, live, quick } from "@/lib/engine";
 import { LANGS, type Lang } from "@/lib/i18n";
 import { activeTask, useApp } from "@/lib/store";
 import { ago } from "@/lib/hooks";
@@ -46,7 +46,7 @@ import { LiveButton } from "../LiveMode";
 import { CLOSE_L, DiscoverStack, deal } from "./DiscoverStack";
 import { toggleTheme, useTheme } from "@/lib/theme";
 import { Glass } from "../glass/Glass";
-import { PILL } from "@/lib/glassRegistry";
+import { PAGE_PILL, PILL } from "@/lib/glassRegistry";
 import { Orb } from "../Orb";
 
 type L = Record<Lang, string>;
@@ -505,7 +505,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
         <AnimatePresence initial={false}>
           {!small && (
             <motion.div key="back" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }} transition={spring}>
-              <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable lens={PILL} lensTint={0.38} overContent>
+              <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable lens={onPage ? PAGE_PILL : PILL} lensTint={onPage ? 0.62 : 0.38} overContent={!live}>
                 <button className="grid h-[52px] w-[52px] place-items-center text-ink disabled:opacity-30" disabled={screen !== "page"} onClick={() => setScreen("home")} aria-label={NAV.back[lang]}>
                   <CaretLeft size={22} weight="bold" />
                 </button>
@@ -515,7 +515,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
         </AnimatePresence>
 
         <motion.div layout transition={spring} className={small ? "" : "min-w-0 flex-1"}>
-          <Glass radius={30} bezel={16} refraction={36} blur={10} tint="rgba(255,255,255,.66)" pressable lens={PILL} lensTint={0.38} overContent>
+          <Glass radius={30} bezel={16} refraction={36} blur={10} tint="rgba(255,255,255,.66)" pressable lens={onPage ? PAGE_PILL : PILL} lensTint={onPage ? 0.62 : 0.38} overContent={!live}>
             {small ? (
               <button onClick={() => setSmall(false)} className="flex h-9 items-center gap-1.5 px-4 text-[13px] font-semibold text-ink">
                 {onPage && <LockSimple size={12} weight="bold" className="text-ink-2" />}
@@ -539,13 +539,13 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
         <AnimatePresence initial={false}>
           {!small && (
             <motion.div key="right" className="flex gap-2" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }} transition={spring}>
-              <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable lens={PILL} lensTint={0.38} overContent>
+              <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable lens={onPage ? PAGE_PILL : PILL} lensTint={onPage ? 0.62 : 0.38} overContent={!live}>
                 <button className={`grid h-[52px] w-[52px] place-items-center transition ${screen === "tabs" ? "rounded-full bg-ink text-paper" : "text-ink"}`} onClick={() => setScreen("tabs")} aria-label={`${NAV.tabs[lang]}, ${count}`} aria-pressed={screen === "tabs"} data-tour="tabs">
                   <TabsGlyph count={count} />
                 </button>
               </Glass>
               <div className="relative">
-                <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable lens={PILL} lensTint={0.38} overContent>
+                <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable lens={onPage ? PAGE_PILL : PILL} lensTint={onPage ? 0.62 : 0.38} overContent={!live}>
                   <button className="grid h-[52px] w-[52px] place-items-center text-ink" onClick={() => setMenu((v) => !v)} aria-label="More" aria-expanded={menu}>
                     <DotsThree size={24} weight="bold" />
                   </button>

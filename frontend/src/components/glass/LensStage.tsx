@@ -10,6 +10,7 @@
    phones), the sky as the scene, per-surface frost, clipping to scroll areas, and drawing only when something moved. */
 import { useEffect, useRef } from "react";
 import { glass, type GlassEntry, type LensConfig } from "@/lib/glassRegistry";
+import { lensLayer, onLensLayer } from "@/lib/lensLayer";
 
 /** LiquidGlass's defaults, then Jagora's: a thick pill bevel, light frost, a little darker, light on top. */
 const BASE: LensConfig = {
@@ -268,8 +269,8 @@ export default function LensStage({ src }: { src: string }) {
       dpr = Math.min(devicePixelRatio || 1, 2);
       W = innerWidth;
       H = innerHeight;
-      cv.width = Math.round(W * dpr);
-      cv.height = Math.round(H * dpr);
+      if (cv.width !== Math.round(W * dpr)) cv.width = Math.round(W * dpr);
+      if (cv.height !== Math.round(H * dpr)) cv.height = Math.round(H * dpr);
       const c2 = document.createElement("canvas");
       const sw = Math.min(2400, Math.round(W * dpr));
       c2.width = sw;
@@ -283,6 +284,22 @@ export default function LensStage({ src }: { src: string }) {
       x.scale(1.07, 1.07);
       x.translate(-ox, -oy);
       x.drawImage(img, (c2.width - iw) / 2, (c2.height - ih) / 2, iw, ih);
+      // the live page, where it sits on screen, so the glass over it shows the page itself
+      const L = lensLayer();
+      if (L && L.img.isConnected && L.img.complete && L.img.naturalWidth) {
+        x.setTransform(1, 0, 0, 1, 0, 0);
+        const k2 = c2.width / W;
+        const box = (L.img.parentElement ?? L.img).getBoundingClientRect();
+        const r = L.img.getBoundingClientRect();
+        x.save();
+        x.beginPath();
+        x.roundRect(box.left * k2, box.top * k2, box.width * k2, box.height * k2, L.radius * k2);
+        x.clip();
+        x.fillStyle = L.bg;
+        x.fillRect(box.left * k2, box.top * k2, box.width * k2, box.height * k2);
+        x.drawImage(L.img, r.left * k2, r.top * k2, r.width * k2, r.height * k2);
+        x.restore();
+      }
       gl.bindTexture(gl.TEXTURE_2D, sky);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c2);
@@ -291,8 +308,12 @@ export default function LensStage({ src }: { src: string }) {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       const bw = Math.max(64, Math.round(c2.width / 2)), bh = Math.max(64, Math.round(c2.height / 2));
-      blurA = target(gl, bw, bh);
-      blurB = target(gl, bw, bh);
+      // reuse the blur targets while the size stays the same (the live page rebuilds this a few times a second)
+      if (!blurA || !blurB || blurA.w !== bw || blurA.h !== bh) {
+        for (const t of [blurA, blurB]) if (t) (gl.deleteTexture(t.tex), gl.deleteFramebuffer(t.fb));
+        blurA = target(gl, bw, bh);
+        blurB = target(gl, bw, bh);
+      }
       gl.viewport(0, 0, bw, bh);
       gl.useProgram(blit.p);
       gl.uniform1i(blit.u("u_tex"), 0);
@@ -380,6 +401,15 @@ export default function LensStage({ src }: { src: string }) {
     // draw only when a glass surface moved, the screen changed, or the sky changed
     let raf = 0;
     const un = glass.subscribe(() => ((dirty = true), (clipCache = new Map())));
+    // a new picture of the live page: rebuild the texture, at most a few times a second
+    let layerTimer = 0;
+    const unLayer = onLensLayer(() => {
+      if (layerTimer) return;
+      layerTimer = window.setTimeout(() => {
+        layerTimer = 0;
+        prepare();
+      }, 220);
+    });
     const resize = () => prepare();
     addEventListener("resize", resize);
     const tick = () => {
@@ -420,6 +450,8 @@ export default function LensStage({ src }: { src: string }) {
       cancelAnimationFrame(raf);
       removeEventListener("resize", resize);
       un();
+      unLayer();
+      clearTimeout(layerTimer);
       glass.setStage(false);
       // free what this run made; the context itself is kept (React may run this effect again on the same canvas)
       for (const t of [sky, blurA?.tex, blurB?.tex]) if (t) gl.deleteTexture(t);

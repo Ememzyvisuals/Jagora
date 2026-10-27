@@ -61,3 +61,5 @@ export const onStage = (l: (v: boolean) => void) => {
 
 /** The liquid lens used on Jagora's bars and pockets: a thick pill bevel, light frost, a little light on top. */
 export const PILL: Partial<LensConfig> = { blurAmount: 0.15, refraction: 1.0, chromAberration: 0.12, zRadius: 40, brightness: 0.02, edgeHighlight: 0.12, specular: 0.25 };
+/** the same glass over a website: more frost and a soft shadow, so the bar reads clearly over any page (iOS style) */
+export const PAGE_PILL: Partial<LensConfig> = { ...PILL, blurAmount: 0.45, refraction: 0.7, chromAberration: 0.08, shadowOpacity: 0.22 };

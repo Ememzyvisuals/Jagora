@@ -9,6 +9,8 @@ import { activeTask, useApp } from "@/lib/store";
 import { registerFrame } from "@/lib/engine/frame";
 import { live } from "@/lib/engine";
 import { onRemoteFrame, remoteInput, remoteTakeover, remoteTranslate } from "@/lib/engine/remote";
+import { PAGE_PILL, PILL } from "@/lib/glassRegistry";
+import { Glass } from "./glass/Glass";
 
 export function Cursor({ x, y, visible, clicking }: { x: number; y: number; visible: boolean; clicking: boolean }) {
   return (
@@ -52,7 +54,9 @@ export function Ring() {
   );
 }
 
-export function PageView({ compact = false, bar = true, onClose }: { compact?: boolean; bar?: boolean; onClose?: () => void }) {
+/** full: the phone browser look. The website fills the whole screen, edge to edge, and the address bar floats over
+    it at the top (the bottom bar floats over it at the bottom), like Chrome and Safari. */
+export function PageView({ compact = false, bar = true, full = false, onClose }: { compact?: boolean; bar?: boolean; full?: boolean; onClose?: () => void }) {
   const task = useApp(activeTask);
   const pointer = useApp((s) => s.pointer);
   const takeover = useApp((s) => s.takeover);
@@ -74,24 +78,30 @@ export function PageView({ compact = false, bar = true, onClose }: { compact?: b
   })();
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {bar && <div className={`flex items-center gap-2 ${compact ? "px-3 pb-2 pt-1" : "px-4 py-3"}`}>
-        <div className="glass-2 flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full px-4 text-[13.5px] text-ink-2">
-          <LockSimple size={14} weight="bold" className="shrink-0 text-ok" />
-          <span className="truncate">{host || "Ready"}</span>
-          {task?.status === "working" && <span className="ml-auto h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" />}
+    <div className={full ? "relative h-full" : "flex h-full min-h-0 flex-col"}>
+      {bar && (
+        <div className={`flex items-center gap-2 ${full ? "absolute inset-x-0 top-0 z-30 px-3 pt-[max(10px,env(safe-area-inset-top))]" : compact ? "px-1 pb-2 pt-1" : "px-4 py-3"}`}>
+          <Glass radius={24} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.6)" lens={full ? PAGE_PILL : PILL} lensTint={full ? 0.62 : 0.3} overContent={!live} className="min-w-0 flex-1">
+            <div className="flex h-12 items-center gap-2 px-4 text-[14.5px] font-semibold text-ink">
+              <LockSimple size={14} weight="bold" className="shrink-0 text-ok" />
+              <span className="truncate">{host || "Ready"}</span>
+              {task?.status === "working" && <span className="ml-auto h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" />}
+            </div>
+          </Glass>
+          {live && task && <TranslateButton />}
+          {live && task && <TakeOverButton taskId={task.id} on={takeover} />}
+          {onClose && (
+            <Glass radius={24} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.6)" lens={full ? PAGE_PILL : PILL} lensTint={full ? 0.62 : 0.3} overContent={!live} pressable>
+              <button onClick={onClose} className="grid h-12 w-12 place-items-center text-ink" aria-label="Close page">
+                <X size={17} weight="bold" />
+              </button>
+            </Glass>
+          )}
         </div>
-        {live && task && <TranslateButton />}
-        {live && task && <TakeOverButton taskId={task.id} on={takeover} />}
-        {onClose && (
-          <button onClick={onClose} className="btn btn-glass h-10 w-10 shrink-0" aria-label="Close page">
-            <X size={16} weight="bold" />
-          </button>
-        )}
-      </div>}
-      <div ref={stage} className={`relative min-h-0 flex-1 overflow-hidden rounded-[22px] bg-white/80 shadow-[inset_0_0_0_1px_rgba(255,255,255,.8)] ${takeover || needsHer ? "ring-2 ring-accent" : ""}`}>
+      )}
+      <div ref={stage} className={`${full ? "absolute inset-0" : "relative min-h-0 flex-1 rounded-[22px] shadow-[inset_0_0_0_1px_rgba(255,255,255,.8)]"} overflow-hidden bg-white ${takeover || needsHer ? "ring-2 ring-inset ring-accent" : ""}`}>
         {live ? (
-          <LiveStage taskId={task?.id ?? ""} interactive={takeover || needsHer || task?.status !== "working"} pointer={pointer} />
+          <LiveStage taskId={task?.id ?? ""} interactive={takeover || needsHer || task?.status !== "working"} pointer={pointer} full={full} />
         ) : (
           <>
             <iframe
@@ -108,7 +118,6 @@ export function PageView({ compact = false, bar = true, onClose }: { compact?: b
             <Cursor {...pointer} />
           </>
         )}
-        <AgentGlow />
       </div>
     </div>
   );
@@ -124,7 +133,7 @@ export function TranslateButton({ small = false }: { small?: boolean }) {
     <button
       onClick={() => void remoteTranslate(!on)}
       title={on ? "Show the page as published" : `Show the page in ${LANG_NAME[lang]}`}
-      className={`shrink-0 rounded-full font-semibold transition active:scale-95 ${small ? "-mr-1 h-7 px-3 text-[12.5px]" : "h-10 px-3.5 text-[13.5px]"} ${on ? "bg-ink text-paper" : small ? "bg-white/80 text-ink" : "glass-2 text-ink"}`}
+      className={`shrink-0 rounded-full font-semibold transition active:scale-95 ${small ? "-mr-1 h-7 px-3 text-[12.5px]" : "h-12 px-4 text-[14px]"} ${on ? "bg-ink text-paper" : "bg-white/80 text-ink"}`}
     >
       {on ? LANG_NAME[lang] : "Original"}
     </button>
@@ -139,7 +148,7 @@ function TakeOverButton({ taskId, on }: { taskId: string; on: boolean }) {
   return (
     <button
       onClick={() => void remoteTakeover(taskId, !on)}
-      className={`h-10 shrink-0 rounded-full px-4 text-[13.5px] font-semibold transition active:scale-95 ${on ? "bg-accent text-snow" : "glass-2 text-ink"}`}
+      className={`h-12 shrink-0 rounded-full px-4 text-[14px] font-semibold transition active:scale-95 ${on ? "bg-accent text-snow" : "bg-ink text-paper"}`}
     >
       {L[lang]}
     </button>
@@ -148,7 +157,7 @@ function TakeOverButton({ taskId, on }: { taskId: string; on: boolean }) {
 
 /** The live picture of Jagora's browser, with the highlight and cursor placed on it at the right scale. While she has
     taken over (or Jagora waits for her), her taps, typing and scrolling go to the real page. */
-function LiveStage({ taskId, interactive, pointer }: { taskId: string; interactive: boolean; pointer: { x: number; y: number; visible: boolean; clicking: boolean } }) {
+function LiveStage({ taskId, interactive, pointer, full }: { taskId: string; interactive: boolean; pointer: { x: number; y: number; visible: boolean; clicking: boolean }; full: boolean }) {
   const size = useApp((s) => s.pageSize);
   const box = useRef<HTMLDivElement>(null);
   const img = useRef<HTMLImageElement>(null);
@@ -164,14 +173,15 @@ function LiveStage({ taskId, interactive, pointer }: { taskId: string; interacti
     if (!el) return;
     const measure = () => {
       const W = el.clientWidth, H = el.clientHeight;
-      const s = Math.min(W / size.w, H / size.h);
+      // full screen on a phone: the page always fills the width, like a real browser
+      const s = full ? W / size.w : Math.min(W / size.w, H / size.h);
       setFit({ s, left: (W - size.w * s) / 2, w: size.w * s, h: size.h * s });
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [size.w, size.h]);
+  }, [size.w, size.h, full]);
 
   const toPage = (e: { clientX: number; clientY: number }) => {
     const r = img.current?.getBoundingClientRect();
@@ -180,7 +190,7 @@ function LiveStage({ taskId, interactive, pointer }: { taskId: string; interacti
   };
 
   return (
-    <div ref={box} className="relative h-full w-full bg-[#f4f6f9]" onWheel={(e) => interactive && void remoteInput(taskId, { action: "scroll", dy: e.deltaY })}>
+    <div ref={box} className="relative h-full w-full bg-white" onWheel={(e) => interactive && void remoteInput(taskId, { action: "scroll", dy: e.deltaY })}>
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -229,28 +239,5 @@ function LiveStage({ taskId, interactive, pointer }: { taskId: string; interacti
         }}
       />
     </div>
-  );
-}
-
-/** Siri-style light around the edge while Jagora works on the page: soft, moving colour, not a spinner. */
-export function AgentGlow({ force = false }: { force?: boolean }) {
-  const task = useApp(activeTask);
-  const orb = useApp((s) => s.orb);
-  const takeover = useApp((s) => s.takeover);
-  const on = force || (!!task && task.status === "working" && !takeover) || orb === "speaking";
-  return (
-    <AnimatePresence>
-      {on && (
-        <motion.div
-          key="glow"
-          aria-hidden
-          className="agent-glow pointer-events-none absolute inset-0 z-40 rounded-[inherit]"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.6 }}
-        />
-      )}
-    </AnimatePresence>
   );
 }

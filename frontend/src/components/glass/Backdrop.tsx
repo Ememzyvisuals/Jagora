@@ -10,7 +10,7 @@ import { useTheme } from "@/lib/theme";
 const LensStage = dynamic(() => import("./LensStage"), { ssr: false });
 // The WebGL lens is drawn only under surfaces that opt in (lens prop): the bottom bar, the search bar and Discover's
 // pocket. Everything else is the white frosted glass.
-const USE_LENS = true;
+const USE_LENS = false; // the portfolio glass (CSS) is used instead of the WebGL lens
 
 /** The same sky the CSS layer shows, for the 3D layer. */
 export function useSkySrc() {

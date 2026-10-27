@@ -123,7 +123,9 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
   }, []);
 
   // when the 3D glass layer is running, a real lens slab is drawn under this element instead of a CSS filter
-  const liquid = !!lens && !flat;
+  // the glass from Emmanuel's portfolio (.liquid-glass: SVG distortion + blur) for the bars that use glass
+  const portfolio = !!lens && !flat;
+  const liquid = false;
   useEffect(() => {
     if (!liquid) return;
     setStageOn(glass.stage);
@@ -180,9 +182,9 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
       ref={el}
       {...rest}
       data-lens={liquid ? "" : undefined}
-      className={`lg ${stage && !nested ? "lg-stage" : ""} ${pressable ? "lg-press" : ""} ${className}`}
+      className={portfolio ? `liquid-glass ${pressable ? "lg-press" : ""} ${className}` : `lg ${stage && !nested ? "lg-stage" : ""} ${pressable ? "lg-press" : ""} ${className}`}
       style={
-        {
+        portfolio ? ({ borderRadius: radius, ...style } as CSSProperties) : {
           borderRadius: radius,
           background: nested ? (dark ? "rgba(44,48,57,0.6)" : "rgba(255,255,255,0.55)") : stage ? (dark ? `rgba(20,22,28,${Math.min(0.85, lensTint + 0.3)})` : `rgba(255,255,255,${lensTint})`) : themedTint(whiter(tint), dark ? "dark" : "light"),
           backdropFilter: stage && !nested ? (overContent ? "blur(10px) saturate(130%)" : "none") : map ? backdrop : "blur(16px) saturate(120%)",
@@ -206,8 +208,8 @@ export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
           </filter>
         </svg>
       )}
-      <span className="lg-rim" aria-hidden="true" />
-      <span className="lg-sheen" aria-hidden="true" />
+      {!portfolio && <span className="lg-rim" aria-hidden="true" />}
+      {!portfolio && <span className="lg-sheen" aria-hidden="true" />}
       {children}
     </div>
   );

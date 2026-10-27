@@ -9,7 +9,7 @@ import { activeTask, useApp, type Task } from "@/lib/store";
 import { AgentPanel } from "../AgentPanel";
 import { Orb } from "../Orb";
 import { PageView } from "../PageView";
-import { WorkCaption } from "../WorkCaption";
+import { WorkOrb } from "../WorkCaption";
 import { TaskIcon, lastLine } from "./Shared";
 import { BottomBar, EdgeBlur, Home } from "./MobileHome";
 import { Backdrop } from "../glass/Backdrop";
@@ -63,9 +63,9 @@ export function MobileApp() {
           </motion.div>
         )}
         {shown === "page" && (
-          <motion.div key="page" className="absolute inset-0 px-3 pb-[96px] pt-[max(12px,env(safe-area-inset-top))]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <motion.div layoutId={task ? `tab-${task.id}` : undefined} className="h-full overflow-hidden rounded-[26px]" transition={{ type: "spring", stiffness: 300, damping: 32 }}>
-              <PageView compact onClose={() => setScreen("home")} />
+          <motion.div key="page" className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div layoutId={task ? `tab-${task.id}` : undefined} className="h-full overflow-hidden" transition={{ type: "spring", stiffness: 300, damping: 32 }}>
+              <PageView compact full onClose={() => setScreen("home")} />
             </motion.div>
           </motion.div>
         )}
@@ -87,8 +87,8 @@ export function MobileApp() {
         )}
       </AnimatePresence>
 
-      {screen !== "tabs" && <EdgeBlur />}
-      {shown === "page" && !sheet && screen !== "tabs" && <WorkCaption onOpen={() => setSheet(true)} />}
+      {screen !== "tabs" && shown !== "page" && <EdgeBlur />}
+      {shown === "page" && !sheet && screen !== "tabs" && <WorkOrb onOpen={() => setSheet(true)} />}
       {!(screen === "tabs" && tabsFull) && <BottomBar screen={screen} setScreen={go} />}
       <Sheet open={sheet} onClose={() => setSheet(false)} />
       {screen === "home" && !sheet && <Tour />}
