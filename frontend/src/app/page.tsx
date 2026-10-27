@@ -27,6 +27,7 @@ import { Backdrop } from "@/components/glass/Backdrop";
 import { CloudWordmark } from "@/components/glass/CloudWordmark";
 import { Devices3D } from "@/components/Devices3D";
 import { CardStack } from "@/components/CardStack";
+import { ScamCheck } from "@/components/ScamCheck";
 import { Orb } from "@/components/Orb";
 import { SiteFooter } from "@/components/SiteFooter";
 import { useApp } from "@/lib/store";
@@ -226,13 +227,7 @@ export default function Landing() {
               ))}
             </ul>
           </motion.div>
-          <motion.div {...rise}>
-            <Devices3D
-              scene="safety"
-              className="aspect-[4/3] w-full"
-              fallback={<Shot src="/shots/desktop-private.webp" alt="Jagora asking for a NIN in a private box that only the website sees" />}
-            />
-          </motion.div>
+          <ScamCheck />
         </div>
       </section>
 
