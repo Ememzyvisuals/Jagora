@@ -185,29 +185,40 @@ export function VoiceBars({ size = 22, color = "#1D63ED" }: { size?: number; col
   );
 }
 
+/** real brand logos (official artwork rendered to PNG, in /logos); Nigerian sites use their own site icon */
+const LOGO: Record<string, { src: string; fill?: boolean }> = {
+  "google.com": { src: "/logos/google.png" },
+  "web.whatsapp.com": { src: "/logos/whatsapp.png" },
+  "facebook.com": { src: "/logos/facebook.png" },
+  "instagram.com": { src: "/logos/instagram.png", fill: true },
+  "youtube.com": { src: "/logos/youtube.png" },
+  "x.com": { src: "/logos/x.png" },
+  "tiktok.com": { src: "/logos/tiktok.png" },
+  "mail.google.com": { src: "/logos/gmail.png" },
+};
+const TILE = { boxShadow: "inset 0 0 0 1px rgba(0,0,0,.06), 0 6px 14px -8px rgba(10,30,70,.35)" };
+
 export function AppIcon({ site, size = 46 }: { site: Site; size?: number }) {
-  const { Icon, from, to, domain, brand } = site;
-  if (brand)
-    return (
-      <span
-        className="relative grid place-items-center overflow-hidden"
-        style={{ width: size, height: size, borderRadius: size * 0.3, background: brand.bg, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.06), inset 0 1px 1px rgba(255,255,255,.5), 0 6px 14px -8px rgba(10,30,70,.4)" }}
-      >
-        <svg viewBox="0 0 24 24" width={size * 0.56} height={size * 0.56} fill={brand.fg} aria-hidden="true">
-          <path d={brand.path} />
-        </svg>
+  const { Icon, from, to, domain } = site;
+  const [failed, setFailed] = useState(!domain);
+  const logo = domain ? LOGO[domain] : undefined;
+  if (logo)
+    return logo.fill ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={logo.src} alt="" width={size} height={size} draggable={false} style={{ width: size, height: size, borderRadius: size * 0.26, ...TILE }} />
+    ) : (
+      <span className="grid place-items-center overflow-hidden bg-white" style={{ width: size, height: size, borderRadius: size * 0.26, ...TILE }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={logo.src} alt="" draggable={false} style={{ width: size * 0.6, height: size * 0.6, objectFit: "contain" }} />
       </span>
     );
-  const [failed, setFailed] = useState(!domain);
   if (!failed && domain)
     return (
-      <span className="grid place-items-center overflow-hidden bg-white" style={{ width: size, height: size, borderRadius: size * 0.3, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.06), 0 6px 14px -8px rgba(10,30,70,.35)" }}>
+      <span className="grid place-items-center overflow-hidden bg-white" style={{ width: size, height: size, borderRadius: size * 0.26, ...TILE }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`https://www.google.com/s2/favicons?domain=${domain}&sz=128`}
           alt=""
-          width={size * 0.62}
-          height={size * 0.62}
           onError={() => setFailed(true)}
           onLoad={(e) => e.currentTarget.naturalWidth <= 16 && setFailed(true)}
           style={{ width: size * 0.62, height: size * 0.62 }}
@@ -220,12 +231,11 @@ export function AppIcon({ site, size = 46 }: { site: Site; size?: number }) {
       style={{
         width: size,
         height: size,
-        borderRadius: size * 0.3,
+        borderRadius: size * 0.26,
         background: `linear-gradient(160deg, ${from}, ${to})`,
         boxShadow: `inset 0 1px 1px rgba(255,255,255,.6), inset 0 -2px 4px rgba(0,0,0,.12), 0 6px 14px -6px ${to}`,
       }}
     >
-      <span className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
       <Icon size={size * 0.52} weight="fill" />
     </span>
   );

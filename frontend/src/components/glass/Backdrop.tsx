@@ -28,6 +28,13 @@ export function useSkySrc() {
 
 export function Backdrop(_: { level?: MutableRefObject<number> }) {
   const lite = useLite();
+  // the lens only redraws when something moves, so it runs on slow networks and modest phones too; it needs WebGL
+  const [gl, setGl] = useState(false);
+  useEffect(() => {
+    try {
+      setGl(!!document.createElement("canvas").getContext("webgl"));
+    } catch {}
+  }, []);
   const src = useSkySrc();
   // the 3D layer loads only after the page is usable
   const [idle, setIdle] = useState(false);
@@ -41,7 +48,7 @@ export function Backdrop(_: { level?: MutableRefObject<number> }) {
       <div className="fixed inset-0 overflow-hidden" aria-hidden="true">
         <div className={`sky-bg absolute inset-0 ${lite ? "" : "sky-drift"}`} />
       </div>
-      {USE_LENS && lite === false && idle && <LensStage src={src} />}
+      {USE_LENS && gl && idle && <LensStage src={src} />}
     </>
   );
 }
