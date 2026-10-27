@@ -6,7 +6,8 @@
 
 <p align="center">
   A voice-first agentic browser for Nigeria. Speak Yorùbá, Hausa, Igbo, Nigerian Pidgin or English,<br>
-  and Jagora uses real websites for you: it searches, reads, proves, fills, pays and schedules, and stops for your yes.
+  and Jagora uses real websites for you: it searches, reads, proves, fills, pays and schedules, and stops for your yes.<br>
+  <sub>This build demonstrates the Jagora desktop browser (Windows, macOS, Linux; mobile next). <a href="#from-demo-to-browser">From demo to browser</a></sub>
 </p>
 
 <p align="center">
@@ -36,18 +37,19 @@
 ## Contents
 
 1. [Why Jagora](#why-jagora)
-2. [What it does](#what-it-does)
-3. [How Meta AI powers Jagora](#how-meta-ai-powers-jagora)
-4. [Architecture](#architecture)
-5. [A task, step by step](#a-task-step-by-step)
-6. [Safety model](#safety-model)
-7. [Voice and languages](#voice-and-languages)
-8. [Run it yourself](#run-it-yourself)
-9. [Tests and the attack range](#tests-and-the-attack-range)
-10. [Repository map](#repository-map)
-11. [Privacy](#privacy)
-12. [Credits](#credits)
-13. [License](#license)
+2. [From demo to browser](#from-demo-to-browser)
+3. [What it does](#what-it-does)
+4. [How Meta AI powers Jagora](#how-meta-ai-powers-jagora)
+5. [Architecture](#architecture)
+6. [A task, step by step](#a-task-step-by-step)
+7. [Safety model](#safety-model)
+8. [Voice and languages](#voice-and-languages)
+9. [Run it yourself](#run-it-yourself)
+10. [Tests and the attack range](#tests-and-the-attack-range)
+11. [Repository map](#repository-map)
+12. [Privacy](#privacy)
+13. [Credits](#credits)
+14. [License](#license)
 
 ---
 
@@ -62,6 +64,118 @@ relative, give up, or fall for a fake "JAMB upgrade" site.
 
 Jagora closes that gap. It listens in the language you think in, does the work on the real website, shows proof
 from official sources, and asks before anything that matters.
+
+## From demo to browser
+
+### What you are looking at
+
+**Jagora is a browser.** A full desktop browser, built on Chromium, where you can browse normally and, at any
+moment, speak in Yorùbá, Hausa, Igbo, Pidgin or English and let the agent take over the page.
+
+This hackathon build is a **working demonstration of that browser**, delivered so any judge can try it in seconds on
+any device with nothing to install:
+
+- the same Chromium engine runs on our server, one private browser per person;
+- the page streams live to your screen, and you can tap or type into it to take over;
+- the agent, the safety layers, the voice and the Meta models are the real ones, not mock-ups.
+
+Everything you see the demo do is what the browser does. The difference is where it runs: today in the cloud,
+in the product on your own computer.
+
+### Why a browser of its own
+
+| Option | Why it falls short for Jagora |
+|---|---|
+| **A chatbot** | It can describe a website, but it cannot fill in the JAMB form, wait for the portal at midnight, or prove a fee from the official PDF. Jagora has to act. |
+| **A browser extension** | It lives inside another browser's rules: limited control over how pages load, no way to separate sites at the engine level, and extension rules that have already weakened ad blockers. It is useful as a bridge, not as the home of a safe agent. |
+| **A browser of its own** | The safety is built into the engine: hidden-text removal, the blocklists, the ad blocker, the private box for passwords and codes, task sites and data labels all run where pages load, not on top. Voice and the agent are part of the browser itself. |
+
+The research is clear on why this matters. AI agents inside today's browsers can quietly undo the web's oldest
+safety rule, the same-origin policy ([University of Washington, 2026](https://www.washington.edu/news/2026/06/30/some-agentic-ai-browsers-come-with-major-cybersecurity-risks-uw-study-finds/)).
+Jagora was designed against that from the start, and it resists those attacks in the live test
+([20 of 20](#live-result-against-the-real-model)).
+
+### Desktop first, then mobile
+
+| Stage | Platforms | Status |
+|---|---|---|
+| **Demo** | Any phone or computer, in the web browser | Live now at [jagora-ai.vercel.app](https://jagora-ai.vercel.app) |
+| **1. Desktop browser** | Windows, macOS, Linux | In development, our main target |
+| **2. Mobile browser** | Android and iOS | Next, after desktop |
+| **Bridge** | A lighter extension for people not ready to switch | After the desktop release |
+
+Desktop comes first because that is where most of the forms people struggle with are filled: JAMB, WAEC, NIN,
+passports, school portals and job applications, often on a shared or café computer. Mobile follows with the same
+engine and the same voice.
+
+### What moves from our server to your computer
+
+| Today in the demo (server) | In the Jagora browser (your device) |
+|---|---|
+| A Chromium per person in Docker on our server | The browser itself, on your computer |
+| The page streamed to you as live frames | You see the page directly, at full speed |
+| Logins for each task, entered through the private box | Your real logged-in accounts, never leaving your device |
+| Safety checks run on our server | The same checks built into the browser engine |
+| Muse Spark called from our server | Muse Spark called from the browser, with the open-weights model (Muse Glimmer / Spark Open) for safety checks where hardware allows |
+| STORM speech through our server | STORM speech called directly, with on-device listening where possible |
+
+### Why Muse Spark is the right brain for this browser
+
+A browser agent makes many small decisions on every page: what this button does, whether this page is the official
+one, whether this action is what she asked for, whether the task is really done. That needs a model that is good at
+tool calling, reads screenshots and page structure together, and is cheap enough to run on every step for millions
+of people.
+
+- **Tool calling at depth.** Jagora gives Muse Spark 57 tools, from clicking and typing to reading PDFs, comparing
+  sources, scheduling tasks and showing evidence. Muse Spark plans across them in one loop.
+- **It sees the page.** Every step it gets a screenshot with numbered controls and the page structure, and it acts
+  on the right element.
+- **It checks its own work.** A second Muse Spark call must agree the task is done before Jagora says so, and a
+  separate call checks each important action against her request.
+- **It is priced for scale.** Meta launched the Muse Spark API at $1.25 per million input tokens and $4.25 per million
+  output tokens, which makes an agent that works on every step of every task realistic for a mass-market browser in
+  Nigeria.
+- **It has an open-weights family.** Muse Glimmer and Muse Spark Open let the safety checks run on hardware we
+  control today, and on the user's own machine later.
+- **The family covers the rest.** Muse Wonder reads photos, PDFs and videos of real letters and bills; Muse Image
+  turns steps into picture guides for people who find reading hard.
+
+### What it takes to run this on servers today
+
+Delivering a full browser agent through a web page is hard engineering. For every person, at the same time, the demo:
+
+- **runs a private Chromium,** isolated from everyone else, with its own cookies, tabs and downloads;
+- **streams the live page** to their screen (Chrome DevTools screencast, JPEG frames over a WebSocket, up to 5 frames
+  a second) and lets them tap and type into it to take over;
+- **streams speech both ways in real time:** STORM speech recognition in, STORM voices out sentence by sentence, and
+  Jagora stops talking the moment they speak;
+- **runs the safety pipeline on every step:**
+  - hides text people cannot see;
+  - numbers every control;
+  - judges the page content;
+  - cuts out orders written to AI;
+  - checks every request against about 1.3 million blocked domains;
+  - checks every important action against her request;
+- **keeps working when nobody is watching:** scheduled tasks, retries at midnight, page watches, and results sent to
+  the lock screen;
+- **seals saved logins** (AES-256-GCM, bound to their own site) so the model never sees a password.
+
+All of this runs in Docker on one AWS server alongside other services, within a 3 GB memory limit for the agent. The
+desktop browser moves this work onto the user's own computer, which is how it reaches millions of people without
+millions of cloud browsers.
+
+### The problems it solves
+
+| Problem in the community | What Jagora does |
+|---|---|
+| Websites assume fluent English and fast typing | Speak in Yorùbá, Hausa, Igbo, Pidgin or English; Jagora does the typing and reads the page back in your language |
+| People pay café attendants or relatives to fill forms | Jagora fills the form with you, asking before anything that matters |
+| Fake portals and "JAMB upgrade" scams | It checks whether a site is official, blocks lookalikes, and proves facts from the official page or PDF |
+| Fake bank alerts and money-doubling schemes | It recognises them, refuses to help make them, and explains the warning signs |
+| Betting dressed up as "trading", and exam "expo" | It does not open them or help with them, and helps with the honest alternative |
+| Reading is hard for many adults | Voice everywhere, and picture guides drawn by Muse Image |
+| Portals that only work at midnight | Scheduled tasks that keep trying and send the result to her phone |
+| AI browsers that can be hijacked by a web page | Safety enforced in code, tested live: 20 of 20 attacks resisted |
 
 ## What it does
 

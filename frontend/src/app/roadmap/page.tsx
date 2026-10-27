@@ -3,21 +3,21 @@ import { InfoPage } from "@/components/InfoPage";
 
 export const metadata: Metadata = {
   title: "Roadmap | Jagora",
-  description: "Where Jagora is today and where it is going: web now, then desktop and mobile apps.",
+  description: "Jagora is a browser. The web app demonstrates it today; the desktop browser for Windows, macOS and Linux is in development, then Android and iPhone.",
 };
 
 const STAGES = [
   {
     when: "Now",
-    title: "Jagora on the web",
-    body: "A web app that works on any phone, tablet or computer, with nothing to install. You can add it to your home screen and it opens full screen like an app. This is how everyone, including the hackathon judges, can try Jagora today.",
-    points: ["Five languages by voice or text", "Browsing agent with safety stops", "Scam and official-site checks", "Documents and downloads"],
+    title: "The Jagora browser, demonstrated on the web",
+    body: "The same Chromium engine, agent, safety layers, voice and Meta models as the browser, running on our server, one private browser per person, streamed live to any phone or computer with nothing to install. This is how everyone, including the hackathon judges, can try Jagora today.",
+    points: ["Five languages by voice or text", "The browsing agent with safety stops", "20 of 20 attacks resisted in the live test", "Scam and official-site checks, documents and downloads"],
   },
   {
-    when: "Next",
-    title: "Jagora for desktop",
-    body: "An installable desktop browser. Running on your own computer, Jagora can work in the background, use your own signed-in sessions safely, handle bigger downloads and run several tasks at once.",
-    points: ["Runs in the background", "Your own sessions, kept on your computer", "Faster, and more capable with files"],
+    when: "In development",
+    title: "Jagora for desktop: Windows, macOS, Linux",
+    body: "The full browser, installed on your computer and built on Chromium. Browse normally, then speak and let the agent take over the page. The safety is built into the engine where pages load, your signed-in accounts never leave your computer, and Jagora can work in the background.",
+    points: ["Safety built into the browser engine", "Your own sessions, kept on your computer", "Runs in the background, several tasks at once", "Safety checks on open-weights models where hardware allows"],
   },
   {
     when: "Then",
@@ -31,8 +31,8 @@ export default function Roadmap() {
   return (
     <InfoPage
       eyebrow="Roadmap"
-      title="Built for the web first, on purpose."
-      lead="A web app lets anyone try Jagora on any device in seconds. Once the idea is proven, the desktop and mobile apps make it faster and more powerful."
+      title="A browser, shown on the web first."
+      lead="Jagora is a browser of its own. The web app lets anyone try it on any device in seconds; the desktop browser is our main target, then Android and iPhone."
     >
       <ol className="relative space-y-6 border-l border-ink/15 pl-6">
         {STAGES.map((s) => (
