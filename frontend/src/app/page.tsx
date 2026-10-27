@@ -1,24 +1,57 @@
 "use client";
 
-import { PaperPlaneRight } from "@phosphor-icons/react";
+/* The front door: the sky, the cloud, what Jagora does (with real screens from the app), how it keeps people safe,
+   the five languages, and the footer. Same design as the app: Boiling headings, Vollkorn text, portfolio glass. */
+import {
+  CalendarCheck,
+  CursorClick,
+  FileText,
+  Globe,
+  LockKey,
+  MagnifyingGlass,
+  PaperPlaneRight,
+  Prohibit,
+  SealCheck,
+  ShieldCheck,
+  Translate,
+  Waveform,
+} from "@phosphor-icons/react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Brand } from "@/components/Brand";
-import { IconDoForMe, IconGuide, IconLock, IconPasteMessage, IconShield, IconSnapPaper } from "@/components/icons";
+import { useEffect, useState, type ReactNode } from "react";
+import { Mark } from "@/components/Brand";
+import { Backdrop } from "@/components/glass/Backdrop";
+import { CloudWordmark } from "@/components/glass/CloudWordmark";
 import { Orb } from "@/components/Orb";
+import { SiteFooter } from "@/components/SiteFooter";
 import { useApp } from "@/lib/store";
 
 const ASKS = [
-  { lang: "Yorùbá", text: "Bá mi forúkọ sílẹ̀ fún ìdánwò JAMB" },
-  { lang: "Naijá", text: "Abeg check if this message na scam" },
+  { lang: "Yorùbá", text: "Bá mi wá àwọn ẹ̀kọ́ JAMB tí UNILAG ń béèrè" },
+  { lang: "Naijá", text: "Abeg check if this bank message na scam" },
   { lang: "Hausa", text: "Taimaka min in duba sakamakon jarrabawa" },
   { lang: "Igbo", text: "Nyere m aka jupụta fọm a" },
-  { lang: "English", text: "Read this water bill to me" },
+  { lang: "English", text: "Buy my Ikeja Electric token tonight" },
 ];
 
-const rise = { initial: { opacity: 0, y: 24 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-80px" }, transition: { duration: 0.7, ease: [0.2, 0.7, 0.2, 1] } } as const;
+const rise = { initial: { opacity: 0, y: 24 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-60px" }, transition: { duration: 0.7, ease: [0.2, 0.7, 0.2, 1] } } as const;
+
+const POWERS: { icon: ReactNode; title: string; body: string }[] = [
+  { icon: <Waveform size={26} />, title: "Say it, it does it", body: "Talk or type in your language. Jagora opens the site, finds the right buttons and fills the forms, like a person would." },
+  { icon: <SealCheck size={26} />, title: "Proof from official sites", body: "It checks the site is the real one, finds the exact line on the page or in the PDF, and highlights it for you." },
+  { icon: <Translate size={26} />, title: "Websites in your language", body: "English websites appear in Yorùbá, Hausa or Igbo, and Jagora can read them out to you." },
+  { icon: <LockKey size={26} />, title: "Logins that stay yours", body: "Passwords and codes go in a private box. Saved logins are locked to their own site and never seen by the AI." },
+  { icon: <CalendarCheck size={26} />, title: "Works while you sleep", body: "Portal too busy? Jagora tries again at midnight, signs in, downloads your printout and leaves it in the chat." },
+  { icon: <FileText size={26} />, title: "Writes it up for you", body: "Research turns into a clean document with sources, ready as PDF, Word or Markdown." },
+];
+
+const GUARD = [
+  "Adult, phishing and fake sites are blocked",
+  "Betting sites wait for your yes",
+  "Ads, pop-ups and redirect tricks are closed",
+  "It asks before it submits, pays or agrees",
+];
 
 export default function Landing() {
   const router = useRouter();
@@ -38,61 +71,61 @@ export default function Landing() {
   };
 
   return (
-    <div className="bg-[#f8f2ea] dark:bg-[#16181d] text-ink">
+    <div className="relative min-h-dvh overflow-x-hidden text-ink">
+      <Backdrop />
+
       {/* hero */}
-      <section className="sky relative min-h-[100svh] overflow-hidden" style={{ backgroundImage: "url(/sky/hero-desktop.webp)" }}>
-        <picture className="absolute inset-0 md:hidden">
-          <img src="/sky/hero-mobile.webp" alt="" className="h-full w-full object-cover" />
-        </picture>
-        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-b from-transparent to-[#f8f2ea]" />
-        <nav className="relative mx-auto flex max-w-[1200px] items-center gap-6 px-5 pt-5 md:px-8">
-          <Brand />
-          <div className="ml-auto hidden items-center gap-7 text-[15px] text-ink-2 md:flex">
-            <a href="#how" className="hover:text-ink">How it works</a>
-            <a href="#safe" className="hover:text-ink">Safety</a>
-            <a href="#languages" className="hover:text-ink">Languages</a>
+      <section className="relative">
+        <nav className="relative z-10 mx-auto flex max-w-[1200px] items-center gap-3 px-5 pt-[max(16px,env(safe-area-inset-top))] md:px-8">
+          <Link href="/" className="flex items-center gap-2.5">
+            <Mark size={34} />
+            <span className="font-display text-[24px] font-bold tracking-[-0.03em] text-ink">Jagora</span>
+          </Link>
+          <div className="ml-auto hidden items-center gap-7 text-[15px] font-semibold text-ink md:flex">
+            <a href="#powers" className="hover:opacity-70">What it does</a>
+            <a href="#safe" className="hover:opacity-70">Safety</a>
+            <a href="#languages" className="hover:opacity-70">Languages</a>
           </div>
-          <Link href="/app" className="btn btn-glass ml-auto h-10 px-4 text-[14.5px] md:ml-0">
+          <Link href="/app" className="liquid-glass ml-auto rounded-full px-5 py-2.5 text-[15px] font-semibold text-ink md:ml-0">
             Open Jagora
           </Link>
         </nav>
 
-        <div className="relative mx-auto flex max-w-[1200px] flex-col items-center px-5 pb-24 pt-[14vh] text-center md:px-8">
+        <div className="relative mx-auto flex max-w-[1200px] flex-col items-center px-5 pb-16 pt-10 text-center md:px-8 md:pt-14">
+          <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9 }}>
+            <Orb size={150} />
+          </motion.div>
+          <CloudWordmark width={320} className="-mt-4" />
           <motion.h1
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: [0.2, 0.7, 0.2, 1] }}
-            className="max-w-[15ch] text-[44px] font-semibold leading-[0.98] tracking-[-0.02em] sm:text-[64px] lg:text-[84px]"
+            transition={{ duration: 0.8, delay: 0.05, ease: [0.2, 0.7, 0.2, 1] }}
+            className="mt-2 max-w-[16ch] text-[40px] leading-[1.02] sm:text-[60px] lg:text-[76px]"
           >
             The internet, in your own words.
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.1 }}
-            className="mt-5 max-w-[34rem] text-[17px] leading-relaxed text-ink-2 sm:text-[19px]"
+            transition={{ duration: 0.8, delay: 0.12 }}
+            className="mt-5 max-w-[36rem] text-[17.5px] font-medium leading-relaxed text-ink sm:text-[19px]"
           >
-            Say what you need in Yorùbá, Hausa, Igbo, Pidgin or English. Jagora opens the site, reads it to you and fills the form, and stops to ask before anything that matters.
+            Say what you need in Yorùbá, Hausa, Igbo, Pidgin or English. Jagora uses any website for you, shows proof from official sources, and stops to ask before anything that matters.
           </motion.p>
 
           <motion.form
-            initial={{ opacity: 0, y: 18, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.9, delay: 0.18, ease: [0.2, 0.7, 0.2, 1] }}
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.9, delay: 0.2, ease: [0.2, 0.7, 0.2, 1] }}
             onSubmit={(e) => (e.preventDefault(), go())}
-            className="glass-2 mt-10 w-full max-w-[680px] rounded-[34px] p-3 text-left"
+            className="liquid-glass mt-9 w-full max-w-[680px] rounded-[30px] p-2.5 text-left"
           >
-            <div className="flex items-center gap-3">
-              <Orb size={64} className="shrink-0" />
-              <label className="relative min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <label className="relative min-w-0 flex-1 pl-4">
                 <span className="sr-only">Tell Jagora what you need</span>
-                <input
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  className="peer h-[64px] w-full bg-transparent text-[18px] text-ink outline-none sm:text-[20px]"
-                />
+                <input value={text} onChange={(e) => setText(e.target.value)} className="h-[56px] w-full bg-transparent text-[17px] font-medium text-ink outline-none sm:text-[19px]" />
                 {!text && (
-                  <motion.span key={k} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="pointer-events-none absolute inset-y-0 left-0 flex items-center truncate text-[18px] text-ink-3 sm:text-[20px]">
+                  <motion.span key={k} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="pointer-events-none absolute inset-y-0 left-4 right-0 flex items-center truncate text-[17px] text-ink-2 sm:text-[19px]">
                     {ASKS[k].text}
                   </motion.span>
                 )}
@@ -101,13 +134,13 @@ export default function Landing() {
                 <PaperPlaneRight size={20} weight="fill" />
               </button>
             </div>
-            <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto px-1 pb-1">
+            <div className="no-scrollbar mt-1.5 flex gap-2 overflow-x-auto px-1.5 pb-1">
               {ASKS.map((a, i) => (
                 <button
                   type="button"
                   key={a.lang}
                   onClick={() => go(a.text)}
-                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13.5px] transition ${i === k ? "bg-ink text-paper" : "bg-white/70 text-ink-2 hover:bg-white"}`}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-semibold transition ${i === k ? "bg-ink text-paper" : "bg-white/60 text-ink hover:bg-white"}`}
                 >
                   {a.lang}
                 </button>
@@ -116,92 +149,82 @@ export default function Landing() {
           </motion.form>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1.1, delay: 0.35, ease: [0.2, 0.7, 0.2, 1] }}
-          className="relative mx-auto max-w-[1200px] px-5 pb-10 md:px-8"
-        >
-          <Frame src="/shots/desktop-register.webp" alt="Jagora filling a registration form on a laptop while explaining each step in Yorùbá" />
+        <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1.1, delay: 0.3 }} className="relative mx-auto max-w-[1200px] px-5 pb-20 md:px-8">
+          <Shot src="/shots/desktop-register.webp" alt="Jagora filling a registration form on the live page, with the conversation on the left" wide />
         </motion.div>
       </section>
 
-      {/* how it works, two ways */}
-      <section id="how" className="mx-auto max-w-[1200px] px-5 py-24 md:px-8 md:py-32">
-        <motion.div {...rise} className="max-w-[40rem]">
-          <p className="text-[15px] font-medium text-accent">How it works</p>
-          <h2 className="mt-3 text-[36px] font-semibold leading-[1.04] tracking-[-0.015em] sm:text-[52px]">Two ways to get it done.</h2>
-        </motion.div>
-        <div className="mt-14 grid gap-6 md:grid-cols-2">
-          <Way
-            icon={<IconGuide size={52} />}
-            title="Guide me"
-            body="Jagora points at each box on the real page and tells you what goes there. You tap and type. You learn the site as you go."
-            shot="/shots/phone-guide.webp"
-          />
-          <Way
-            icon={<IconDoForMe size={52} />}
-            title="Do it for me"
-            body="Jagora fills it in from your saved details and reads every answer back. Only you can say the final yes."
-            shot="/shots/phone-register.webp"
-          />
+      {/* what it does */}
+      <section id="powers" className="relative bg-[var(--color-white)]/85 py-20 backdrop-blur-xl md:py-28">
+        <div className="mx-auto max-w-[1200px] px-5 md:px-8">
+          <motion.div {...rise} className="max-w-[40rem]">
+            <p className="text-[15px] font-semibold text-accent">What Jagora does</p>
+            <h2 className="mt-3 text-[34px] leading-[1.05] sm:text-[50px]">A browser that works for you.</h2>
+          </motion.div>
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {POWERS.map((p, i) => (
+              <motion.article key={p.title} {...rise} transition={{ ...rise.transition, delay: (i % 3) * 0.06 }} className="rounded-[26px] border border-ink/10 bg-white/80 p-6 dark:bg-white/5">
+                <span className="grid h-12 w-12 place-items-center rounded-[14px] border border-ink/15 text-ink">{p.icon}</span>
+                <h3 className="mt-5 text-[22px] leading-tight">{p.title}</h3>
+                <p className="mt-2 text-[16px] leading-relaxed text-ink-2">{p.body}</p>
+              </motion.article>
+            ))}
+          </div>
+
+          {/* real screens */}
+          <div className="mt-20 grid items-center gap-10 md:grid-cols-[1fr_1.1fr]">
+            <motion.div {...rise}>
+              <p className="text-[15px] font-semibold text-accent">See it work</p>
+              <h2 className="mt-3 text-[32px] leading-[1.06] sm:text-[44px]">The live page, on your screen.</h2>
+              <p className="mt-4 max-w-[30rem] text-[17px] leading-relaxed text-ink-2">
+                You watch Jagora work on the real website, full screen on your phone. Want to do a step yourself? Tap Take over. Not sure what it means? It asks you to point.
+              </p>
+              <ul className="mt-6 flex flex-col gap-3 text-[16px] font-medium">
+                <Li icon={<Globe size={20} />}>Any website: forms, dashboards, maps, uploads</Li>
+                <Li icon={<CursorClick size={20} />}>Tap to show it what you mean</Li>
+                <Li icon={<MagnifyingGlass size={20} />}>Reads five sources at once, then shows proof</Li>
+              </ul>
+            </motion.div>
+            <motion.div {...rise} className="flex items-end justify-center gap-4">
+              <PhoneShot src="/shots/phone-register.webp" alt="Jagora filling a form on a phone" />
+              <PhoneShot src="/shots/phone-doc.webp" alt="A research document Jagora wrote, ready as PDF, Word or Markdown" className="hidden translate-y-10 sm:block" />
+            </motion.div>
+          </div>
         </div>
       </section>
 
       {/* safety */}
-      <section id="safe" className="relative overflow-hidden">
-        <div className="sky absolute inset-0 opacity-90" style={{ backgroundImage: "url(/sky/app.webp)" }} />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#f8f2ea] via-transparent to-[#f8f2ea]" />
-        <div className="relative mx-auto grid max-w-[1200px] items-center gap-14 px-5 py-28 md:grid-cols-[1fr_420px] md:px-8 md:py-36">
+      <section id="safe" className="relative py-20 md:py-28">
+        <div className="mx-auto grid max-w-[1200px] items-center gap-12 px-5 md:grid-cols-[1fr_1.2fr] md:px-8">
           <motion.div {...rise}>
-            <IconShield size={60} />
-            <h2 className="mt-6 max-w-[14ch] text-[36px] font-semibold leading-[1.04] tracking-[-0.015em] sm:text-[52px]">It stops before anything that matters.</h2>
-            <p className="mt-5 max-w-[32rem] text-[17.5px] leading-relaxed text-ink-2">
-              The stops are written into the code, not left to the model. Jagora pauses and asks, in your language, before it:
+            <span className="liquid-glass grid h-14 w-14 place-items-center rounded-[16px] text-ink">
+              <ShieldCheck size={28} />
+            </span>
+            <h2 className="mt-6 max-w-[14ch] text-[34px] leading-[1.05] sm:text-[50px]">Safe on every page.</h2>
+            <p className="mt-4 max-w-[30rem] text-[17px] font-medium leading-relaxed text-ink">
+              The safety rules are written into the code, not left to the AI. Private numbers go in a private box that only the website sees.
             </p>
-            <ul className="mt-7 grid max-w-[34rem] gap-3 sm:grid-cols-2">
-              {["Submits or sends anything", "Pays or moves money", "Types a password, PIN or OTP", "Agrees to terms for you"].map((r) => (
-                <li key={r} className="glass-2 rounded-[20px] px-5 py-4 text-[16px] font-medium">
-                  {r}
+            <ul className="mt-6 grid gap-2.5">
+              {GUARD.map((g) => (
+                <li key={g} className="liquid-glass flex items-center gap-3 rounded-[18px] px-4 py-3 text-[16px] font-semibold">
+                  <Prohibit size={20} className="shrink-0" /> {g}
                 </li>
               ))}
             </ul>
           </motion.div>
-          <motion.div {...rise} transition={{ ...rise.transition, delay: 0.1 }}>
-            <Phone src="/shots/phone-confirm.webp" alt="Jagora asking for a yes before it submits a form" />
+          <motion.div {...rise}>
+            <Shot src="/shots/desktop-private.webp" alt="Jagora asking for a NIN in a private box that only the website sees" />
           </motion.div>
         </div>
       </section>
 
-      {/* everyday help */}
-      <section className="mx-auto max-w-[1200px] px-5 py-24 md:px-8 md:py-32">
-        <motion.div {...rise} className="max-w-[40rem]">
-          <p className="text-[15px] font-medium text-accent">Everyday help</p>
-          <h2 className="mt-3 text-[36px] font-semibold leading-[1.04] tracking-[-0.015em] sm:text-[52px]">For the messages and papers that worry you.</h2>
-        </motion.div>
-        <div className="mt-14 grid gap-6 md:grid-cols-2">
-          <Card
-            icon={<IconPasteMessage size={52} />}
-            title="Is this message real?"
-            body="Paste the SMS or WhatsApp message. Jagora checks the link against the real bank's site and tells you plainly what it found."
-            shot="/shots/phone-scam.webp"
-          />
-          <Card
-            icon={<IconSnapPaper size={52} />}
-            title="What does this paper say?"
-            body="Take a photo of a bill, a letter or a notice. Jagora reads it out and shows you the part that needs action: how much, and by when."
-            shot="/shots/phone-letter.webp"
-          />
-        </div>
-      </section>
-
       {/* languages */}
-      <section id="languages" className="bg-ink py-24 text-paper md:py-32">
+      <section id="languages" className="relative bg-[var(--color-white)]/85 py-20 backdrop-blur-xl md:py-28">
         <div className="mx-auto max-w-[1200px] px-5 md:px-8">
-          <motion.p {...rise} className="text-[15px] font-medium text-paper/60">
+          <motion.p {...rise} className="text-[15px] font-semibold text-accent">
             Five languages, spoken and written
           </motion.p>
-          <div className="mt-8 flex flex-col gap-1">
+          <div className="mt-6 flex flex-col">
             {[
               ["Ẹ n lẹ́, kí ni kí n bá yín ṣe?", "Yorùbá"],
               ["Sannu, me kake so in yi maka?", "Hausa"],
@@ -209,81 +232,55 @@ export default function Landing() {
               ["How you dey, wetin I fit do for you?", "Naijá"],
               ["Good day, what can I do for you?", "English"],
             ].map(([line, name], i) => (
-              <motion.div key={name} {...rise} transition={{ ...rise.transition, delay: i * 0.06 }} className="flex flex-wrap items-baseline gap-x-5 border-b border-white/10 py-5">
-                <span className="text-[28px] font-semibold leading-tight tracking-[-0.01em] sm:text-[44px]">{line}</span>
-                <span className="text-[15px] text-paper/50">{name}</span>
+              <motion.div key={name} {...rise} transition={{ ...rise.transition, delay: i * 0.05 }} className="flex flex-wrap items-baseline gap-x-5 border-b border-ink/10 py-5">
+                <span className="font-head text-[26px] leading-tight sm:text-[40px]">{line}</span>
+                <span className="text-[15px] font-semibold text-ink-3">{name}</span>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* privacy + cta */}
-      <section className="mx-auto max-w-[1200px] px-5 py-24 md:px-8 md:py-32">
-        <div className="grid items-center gap-12 md:grid-cols-2">
-          <motion.div {...rise}>
-            <IconLock size={56} />
-            <h2 className="mt-6 text-[34px] font-semibold leading-[1.06] tracking-[-0.015em] sm:text-[46px]">Your details stay with you.</h2>
-            <p className="mt-4 max-w-[30rem] text-[17.5px] leading-relaxed text-ink-2">
-              Your name, phone and date of birth are saved on your phone. Jagora reads each one back before using it, and you can remove them all with one tap.
-            </p>
-          </motion.div>
-          <motion.div {...rise} className="sky relative overflow-hidden rounded-[36px] p-8 sm:p-12" style={{ backgroundImage: "url(/sky/hero-mobile.webp)" }}>
-            <div className="relative flex flex-col items-start">
-              <Orb size={120} />
-              <h3 className="mt-6 text-[30px] font-semibold leading-tight">Try Jagora now.</h3>
-              <p className="mt-2 text-[16.5px] text-ink-2">No download. Works in the browser on any phone.</p>
-              <button onClick={() => go("")} className="btn btn-ink mt-6 h-13 px-6 py-3.5 text-[16px]">
-                Start
-              </button>
-            </div>
-          </motion.div>
-        </div>
+      {/* start */}
+      <section className="relative py-20 md:py-28">
+        <motion.div {...rise} className="liquid-glass mx-auto flex max-w-[860px] flex-col items-center rounded-[36px] px-6 py-12 text-center sm:px-12">
+          <Orb size={120} />
+          <h2 className="mt-4 text-[32px] leading-tight sm:text-[46px]">Try Jagora now.</h2>
+          <p className="mt-2 text-[17px] font-medium text-ink">No download. Works in the browser on any phone or computer.</p>
+          <button onClick={() => go("")} className="btn btn-ink mt-6 h-12 px-7 text-[16px]">
+            Start
+          </button>
+        </motion.div>
       </section>
 
-      <footer className="border-t border-ink/10">
-        <div className="mx-auto flex max-w-[1200px] flex-col gap-3 px-5 py-8 text-[14px] text-ink-3 sm:flex-row sm:items-center md:px-8">
-          <Brand size={22} />
-          <span className="sm:ml-auto">Built for the Meta AI Developer Hackathon 2026 with Muse Spark.</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
 
-function Frame({ src, alt }: { src: string; alt: string }) {
+function Li({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
-    <div className="glass rounded-[30px] p-2.5 shadow-[0_60px_120px_-60px_rgba(60,38,16,.55)] sm:rounded-[38px] sm:p-3.5">
+    <li className="flex items-center gap-3">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border border-ink/15">{icon}</span>
+      {children}
+    </li>
+  );
+}
+
+function Shot({ src, alt, wide = false }: { src: string; alt: string; wide?: boolean }) {
+  return (
+    <div className={`liquid-glass overflow-hidden p-2 sm:p-3 ${wide ? "rounded-[30px] sm:rounded-[38px]" : "rounded-[26px]"}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={alt} className="block w-full rounded-[22px] sm:rounded-[28px]" />
+      <img src={src} alt={alt} loading="lazy" className={`block w-full ${wide ? "rounded-[22px] sm:rounded-[28px]" : "rounded-[18px]"}`} />
     </div>
   );
 }
 
-function Phone({ src, alt }: { src: string; alt: string }) {
+function PhoneShot({ src, alt, className = "" }: { src: string; alt: string; className?: string }) {
   return (
-    <div className="mx-auto w-full max-w-[340px] rounded-[48px] bg-ink p-2.5 shadow-[0_50px_100px_-40px_rgba(60,38,16,.6)]">
+    <div className={`w-[46%] max-w-[260px] rounded-[38px] bg-ink p-2 shadow-[0_40px_80px_-40px_rgba(10,30,70,.6)] ${className}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={alt} className="block w-full rounded-[40px]" />
+      <img src={src} alt={alt} loading="lazy" className="block w-full rounded-[31px]" />
     </div>
   );
 }
-
-function Way({ icon, title, body, shot }: { icon: React.ReactNode; title: string; body: string; shot: string }) {
-  return (
-    <motion.article {...rise} className="overflow-hidden rounded-[36px] bg-white">
-      <div className="p-8 sm:p-10">
-        {icon}
-        <h3 className="mt-5 text-[28px] font-semibold">{title}</h3>
-        <p className="mt-2 max-w-[28rem] text-[16.5px] leading-relaxed text-ink-2">{body}</p>
-      </div>
-      <div className="sky relative h-[420px] overflow-hidden" style={{ backgroundImage: "url(/sky/app.webp)" }}>
-        <div className="absolute left-1/2 top-10 w-[300px] -translate-x-1/2">
-          <Phone src={shot} alt={title} />
-        </div>
-      </div>
-    </motion.article>
-  );
-}
-
-const Card = Way;
