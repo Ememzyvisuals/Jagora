@@ -21,7 +21,7 @@ import { TAGLINE } from "@/components/app/MobileHome";
 import { isEmail } from "@/lib/fields";
 import { useHydrated } from "@/lib/hooks";
 import { LANGS, type Lang } from "@/lib/i18n";
-import { useApp } from "@/lib/store";
+import { EMPTY_PROFILE, useApp } from "@/lib/store";
 
 type L = Record<Lang, string>;
 const T: Record<string, L> = {
@@ -89,6 +89,10 @@ export default function Start() {
         const m = e instanceof Error ? e.message : "";
         return setErr(m && m !== "Failed to fetch" && m !== "puzzle" ? m : "Can't reach Jagora right now. Check your network.");
       }
+    }
+    const was = useApp.getState().profile.email;
+    if (was && was.toLowerCase() !== email.trim().toLowerCase()) {
+      useApp.setState({ tasks: [], activeId: null, profile: EMPTY_PROFILE }); // someone else's account on this device: don't show her their chats or details
     }
     setProfile({ email: email.trim() });
     setOnboarded(true);

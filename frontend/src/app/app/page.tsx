@@ -9,6 +9,7 @@ import { useApp } from "@/lib/store";
 import { ask, live } from "@/lib/engine";
 import { remoteWake } from "@/lib/engine/remote";
 import { refreshPush } from "@/lib/push";
+import { syncAccount } from "@/lib/sync";
 
 export default function AppPage() {
   const ready = useHydrated();
@@ -38,6 +39,7 @@ export default function AppPage() {
     if (live) {
       void remoteWake(); // what came while she was away arrives now
       void refreshPush();
+      void syncAccount(); // her chats and saved details, on any device
     }
     // shared from another app ("Share to Jagora"): check the message or open the link
     try {

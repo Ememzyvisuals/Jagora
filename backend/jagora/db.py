@@ -65,6 +65,7 @@ SCHEMA = [
 MIGRATIONS = [
     "alter table users add column code text not null default ''",  # which access code she came with (label, never the code)
     "alter table users add column last_seen real not null default 0",
+    "alter table users add column settings text not null default ''",  # her saved details, language and mode, sealed
 ]
 
 

@@ -23,7 +23,7 @@
   <img alt="Muse Wonder" src="https://img.shields.io/badge/Meta-Muse%20Wonder-0467DF?style=flat-square">
   <img alt="Muse Image" src="https://img.shields.io/badge/Meta-Muse%20Image-0467DF?style=flat-square">
   <img alt="Languages" src="https://img.shields.io/badge/languages-yo%20%C2%B7%20ha%20%C2%B7%20ig%20%C2%B7%20pcm%20%C2%B7%20en-111318?style=flat-square">
-  <img alt="Tests" src="https://img.shields.io/badge/backend%20tests-75%20passing-3f8f5c?style=flat-square">
+  <img alt="Tests" src="https://img.shields.io/badge/backend%20tests-77%20passing-3f8f5c?style=flat-square">
   <a href="#live-result-against-the-real-model"><img alt="Attacks resisted" src="https://img.shields.io/badge/live%20attack%20range-20%2F20%20resisted-3f8f5c?style=flat-square"></a>
 </p>
 

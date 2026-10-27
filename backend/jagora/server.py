@@ -169,6 +169,52 @@ async def me(request: Request):
     return acc
 
 
+# ---- her settings follow her account: saved details, language and mode, sealed like her saved logins ----------------
+SETTING_KEYS = {"lang", "mode", "profile"}
+
+
+@app.get("/me/settings")
+async def get_settings(request: Request):
+    uid = _user_from(request)
+    if not uid:
+        raise HTTPException(401)
+    row = await db.one("select settings from users where id=?", (uid,))
+    raw = (row or {}).get("settings") or ""
+    if not raw:
+        return {"settings": None}
+    from jagora.vault import unseal
+
+    try:
+        nonce, ct = raw.split(":", 1)
+        return {"settings": json.loads(unseal(uid, "settings", "settings", nonce, ct))}
+    except Exception:  # noqa: BLE001
+        return {"settings": None}
+
+
+@app.put("/me/settings")
+async def put_settings(request: Request):
+    uid = _user_from(request)
+    if not uid:
+        raise HTTPException(401)
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400)
+    clean: dict = {k: v for k, v in body.items() if k in SETTING_KEYS}
+    if isinstance(clean.get("profile"), dict):
+        clean["profile"] = {str(k)[:40]: str(v)[:300] for k, v in clean["profile"].items() if isinstance(v, (str, int, float))}
+    for k in ("lang", "mode"):
+        if k in clean and not isinstance(clean[k], str):
+            clean.pop(k)
+    text = json.dumps({**clean, "updated": time.time()}, ensure_ascii=False)
+    if len(text) > 8000:
+        raise HTTPException(413)
+    from jagora.vault import seal
+
+    nonce, ct = seal(uid, "settings", "settings", text)
+    await db.exec("update users set settings=? where id=?", (f"{nonce}:{ct}", uid))
+    return {"ok": True}
+
+
 # Amina's hello in each language, for the landing page (a fixed set of lines, so nobody can use this to make speech)
 HELLO = {  # exactly the lines shown in the languages section of the landing page
     "yo": "Ẹ n lẹ́, kí ni kí n bá yín ṣe?",
@@ -238,6 +284,7 @@ async def push_unsubscribe(request: Request):
 
 @app.get("/chats")
 async def chats(request: Request):
+    """Her chats on any device: newest first."""
     uid = _user_from(request)
     if not uid:
         raise HTTPException(401)

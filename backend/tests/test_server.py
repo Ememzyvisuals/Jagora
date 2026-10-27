@@ -233,3 +233,26 @@ def test_phone_notifications_when_jagora_is_closed(client, monkeypatch):
     asyncio.run(server.fire_reminders())
     assert sent and sent[0][0] == sub["endpoint"] and sent[0][1]["body"] == "Pay NEPA bill" and sent[0][1]["url"] == "/app?chat=c1"
     assert sent[0][2].startswith("mailto:")
+
+
+def test_her_chats_and_details_follow_her_to_any_device(client):  # noqa: F811
+    """Signed in on a new phone: the same chats and the same saved details, which are sealed on the server."""
+    import asyncio
+
+    c, server = client
+    a = c.post("/auth/signup", json={"email": "d@b.co", "password": "longenough", "altcha": solve(c.get("/altcha").json())}).json()
+    phone_one = {"Authorization": f"Bearer {a['token']}"}
+    details = {"lang": "yo", "mode": "do", "profile": {"full_name": "Bísí Adébáyọ̀", "phone": "07011111111"}}
+    assert c.put("/me/settings", json=details, headers=phone_one).json() == {"ok": True}
+    asyncio.run(server.db.remember(a["user"]["id"], "chat-1", "user", "Check my JAMB result", "JAMB result"))
+
+    b = c.post("/auth/signin", json={"email": "d@b.co", "password": "longenough", "altcha": solve(c.get("/altcha").json())}).json()
+    phone_two = {"Authorization": f"Bearer {b['token']}"}
+    got = c.get("/me/settings", headers=phone_two).json()["settings"]
+    assert got["profile"] == details["profile"] and got["lang"] == "yo"
+    assert [x["chat_id"] for x in c.get("/chats", headers=phone_two).json()] == ["chat-1"]
+    assert c.get("/chats/chat-1", headers=phone_two).json()[0]["text"] == "Check my JAMB result"
+
+    raw = asyncio.run(server.db.one("select settings from users where id=?", (a["user"]["id"],)))["settings"]
+    assert "07011111111" not in raw and "Bísí" not in raw  # sealed, never stored in clear
+    assert c.get("/me/settings").status_code == 401
