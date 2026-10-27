@@ -417,7 +417,7 @@ function Stage() {
         await s.load("/mascot/amina.vrm");
         if (dead) return s.dispose();
         stage = s;
-        (window as unknown as { __amina?: unknown }).__amina = { stage: s, state: () => ({ spot: spot?.id ?? null, phase, dir, pos, say }), go: (id: string) => { done.delete(id); spot = null; phase = 0; const a = anchors().find((x) => x.id === id); if (a) enter(a); } };
+        if (process.env.NODE_ENV !== "production") (window as unknown as { __amina?: unknown }).__amina = { stage: s, state: () => ({ spot: spot?.id ?? null, phase, dir, pos, say }), go: (id: string) => { done.delete(id); spot = null; phase = 0; const a = anchors().find((x) => x.id === id); if (a) enter(a); } };
         const now = performance.now();
         raf = requestAnimationFrame((n) => loop(n, now));
       } catch {
