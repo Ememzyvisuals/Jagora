@@ -114,18 +114,12 @@ const SOCIALS = [
 
 const Meta = ({ label, seat }: { label: string; seat?: boolean }) => (
   <span className="flex items-center gap-2 font-display text-[16.5px] font-bold tracking-[-0.02em] text-ink">
-    {seat ? (
-      /* Amina's bench: a bigger Meta mark with a soft shadow under it, so she has something to sit on */
-      <span data-amina-seat className="relative -my-2 inline-flex">
-        <svg viewBox="0 0 24 24" width="46" height="46" fill="#0866FF" aria-hidden="true" className="drop-shadow-[0_6px_6px_rgba(8,102,255,0.35)]">
-          <path d={siMeta.path} />
-        </svg>
-      </span>
-    ) : (
+    {/* Amina sits on the Muse Spark mark (data-amina-seat); it looks exactly like the others */}
+    <span data-amina-seat={seat ? "" : undefined} className="inline-flex">
       <svg viewBox="0 0 24 24" width="24" height="24" fill="#0866FF" aria-hidden="true">
         <path d={siMeta.path} />
       </svg>
-    )}
+    </span>
     {label}
   </span>
 );

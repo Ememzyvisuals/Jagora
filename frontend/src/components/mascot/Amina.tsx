@@ -11,6 +11,7 @@
    She loads after the page is idle, draws only while visible, sits still when the visitor prefers less motion,
    and can be hidden from the footer. */
 import { useEffect, useRef, useState } from "react";
+import { siMeta } from "simple-icons";
 import type { AminaStage, Gesture } from "./engine";
 
 type Kind = "over" | "edgeL" | "edgeR" | "seat" | "corner";
@@ -79,6 +80,7 @@ function Stage() {
     let phase = 0; // 0 hidden .. 1 fully in
     let dir = 0; // +1 coming in, -1 going out
     let holdUntil = 0;
+    let holdFor = 0;
     let gestureUntil = 0;
     let say = "";
     let sayUntil = 0;
@@ -91,6 +93,10 @@ function Stage() {
     let walkBack = 0;
     let taps: number[] = [];
     let lastLine: Element | null = null;
+    let scale = 1;
+    let seatStage: "drop" | "land" | "sat" = "drop";
+    let landAt = 0;
+    let flat: SVGElement | null = null;
 
     const anchors = () => {
       const list: Spot[] = [];
@@ -120,8 +126,11 @@ function Stage() {
       spot = s;
       dir = 1;
       phase = s.kind === "seat" ? 0 : phase;
-      holdUntil = performance.now() + (s.persistent || s.kind === "seat" ? 1e12 : 4200);
+      holdUntil = 1e15; // the stay starts once she has fully arrived
+      holdFor = s.persistent || s.kind === "seat" ? 1e12 : 4200;
+      if (s.kind === "seat") seatStage = "drop";
       if (stage) {
+        stage.useSeat(s.kind === "seat" ? siMeta.path : null);
         stage.base = s.kind === "seat" ? "dangle" : "stand";
         stage.play(calm ? "none" : s.gesture);
         stage.mood = s.kind === "seat" ? "happy" : "calm";
@@ -172,6 +181,7 @@ function Stage() {
       const head = stage.screenOf("head") ?? { x: W / 2, y: H * 0.15 };
       const small = innerWidth < 640;
       let tx = 0, ty = 0, clip = "none";
+      scale = 1;
       stage.yaw = 0;
       stage.leanTo = 0;
       if (sp.kind === "over" || sp.kind === "corner") {
@@ -181,9 +191,11 @@ function Stage() {
         const cut = Math.max(0, pos.y + H - line);
         clip = `inset(0 0 ${cut}px 0)`;
         stage.yaw = -0.15;
+        el.style.opacity = "1";
       } else if (sp.kind === "edgeL" || sp.kind === "edgeR") {
+        el.style.opacity = "1";
         const left = sp.kind === "edgeL";
-        const inX = small ? 40 : 66;
+        const inX = small ? 34 : 52;
         tx = left ? -150 + (150 + inX) * e : innerWidth + 150 - (150 + inX) * e;
         ty = Math.min(innerHeight * 0.7, Math.max(innerHeight * 0.3, r.top + r.height / 2));
         if (sp.id === "languages") {
@@ -197,13 +209,30 @@ function Stage() {
           }
         }
         stage.yaw = left ? 0.5 : -0.5;
-        stage.leanTo = left ? 0.9 : -0.9;
+        stage.leanTo = left ? 1.4 : -1.4;
       } else if (sp.kind === "seat") {
-        const seat = stage.seatPoint() ?? { x: W / 2, y: H * 0.6 };
-        const sx = r.left + r.width / 2, sy = r.top + r.height * 0.18;
-        const drop = (1 - e) * 280;
-        pos = { x: sx - seat.x, y: sy - seat.y - drop };
-        if (stage.base === "dangle" && phase >= 1 && !drag) stage.base = "sit";
+        // she drops onto the 3D Meta logo, lands on her feet, then lowers herself to sit, legs over the front
+        stage.yaw = -0.35;
+        stage.dropY = (1 - e) * 0.9;
+        el.style.opacity = String(Math.min(1, phase * 3));
+        if (phase >= 1 && dir === 1 && seatStage === "drop") {
+          seatStage = "land";
+          landAt = performance.now();
+          stage.base = "stand";
+        }
+        if (seatStage === "land" && performance.now() - landAt > 420) {
+          seatStage = "sat";
+          stage.base = "sit";
+        }
+        if (dir === -1) stage.base = "dangle";
+        const box = stage.seatOnCanvas();
+        if (box) {
+          // the 3D logo lands exactly on top of the flat one: same width, same centre
+          scale = (r.width * 0.98) / Math.max(1, box.right - box.left);
+          pos = { x: r.left + r.width / 2 - ((box.left + box.right) / 2) * scale, y: r.top + r.height / 2 - ((box.top + box.bottom) / 2) * scale };
+        }
+        flat = flat ?? (sp.el?.querySelector("svg") as SVGElement | null);
+        if (flat) flat.style.visibility = "hidden";
         el.style.clipPath = "none";
         return;
       }
@@ -231,7 +260,16 @@ function Stage() {
       choose();
       if (spot) {
         phase = Math.max(0, Math.min(1, phase + dir * dt * (spot.kind === "seat" ? 1.6 : 1.5)));
+        if (phase === 1 && dir === 1 && holdFor) {
+          holdUntil = Math.min(holdUntil, performance.now() + holdFor);
+          holdFor = 0;
+        }
         if (dir === -1 && phase === 0) {
+          if (spot.kind === "seat") {
+            stage.useSeat(null);
+            if (flat) flat.style.visibility = "";
+            seatStage = "drop";
+          }
           if (spot.kind !== "seat" && !spot.persistent) done.add(spot.id);
           spot = null;
           dir = 0;
@@ -252,8 +290,13 @@ function Stage() {
       }
       if (spot && phase > 0.9 && !calm && !gestureUntil) {
         const idle = t - lastMove;
-        if (idle > 20000 && idleStage === 0) (idleStage = 1), react("stretch", 2600, "calm");
-        else if (idle > 23500 && idleStage === 1) (idleStage = 2), react("wrist", 2600, "calm");
+        if (idle > 20000 && idleStage === 0) {
+          idleStage = 1;
+          react("stretch", 2600, "calm");
+        } else if (idle > 23500 && idleStage === 1) {
+          idleStage = 2;
+          react("wrist", 2600, "calm");
+        }
       }
       // fast scrolling shoves her a little
       const sv = scrollY - lastScroll;
@@ -263,7 +306,7 @@ function Stage() {
       if (spot || phase > 0) {
         el.style.display = "block";
         place(dt);
-        el.style.transform = `translate3d(${Math.round(pos.x)}px, ${Math.round(pos.y)}px, 0)`;
+        el.style.transform = `translate3d(${Math.round(pos.x)}px, ${Math.round(pos.y)}px, 0) scale(${scale})`;
         stage.frame(dt);
         // the speech bubble rides next to her head
         if (say) {
@@ -272,8 +315,8 @@ function Stage() {
           bub.textContent = say;
           bub.style.opacity = "1";
           const bw = bub.offsetWidth;
-          const bx = pos.x + hp.x + (right ? -bw - 34 : 34);
-          bub.style.transform = `translate3d(${Math.round(Math.max(8, Math.min(innerWidth - bw - 8, bx)))}px, ${Math.round(pos.y + hp.y - 46)}px, 0)`;
+          const bx = pos.x + hp.x * scale + (right ? -bw - 34 : 34);
+          bub.style.transform = `translate3d(${Math.round(Math.max(8, Math.min(innerWidth - bw - 8, bx)))}px, ${Math.round(pos.y + hp.y * scale - 46)}px, 0)`;
         } else bub.style.opacity = "0";
       } else {
         el.style.display = "none";
@@ -283,7 +326,7 @@ function Stage() {
     };
 
     /* --- the visitor --- */
-    const local = (x: number, y: number) => ({ x: x - pos.x, y: y - pos.y });
+    const local = (x: number, y: number) => ({ x: (x - pos.x) / scale, y: (y - pos.y) / scale });
     const onHer = (x: number, y: number) => {
       if (!stage || !spot || phase < 0.6) return false;
       const p = local(x, y);
@@ -374,7 +417,7 @@ function Stage() {
         await s.load("/mascot/amina.vrm");
         if (dead) return s.dispose();
         stage = s;
-        (window as unknown as { __amina?: unknown }).__amina = { stage: s, go: (id: string) => { done.delete(id); spot = null; phase = 0; const a = anchors().find((x) => x.id === id); if (a) enter(a); } };
+        (window as unknown as { __amina?: unknown }).__amina = { stage: s, state: () => ({ spot: spot?.id ?? null, phase, dir, pos, say }), go: (id: string) => { done.delete(id); spot = null; phase = 0; const a = anchors().find((x) => x.id === id); if (a) enter(a); } };
         const now = performance.now();
         raf = requestAnimationFrame((n) => loop(n, now));
       } catch {
@@ -416,7 +459,7 @@ function Stage() {
 
   return (
     <>
-      <div ref={box} aria-hidden="true" className="pointer-events-none fixed left-0 top-0 z-[60] hidden will-change-transform">
+      <div ref={box} aria-hidden="true" className="pointer-events-none fixed left-0 top-0 z-[60] hidden origin-top-left will-change-transform">
         <canvas ref={cvs} className="h-full w-full" />
       </div>
       <div

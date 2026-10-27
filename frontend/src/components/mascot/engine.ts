@@ -6,18 +6,19 @@
    right arm runs along +X, a positive X turn swings an arm or leg forward. */
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { SVGLoader } from "three/examples/jsm/loaders/SVGLoader.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 
 export type Base = "stand" | "sit" | "walk" | "dangle";
 export type Gesture = "none" | "wave" | "pointL" | "pointR" | "shush" | "watch" | "hop" | "dizzy" | "stretch" | "wrist" | "bounce" | "hello";
 
 type R = [number, number, number];
-type Pose = Partial<Record<string, R>> & { lift?: number };
+type Pose = { [bone: string]: R | number | undefined; lift?: number };
 
 const BONES = ["hips", "spine", "chest", "neck", "head", "leftUpperArm", "leftLowerArm", "rightUpperArm", "rightLowerArm",
   "leftHand", "rightHand", "leftUpperLeg", "leftLowerLeg", "rightUpperLeg", "rightLowerLeg"] as const;
 
-const sm = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 
 /* the base poses */
@@ -58,6 +59,17 @@ function basePose(base: Base, t: number): Pose {
     leftUpperArm: [0, 0, 1.22 + breathe], rightUpperArm: [0, 0, -1.22 - breathe],
     leftLowerArm: [0, -0.12, 0], rightLowerArm: [0, 0.12, 0],
   };
+}
+
+function mix(a: Pose, b: Pose, k: number): Pose {
+  const out: Pose = {};
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (key === "lift") continue;
+    const x = (a[key] as R | undefined) ?? [0, 0, 0], y = (b[key] as R | undefined) ?? [0, 0, 0];
+    out[key] = [lerp(x[0], y[0], k), lerp(x[1], y[1], k), lerp(x[2], y[2], k)];
+  }
+  out.lift = lerp(a.lift ?? 0, b.lift ?? 0, k);
+  return out;
 }
 
 /* gestures layered on top (only the bones they name) */
@@ -112,6 +124,12 @@ export class AminaStage {
   private talking = 0;
   private headLook = new THREE.Vector2();
   private ray = new THREE.Raycaster();
+  private seat: THREE.Group | null = null; // the 3D Meta logo she sits on
+  private seatTop = new THREE.Vector3();
+  private seatBox = new THREE.Box3();
+  private sitK = 0;
+  onSeat = false;
+  dropY = 0; // metres above the seat while she drops in
   base: Base = "stand";
   gesture: Gesture = "none";
   private nextGesture: Gesture = "none";
@@ -131,6 +149,78 @@ export class AminaStage {
     this.camera.position.set(0, 0.86, 5.0);
     this.camera.lookAt(0, 0.82, 0);
     this.scene.add(new THREE.AmbientLight(0xffffff, 1.6));
+    const key = new THREE.DirectionalLight(0xffffff, 1.4);
+    key.position.set(1.5, 3, 4);
+    this.scene.add(key);
+    const pm = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    pm.dispose();
+  }
+
+  /** the Meta logo as a real object: extruded from the official mark, thick, glossy, in Meta's blue gradient */
+  private buildSeat(path: string) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="${path}"/></svg>`;
+    const shapes = new SVGLoader().parse(svg).paths.flatMap((p) => SVGLoader.createShapes(p));
+    // thin, so from the front it looks exactly like the flat logo; the depth only shows where she sits on it
+    const geo = new THREE.ExtrudeGeometry(shapes, { depth: 2.2, curveSegments: 32, bevelEnabled: false });
+    geo.computeBoundingBox();
+    const b = geo.boundingBox!;
+    const sc = 0.5 / (b.max.x - b.min.x);
+    geo.translate(-(b.min.x + b.max.x) / 2, -(b.min.y + b.max.y) / 2, -(b.min.z + b.max.z) / 2);
+    geo.scale(sc, -sc, sc); // SVG y points down
+    geo.computeBoundingBox();
+    geo.translate(0, -geo.boundingBox!.min.y, 0);
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    // the same flat Meta blue as the logo in the footer (#0866FF), unlit; the edge a shade deeper
+    const face = new THREE.MeshBasicMaterial({ color: "#0866FF" });
+    const edge = new THREE.MeshBasicMaterial({ color: "#0552cc" });
+    const mesh = new THREE.Mesh(geo, [face, edge]);
+    const g = new THREE.Group();
+    g.add(mesh);
+    g.position.x = 0.1; // her loop (the left one) sits under the middle of the canvas
+    this.scene.add(g);
+    g.updateMatrixWorld(true);
+    this.seatBox.setFromObject(g);
+    // the top of the left loop: the highest point between a tenth and four tenths in from the left
+    const w = this.seatBox.max.x - this.seatBox.min.x;
+    let best = -1, bx = 0;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+      if (v.x > this.seatBox.min.x + w * 0.12 && v.x < this.seatBox.min.x + w * 0.42 && v.y > best) {
+        best = v.y;
+        bx = v.x;
+      }
+    }
+    this.seatTop.set(bx, best, 0);
+    this.seat = g;
+  }
+
+  /** show or hide the Meta seat */
+  useSeat(path: string | null) {
+    if (path && !this.seat) this.buildSeat(path);
+    if (this.seat) this.seat.visible = !!path;
+    this.onSeat = !!path;
+    if (!path && this.vrm) this.vrm.scene.position.set(0, 0, 0);
+    // on the seat the camera steps back so the logo and Amina standing on top of it both fit
+    if (path) {
+      this.camera.position.set(0, 1.12, 6.4);
+      this.camera.lookAt(0, 1.06, 0);
+    } else {
+      this.camera.position.set(0, 0.86, 5.0);
+      this.camera.lookAt(0, 0.82, 0);
+    }
+  }
+
+  /** the seat's box on the canvas, in CSS pixels */
+  seatOnCanvas() {
+    if (!this.seat) return null;
+    const c = this.renderer.domElement;
+    const w = c.clientWidth || 1, h = c.clientHeight || 1;
+    const b = this.seatBox;
+    const pts = [b.min.x, b.max.x].flatMap((x) => [b.min.y, b.max.y].map((y) => new THREE.Vector3(x, y, b.max.z).project(this.camera)));
+    const xs = pts.map((p) => (p.x * 0.5 + 0.5) * w), ys = pts.map((p) => (-p.y * 0.5 + 0.5) * h);
+    return { left: Math.min(...xs), right: Math.max(...xs), top: Math.min(...ys), bottom: Math.max(...ys) };
   }
 
   async load(url: string) {
@@ -188,14 +278,16 @@ export class AminaStage {
     this.kickV += (-this.kick * 40 - this.kickV * 7) * dt;
     this.kick += this.kickV * dt;
 
-    const bp = basePose(this.base, this.t);
+    this.sitK = Math.max(0, Math.min(1, this.sitK + (this.base === "sit" ? dt : -dt) / 0.85));
+    const sk = this.sitK * this.sitK * (3 - 2 * this.sitK);
+    const bp = this.base === "sit" || sk > 0.001 ? mix(basePose(this.base === "sit" ? "stand" : this.base, this.t), basePose("sit", this.t), sk) : basePose(this.base, this.t);
     const gp = gesturePose(this.gesture, this.gT, this.base);
     const k = 1 - Math.exp(-dt * 10);
     for (const name of BONES) {
       const node = vrm.humanoid.getNormalizedBoneNode(name);
       if (!node) continue;
-      const a = bp[name] ?? [0, 0, 0];
-      const g = gp[name];
+      const a = (bp[name] as R | undefined) ?? [0, 0, 0];
+      const g = gp[name] as R | undefined;
       const w = this.gWeight;
       const target: R = g ? [lerp(a[0], g[0], w), lerp(a[1], g[1], w), lerp(a[2], g[2], w)] : a;
       const e = this.cur.get(name)!;
@@ -211,12 +303,24 @@ export class AminaStage {
     hips.rotation.x += this.kick * 0.5;
     const lift = (bp.lift ?? 0) + (gp.lift ?? 0) * this.gWeight;
     this.lift = lerp(this.lift, lift, 1 - Math.exp(-dt * 18));
-    vrm.scene.position.y = this.lift;
     this.faceYaw = lerp(this.faceYaw, this.yaw, 1 - Math.exp(-dt * 6));
     vrm.scene.rotation.y = Math.PI + this.faceYaw;
+    if (this.onSeat && this.seat) {
+      // standing: her feet on top of the loop; sitting: her hips just above it, set back so her thighs rest on the
+      // top and her knees reach the front edge, legs hanging down the face of the logo
+      vrm.scene.position.set(0, 0, 0);
+      vrm.scene.updateMatrixWorld(true);
+      const H = (n: string) => vrm.humanoid.getNormalizedBoneNode(n as "hips")!.getWorldPosition(new THREE.Vector3());
+      const feet = H("leftFoot").add(H("rightFoot")).multiplyScalar(0.5);
+      const hips = H("leftUpperLeg").add(H("rightUpperLeg")).multiplyScalar(0.5).add(new THREE.Vector3(0, -0.075, 0));
+      const anchor = feet.lerp(hips, sk);
+      const mid = (this.seatBox.min.z + this.seatBox.max.z) / 2;
+      const target = new THREE.Vector3(this.seatTop.x, this.seatTop.y + this.dropY, mid);
+      vrm.scene.position.copy(target.sub(anchor));
+      vrm.scene.position.y += this.lift;
+    } else vrm.scene.position.set(0, this.lift, 0);
 
     // follow the cursor with head and eyes, unless a gesture is steering the head
-    const neck = vrm.humanoid.getNormalizedBoneNode("neck")!;
     const head = vrm.humanoid.getNormalizedBoneNode("head")!;
     let lx = 0, ly = 0;
     if (this.look && !gp.neck) {
@@ -229,7 +333,6 @@ export class AminaStage {
     this.headLook.x = lerp(this.headLook.x, lx, k * 0.8);
     this.headLook.y = lerp(this.headLook.y, ly, k * 0.8);
     head.rotation.set(-this.headLook.y * 0.35, this.headLook.x * 0.6 - this.faceYaw * 0.5, 0);
-    neck.rotation.x += 0;
 
     // face: blink, mood, talking
     const em = vrm.expressionManager;
