@@ -45,8 +45,8 @@
 9. [Tests and the attack range](#tests-and-the-attack-range)
 10. [Repository map](#repository-map)
 11. [Privacy](#privacy)
-12. [What was built during the hackathon](#what-was-built-during-the-hackathon)
-13. [Credits](#credits)
+12. [Credits](#credits)
+13. [License](#license)
 
 ---
 
@@ -315,19 +315,6 @@ docs/              research notes and media
 - **Learned skills.** Only steps and page words are kept, never anyone's values. Digits and emails are stripped.
 - **Admin page.** It shows code labels, never the codes, and never shows passwords or vault contents.
 
-## What was built during the hackathon
-
-The hackathon began on 26 October 2026 at 17:00 Lagos time (12:00 ET).
-
-- The repository's first two commits (backend 15:52, app 16:59 Lagos time, the same day) set up the starting
-  skeleton just before kickoff.
-- Everything else was built during the event, in over 70 commits. That includes:
-  - the agent v2 rebuild, the safety and attack range, and the Muse Wonder, Muse Image and open-weights work
-  - streaming voice with barge-in, push notifications, scheduling, the vault, learned skills
-  - the admin page and the whole current interface
-- **Used through their APIs, built before the event:** STORM ASR, TTS and MT, PlotWeaver's Nigerian-language
-  speech models.
-
 ## Credits
 
 - **Built by** Emmanuel Ariyo, ML Engineer at [PlotWeaver](https://www.plotweaver.app).
@@ -335,3 +322,8 @@ The hackathon began on 26 October 2026 at 17:00 Lagos time (12:00 ET).
 - **Orb shader:** based on [AI-Orb](https://github.com/weeeha/AI-Orb) by Nick Vyhouski (MIT).
 - **Fonts:** Vollkorn (SIL OFL), Boiling (Alit Design), Bricolage Grotesque (SIL OFL).
 - **Blocklists:** StevenBlack hosts, URLhaus (abuse.ch), Phishing.Database, HaGeZi DNS blocklists.
+
+## License
+
+Jagora's code is released under the [MIT License](LICENSE). Fonts, the orb shader and the blocklists keep their own
+licences, listed in [Credits](#credits).
