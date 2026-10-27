@@ -61,18 +61,24 @@ export function Devices3D({ scene, className = "", fallback }: { scene: Scene; c
   }, [scene]);
 
   if (state === "failed") return <>{fallback}</>;
+  // the flat picture holds the place until the 3D is drawn, then fades out under it, so the space is never empty
   return (
-    <div
-      ref={box}
-      className={`relative select-none transition-opacity duration-700 ${state === "ready" ? "opacity-100" : "opacity-0"} ${className}`}
-      role="img"
-      aria-label={
-        scene === "phones"
-          ? "Jagora on two phones. Drag to turn them, tap to spin them round."
-          : scene === "safety"
-            ? "Jagora asking for a private number on a laptop. Drag to turn it, tap to spin it round."
-            : "Jagora on a laptop and a phone. Drag to turn them, tap to spin them round."
-      }
-    />
+    <div className={`relative select-none ${className}`}>
+      <div aria-hidden={state === "ready"} className={`absolute inset-0 flex items-center justify-center transition-opacity duration-700 [&>*]:w-full ${state === "ready" ? "pointer-events-none opacity-0" : "opacity-100"}`}>
+        {fallback}
+      </div>
+      <div
+        ref={box}
+        className={`absolute inset-0 transition-opacity duration-700 ${state === "ready" ? "opacity-100" : "opacity-0"}`}
+        role="img"
+        aria-label={
+          scene === "phones"
+            ? "Jagora on two phones. Drag to turn them, tap to spin them round."
+            : scene === "safety"
+              ? "Jagora asking for a private number on a laptop. Drag to turn it, tap to spin it round."
+              : "Jagora on a laptop and a phone. Drag to turn them, tap to spin them round."
+        }
+      />
+    </div>
   );
 }
