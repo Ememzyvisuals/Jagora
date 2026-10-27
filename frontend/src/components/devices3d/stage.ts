@@ -1,6 +1,16 @@
-/* The 3D devices behind Devices3D.tsx. Plain three.js, loaded only when a device section is on the page.
+/* The 3D devices behind Devices3D.tsx. Plain three.js, loaded only when a device section is near the screen.
    Units are roughly decimetres: the laptop is a 13 inch midnight notebook (30.4 x 21.5 cm) and the phone a
-   6.1 inch phone (7.2 x 15.6 cm), so the two keep their real sizes next to each other. */
+   6.1 inch phone (7.2 x 15.6 cm), so the two keep their real sizes next to each other.
+
+   She can play with them:
+     drag (mouse or finger)  turns the device in her hand; let go and it comes back to face her
+     tap or click            it spins all the way round, showing its back, and faces her again
+     hover                   it lifts a little towards the pointer
+     typing anywhere         the same key goes down on the laptop's keyboard and lights up
+     arrow keys              turn the device when it has focus
+
+   Kept light: built only near the screen and freed when far away, drawn only while visible, big images decoded
+   off the main thread and sent to the GPU one per frame, shaders compiled in the background. */
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
@@ -8,16 +18,18 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 export type Scene = "hero" | "phones" | "safety";
 
 const SHOTS: Record<Scene, Record<string, string[]>> = {
-  hero: { laptop: ["/shots/desktop-register.webp", "/shots/desktop-doc.webp"], phone: ["/shots/phone-register.webp", "/shots/phone-home.webp"] },
-  phones: { a: ["/shots/phone-register.webp", "/shots/phone-home.webp"], b: ["/shots/phone-doc.webp"] },
-  safety: { laptop: ["/shots/desktop-private.webp"] },
+  hero: { laptop: ["desktop-register", "desktop-doc"], phone: ["phone-register", "phone-home"] },
+  phones: { a: ["phone-register", "phone-home"], b: ["phone-doc"] },
+  safety: { laptop: ["desktop-private"] },
 };
 
 const PI = Math.PI;
+const TAU = PI * 2;
 const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const ease = (v: number) => (v < 0.5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2);
 const easeOut = (v: number) => 1 - Math.pow(1 - v, 3);
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
+const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
 /* ---------- shapes ---------- */
 
@@ -38,22 +50,22 @@ function rrect(w: number, h: number, r: number) {
 }
 
 /** A rounded slab: w x h in the XY plane, d thick along Z, centred, with soft rounded edges. */
-function slab(w: number, h: number, d: number, r: number, b: number) {
+function slab(w: number, h: number, d: number, r: number, b: number, seg = 16) {
   const g = new THREE.ExtrudeGeometry(rrect(w - 2 * b, h - 2 * b, Math.max(r - b, 0.002)), {
     depth: Math.max(d - 2 * b, 0.0002),
     bevelEnabled: true,
     bevelThickness: b,
     bevelSize: b,
-    bevelSegments: 6,
-    curveSegments: 24,
+    bevelSegments: 4,
+    curveSegments: seg,
   });
   g.translate(0, 0, -(d / 2 - b));
   return g;
 }
 
 /** A flat rounded face with 0..1 UVs, for screens and glass. */
-function face(w: number, h: number, r: number) {
-  const g = new THREE.ShapeGeometry(rrect(w, h, r), 24);
+function face(w: number, h: number, r: number, seg = 16) {
+  const g = new THREE.ShapeGeometry(rrect(w, h, r), seg);
   const p = g.attributes.position, uv = g.attributes.uv;
   for (let i = 0; i < p.count; i++) uv.setXY(i, (p.getX(i) + w / 2) / w, (p.getY(i) + h / 2) / h);
   return g;
@@ -63,17 +75,18 @@ function face(w: number, h: number, r: number) {
 
 type Shot = { tex: THREE.Texture; aspect: number };
 
-async function loadShot(src: string, kind: "phone" | "laptop", aniso: number): Promise<Shot> {
-  const im = new Image();
-  im.decoding = "async";
-  im.src = src;
-  await im.decode();
+async function loadShot(name: string, kind: "phone" | "laptop", hd: boolean, aniso: number): Promise<Shot> {
+  const src = `/shots/${hd ? "hd/" : ""}${name}.webp`;
+  // decoded off the main thread, so scrolling stays smooth while the big images arrive
+  const blob = await (await fetch(src)).blob();
+  const im = await createImageBitmap(blob);
   const strip = Math.round(im.width * (kind === "phone" ? 0.137 : 0.0267));
   const c = document.createElement("canvas");
   c.width = im.width;
   c.height = im.height + strip;
-  const g = c.getContext("2d")!;
+  const g = c.getContext("2d", { willReadFrequently: false })!;
   g.drawImage(im, 0, strip);
+  im.close();
   // the status bar takes the colour of the top of the page, like a real phone or a full-screen browser
   const px = g.getImageData(0, strip + 3, c.width, 1).data;
   let R = 0, G = 0, B = 0;
@@ -98,7 +111,6 @@ async function loadShot(src: string, kind: "phone" | "laptop", aniso: number): P
     g.textAlign = "center";
     g.fillText("9:41", c.width * 0.19, mid);
     const u = strip * 0.06;
-    // signal
     let x = c.width * 0.69;
     for (let i = 0; i < 4; i++) {
       const h = u * (1.6 + i * 0.9);
@@ -107,7 +119,6 @@ async function loadShot(src: string, kind: "phone" | "laptop", aniso: number): P
       g.fill();
       x += u * 1.65;
     }
-    // wifi
     x += u * 3.2;
     g.lineWidth = u * 0.95;
     g.lineCap = "round";
@@ -117,9 +128,8 @@ async function loadShot(src: string, kind: "phone" | "laptop", aniso: number): P
       g.stroke();
     }
     g.beginPath();
-    g.arc(x, mid + u * 2.0, u * 0.45, 0, 2 * PI);
+    g.arc(x, mid + u * 2.0, u * 0.45, 0, TAU);
     g.fill();
-    // battery
     x += u * 4.2;
     g.lineWidth = u * 0.5;
     g.globalAlpha = 0.45;
@@ -155,7 +165,7 @@ class Screen {
   private t = 0;
   private i = 0;
   private fade = -1;
-  constructor(geo: THREE.BufferGeometry, private shots: Shot[], z: number, parent: THREE.Object3D, private every = 5.5) {
+  constructor(geo: THREE.BufferGeometry, public shots: Shot[], z: number, parent: THREE.Object3D, private every = 6) {
     this.a = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: shots[0].tex, toneMapped: false }));
     this.b = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: shots[0].tex, toneMapped: false, transparent: true, opacity: 0, depthWrite: false }));
     this.a.position.z = z;
@@ -185,17 +195,17 @@ class Screen {
   }
 }
 
-/* ---------- materials ---------- */
+/* ---------- materials (standard PBR: one specular layer, cheaper than clearcoat, same look) ---------- */
 
 function materials() {
   return {
-    metal: new THREE.MeshPhysicalMaterial({ color: 0x1f2a3d, metalness: 0.86, roughness: 0.32, clearcoat: 0.35, clearcoatRoughness: 0.35 }),
+    metal: new THREE.MeshStandardMaterial({ color: 0x1f2a3d, metalness: 0.86, roughness: 0.3 }),
     well: new THREE.MeshStandardMaterial({ color: 0x161b22, metalness: 0.3, roughness: 0.75 }),
-    key: new THREE.MeshStandardMaterial({ color: 0x0d1014, metalness: 0.1, roughness: 0.6 }),
-    pad: new THREE.MeshPhysicalMaterial({ color: 0x2a3446, metalness: 0.75, roughness: 0.2, clearcoat: 0.6 }),
-    black: new THREE.MeshPhysicalMaterial({ color: 0x040507, metalness: 0, roughness: 0.18, clearcoat: 1 }),
-    back: new THREE.MeshPhysicalMaterial({ color: 0x27324a, metalness: 0.25, roughness: 0.5 }),
-    lens: new THREE.MeshPhysicalMaterial({ color: 0x06080b, metalness: 0.2, roughness: 0.05, clearcoat: 1 }),
+    key: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.6 }),
+    pad: new THREE.MeshStandardMaterial({ color: 0x2a3446, metalness: 0.75, roughness: 0.18 }),
+    black: new THREE.MeshStandardMaterial({ color: 0x040507, metalness: 0.1, roughness: 0.12 }),
+    back: new THREE.MeshStandardMaterial({ color: 0x27324a, metalness: 0.3, roughness: 0.48 }),
+    lens: new THREE.MeshStandardMaterial({ color: 0x06080b, metalness: 0.3, roughness: 0.04 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x000000, metalness: 0, roughness: 0.06, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, envMapIntensity: 1.3 }),
   };
 }
@@ -203,43 +213,53 @@ type Mats = ReturnType<typeof materials>;
 
 /* ---------- the laptop ---------- */
 
+const KEY_ROWS: [number, [number, string][]][] = [
+  [0.55, [[1.5, "Escape"], ...Array.from({ length: 12 }, (_, i) => [1, `F${i + 1}`] as [number, string]), [1, "Power"]]],
+  [1, [..."`1234567890-=".split("").map((c) => [1, c] as [number, string]), [1.5, "Backspace"]]],
+  [1, [[1.5, "Tab"], ..."qwertyuiop[]\\".split("").map((c) => [1, c] as [number, string])]],
+  [1, [[1.75, "CapsLock"], ..."asdfghjkl;'".split("").map((c) => [1, c] as [number, string]), [1.75, "Enter"]]],
+  [1, [[2.25, "Shift"], ..."zxcvbnm,./".split("").map((c) => [1, c] as [number, string]), [2.25, "Shift"]]],
+  [1, [[1, "Fn"], [1, "Control"], [1, "Alt"], [1.25, "Meta"], [5, " "], [1.25, "Meta"], [1, "Alt"], [1, "ArrowLeft"], [1, "ArrowUp"], [1, "ArrowRight"]]],
+];
+const KEY_BASE = new THREE.Color(0x0d1014);
+const KEY_LIT = new THREE.Color(0x4d8dff);
+
 function buildLaptop(m: Mats, shots: Shot[]) {
   const W = 3.04, D = 2.15, BT = 0.065, R = 0.13;
   const body = new THREE.Group();
   const top = BT / 2;
 
-  const base = new THREE.Mesh(slab(W, D, BT, R, 0.026).rotateX(-PI / 2), m.metal);
-  body.add(base);
+  body.add(new THREE.Mesh(slab(W, D, BT, R, 0.026, 20).rotateX(-PI / 2), m.metal));
 
   // keyboard: six rows of real keys, set in a dark well
   const kbW = 2.7, u = kbW / 14.5, gap = 0.026;
-  const rows: [number, number[]][] = [
-    [0.55, [1.5, ...Array(12).fill(1), 1]],
-    [1, [...Array(13).fill(1), 1.5]],
-    [1, [1.5, ...Array(13).fill(1)]],
-    [1, [1.75, ...Array(11).fill(1), 1.75]],
-    [1, [2.25, ...Array(10).fill(1), 2.25]],
-    [1, [1, 1, 1, 1.25, 5, 1.25, 1, 1, 1, 1]],
-  ];
-  const kbD = rows.reduce((s, [h]) => s + h * u, 0);
+  const kbD = KEY_ROWS.reduce((s, [h]) => s + h * u, 0);
   const kbBack = -D / 2 + 0.19;
   const well = new THREE.Mesh(face(kbW + 0.1, kbD + 0.08, 0.04).rotateX(-PI / 2), m.well);
   well.position.set(0, top + 0.0008, kbBack + kbD / 2);
   body.add(well);
-  const count = rows.reduce((s, [, k]) => s + k.length, 0);
+  const count = KEY_ROWS.reduce((s, [, k]) => s + k.length, 0);
   const keys = new THREE.InstancedMesh(new RoundedBoxGeometry(1, 1, 1, 2, 0.2), m.key, count);
+  const rest: THREE.Matrix4[] = [];
+  const byKey = new Map<string, number[]>();
   const mat = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scl = new THREE.Vector3();
   let idx = 0, z = kbBack;
-  for (const [h, ks] of rows) {
+  for (const [h, ks] of KEY_ROWS) {
     let x = -kbW / 2;
-    for (const k of ks) {
+    for (const [k, name] of ks) {
       pos.set(x + (k * u) / 2, top + 0.006, z + (h * u) / 2);
       scl.set(k * u - gap, 0.012, h * u - gap);
-      keys.setMatrixAt(idx++, mat.compose(pos, q, scl));
+      mat.compose(pos, q, scl);
+      rest.push(mat.clone());
+      keys.setMatrixAt(idx, mat);
+      keys.setColorAt(idx, KEY_BASE);
+      byKey.set(name, [...(byKey.get(name) || []), idx]);
+      idx++;
       x += k * u;
     }
     z += h * u;
   }
+  byKey.set("ArrowDown", byKey.get("ArrowUp")!);
   body.add(keys);
 
   const pad = new THREE.Mesh(face(1.32, 0.72, 0.05).rotateX(-PI / 2), m.pad);
@@ -251,7 +271,7 @@ function buildLaptop(m: Mats, shots: Shot[]) {
   const hinge = new THREE.Group();
   hinge.position.set(0, top + 0.008, -D / 2 + 0.035);
   body.add(hinge);
-  const lid = new THREE.Mesh(slab(W, LH, LT, R, 0.012).translate(0, LH / 2, -LT / 2), m.metal);
+  const lid = new THREE.Mesh(slab(W, LH, LT, R, 0.012, 20).translate(0, LH / 2, -LT / 2), m.metal);
   const bezel = new THREE.Mesh(face(W - 0.04, LH - 0.04, R - 0.02), m.black);
   bezel.position.set(0, LH / 2, 0.0006);
   const SW = W - 0.2, SH = SW / shots[0].aspect, sy = LH - 0.085 - SH / 2;
@@ -265,15 +285,16 @@ function buildLaptop(m: Mats, shots: Shot[]) {
   glass.position.set(0, LH / 2, 0.0022);
   hinge.add(lid, bezel, holder, glass);
 
-  return { body, hinge, screen, size: { w: W, d: D, h: LH } };
+  return { body, hinge, screen, keyboard: { mesh: keys, rest, byKey, pressed: new Map<number, number>() } };
 }
+type Keyboard = ReturnType<typeof buildLaptop>["keyboard"];
 
 /* ---------- the phone ---------- */
 
 function buildPhone(m: Mats, shots: Shot[]) {
   const W = 0.716, SW = W - 0.068, SH = SW / shots[0].aspect, H = SH + 0.068, T = 0.082, R = 0.118;
   const body = new THREE.Group();
-  body.add(new THREE.Mesh(slab(W, H, T, R, 0.027), m.metal));
+  body.add(new THREE.Mesh(slab(W, H, T, R, 0.027, 20), m.metal));
 
   const back = new THREE.Mesh(face(W - 0.03, H - 0.03, R - 0.015), m.back);
   back.rotation.y = PI;
@@ -294,9 +315,9 @@ function buildPhone(m: Mats, shots: Shot[]) {
   glass.position.z = 0.0024;
   holder.add(glass);
 
-  // side buttons
+  const btnGeo = (len: number) => new RoundedBoxGeometry(0.014, len, 0.03, 2, 0.006);
   const btn = (x: number, y: number, len: number) => {
-    const b = new THREE.Mesh(new RoundedBoxGeometry(0.014, len, 0.03, 2, 0.006), m.metal);
+    const b = new THREE.Mesh(btnGeo(len), m.metal);
     b.position.set(x, y, 0);
     body.add(b);
   };
@@ -305,19 +326,21 @@ function buildPhone(m: Mats, shots: Shot[]) {
   btn(-W / 2 - 0.002, H / 2 - 0.66, 0.12);
   btn(W / 2 + 0.002, H / 2 - 0.55, 0.18);
 
-  // camera on the back
-  const cam = new THREE.Mesh(slab(0.3, 0.3, 0.014, 0.075, 0.005), m.back);
+  // camera on the back, seen when it turns round
+  const cam = new THREE.Mesh(slab(0.3, 0.3, 0.014, 0.075, 0.005, 12), m.back);
   cam.position.set(-W / 2 + 0.2, H / 2 - 0.2, -T / 2 - 0.006);
   body.add(cam);
+  const ringGeo = new THREE.CylinderGeometry(0.056, 0.056, 0.022, 32).rotateX(PI / 2);
+  const lensGeo = new THREE.CircleGeometry(0.04, 32);
   for (const [dx, dy] of [[-0.066, 0.066], [0.066, -0.066]]) {
-    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.056, 0.056, 0.022, 40).rotateX(PI / 2), m.metal);
+    const ring = new THREE.Mesh(ringGeo, m.metal);
     ring.position.set(cam.position.x + dx, cam.position.y + dy, -T / 2 - 0.016);
-    const lens = new THREE.Mesh(new THREE.CircleGeometry(0.04, 40), m.lens);
+    const lens = new THREE.Mesh(lensGeo, m.lens);
     lens.rotation.y = PI;
     lens.position.set(ring.position.x, ring.position.y, -T / 2 - 0.0275);
     body.add(ring, lens);
   }
-  return { body, screen, size: { w: W, h: H } };
+  return { body, screen };
 }
 
 /* ---------- soft shadow on the floor ---------- */
@@ -347,7 +370,7 @@ function shadow(tex: THREE.Texture, w: number, d: number) {
 /* ---------- a scene ---------- */
 
 type Part = {
-  rig: THREE.Group; // holds the floating body and its shadow
+  rig: THREE.Group;
   body: THREE.Group;
   shadow: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   rest: THREE.Euler;
@@ -355,25 +378,42 @@ type Part = {
   phase: number;
   screen: Screen;
   hinge?: THREE.Group;
+  keyboard?: Keyboard;
   enter: (t: number, p: Part) => void;
+  // her hands on it
+  yaw: number;
+  pitch: number;
+  vyaw: number;
+  held: boolean;
+  letGo: number;
+  spin: number; // seconds into a full turn, -1 when not spinning
+  hover: number;
 };
 
-export function mount(el: HTMLElement, scene: Scene, onReady: () => void): () => void {
+export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail: () => void): () => void {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(dpr);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.setClearColor(0x000000, 0);
   const cv = renderer.domElement;
-  cv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block";
+  cv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;outline:none";
+  cv.tabIndex = 0;
   el.appendChild(cv);
+  const lost = (e: Event) => {
+    e.preventDefault();
+    onFail();
+  };
+  cv.addEventListener("webglcontextlost", lost);
 
   const three = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
   const room = new RoomEnvironment();
   three.environment = pmrem.fromScene(room, 0.04).texture;
   room.dispose();
+  pmrem.dispose();
   const key = new THREE.DirectionalLight(0xffffff, 1.3);
   key.position.set(3, 6, 5);
   three.add(key, new THREE.HemisphereLight(0xe4eeff, 0x18202e, 0.45));
@@ -383,6 +423,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void): () =>
   three.add(world);
 
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const big = Math.min(window.screen.width, window.screen.height) >= 700; // tablets and computers get the sharpest laptop screens
   const aniso = renderer.capabilities.getMaxAnisotropy();
   const m = materials();
   const sTex = shadowTex();
@@ -391,7 +432,9 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void): () =>
   let elev = 0.22;
   let alive = true;
 
-  const laptopPart = (shots: Shot[], at: [number, number, number], rest: [number, number, number], floor: number, delay = 0): Part => {
+  const hands = () => ({ yaw: 0, pitch: 0, vyaw: 0, held: false, letGo: 0, spin: -1, hover: 0 });
+
+  const laptopPart = (shots: Shot[], at: [number, number, number], rest: [number, number, number], floor: number): Part => {
     const l = buildLaptop(m, shots);
     const rig = new THREE.Group();
     rig.position.set(...at);
@@ -401,15 +444,14 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void): () =>
     world.add(rig);
     l.hinge.rotation.x = PI / 2;
     return {
-      rig, body: l.body, shadow: sh, rest: new THREE.Euler(...rest), floatY: 0, phase: 0, screen: l.screen, hinge: l.hinge,
+      rig, body: l.body, shadow: sh, rest: new THREE.Euler(...rest), floatY: 0, phase: 0, screen: l.screen, hinge: l.hinge, keyboard: l.keyboard, ...hands(),
       enter: (t, p) => {
-        const k = t - delay;
-        const open = ease(clamp((k - 0.35) / 1.7));
+        const open = ease(clamp((t - 0.35) / 1.7));
         p.hinge!.rotation.x = lerp(PI / 2, -0.3, open);
         p.screen.power = ease(clamp((open - 0.5) / 0.4));
-        const turn = easeOut(clamp(k / 2.3));
+        const turn = easeOut(clamp(t / 2.3));
         p.body.rotation.set(p.rest.x + (1 - turn) * 0.22, p.rest.y + (1 - turn) * -0.9, p.rest.z);
-        p.floatY = (1 - easeOut(clamp(k / 1.5))) * -0.35;
+        p.floatY = (1 - easeOut(clamp(t / 1.5))) * -0.35;
       },
     };
   };
@@ -424,7 +466,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void): () =>
     rig.add(ph.body, sh);
     world.add(rig);
     return {
-      rig, body: ph.body, shadow: sh, rest: new THREE.Euler(...rest), floatY: 0, phase: Math.random() * 6, screen: ph.screen,
+      rig, body: ph.body, shadow: sh, rest: new THREE.Euler(...rest), floatY: 0, phase: 1.3 + delay * 5, screen: ph.screen, ...hands(),
       enter: (t, p) => {
         const k = easeOut(clamp((t - delay) / 1.5));
         p.body.rotation.set(p.rest.x, p.rest.y + (1 - k) * spin, p.rest.z);
@@ -433,38 +475,64 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void): () =>
     };
   };
 
+  /* the first screen of each device first; the others come in quietly afterwards */
+  const later: { screen: Screen; names: string[]; kind: "phone" | "laptop" }[] = [];
+  const first = async (names: string[], kind: "phone" | "laptop") => [await loadShot(names[0], kind, kind === "phone" || big, aniso)];
+
   const ready = (async () => {
     const want = SHOTS[scene];
-    const load = (list: string[], kind: "phone" | "laptop") => Promise.all(list.map((s) => loadShot(s, kind, aniso)));
     if (scene === "hero") {
-      const [lap, ph] = await Promise.all([load(want.laptop, "laptop"), load(want.phone, "phone")]);
+      const [lap, ph] = await Promise.all([first(want.laptop, "laptop"), first(want.phone, "phone")]);
       if (!alive) return;
-      parts.push(laptopPart(lap, [-0.5, 0, 0], [0, -0.26, 0], -0.32));
-      parts.push(phonePart(ph, [1.72, 0.86, 1.0], [-0.04, -0.42, -0.05], 1.3, -1.16, 0.5));
+      const L = laptopPart(lap, [-0.5, 0, 0], [0, -0.22, 0], -0.32);
+      const P = phonePart(ph, [1.72, 0.86, 1.0], [-0.04, -0.42, -0.05], 1.3, -1.16, 0.5);
+      parts.push(L, P);
+      later.push({ screen: L.screen, names: want.laptop, kind: "laptop" }, { screen: P.screen, names: want.phone, kind: "phone" });
       world.position.set(-0.15, -0.8, -0.3);
-      frame = { w: 5.2, h: 3.15 };
+      frame = { w: 5.0, h: 3.05 };
       elev = 0.2;
     } else if (scene === "phones") {
-      const [a, b] = await Promise.all([load(want.a, "phone"), load(want.b, "phone")]);
+      const [a, b] = await Promise.all([first(want.a, "phone"), first(want.b, "phone")]);
       if (!alive) return;
-      parts.push(phonePart(a, [-0.46, 0.06, 0.1], [0.06, 0.4, 0.16], 1, -1.0, 0, 1.1));
-      parts.push(phonePart(b, [0.5, 0.3, -0.25], [0.02, -0.42, -0.14], 1, -1.24, 0.25, -1.1));
+      const A = phonePart(a, [-0.46, 0.06, 0.1], [0.06, 0.4, 0.16], 1, -1.0, 0, 1.1);
+      const B = phonePart(b, [0.5, 0.3, -0.25], [0.02, -0.42, -0.14], 1, -1.24, 0.25, -1.1);
+      parts.push(A, B);
+      later.push({ screen: A.screen, names: want.a, kind: "phone" });
       frame = { w: 2.25, h: 2.35 };
       elev = 0.06;
     } else {
-      const lap = await load(want.laptop, "laptop");
+      const lap = await first(want.laptop, "laptop");
       if (!alive) return;
       parts.push(laptopPart(lap, [0, 0, 0], [0, 0.3, 0], -0.32));
       world.position.set(0, -0.85, 0.1);
       frame = { w: 4.1, h: 2.9 };
       elev = 0.24;
     }
-    for (const p of parts) p.phase ||= 1.3;
-    for (const p of parts) p.screen.update(0);
+    fit();
+    // compile shaders in the background (no freeze), then send each texture to the GPU on its own frame
+    await renderer.compileAsync(three, camera);
+    for (const p of parts) {
+      if (!alive) return;
+      renderer.initTexture(p.screen.shots[0].tex);
+      await nextFrame();
+    }
   })();
 
+  const loadLater = async () => {
+    for (const l of later) {
+      for (const name of l.names.slice(1)) {
+        if (!alive) return;
+        const s = await loadShot(name, l.kind, l.kind === "phone" || big, aniso).catch(() => null);
+        if (!s || !alive) continue;
+        renderer.initTexture(s.tex);
+        l.screen.shots.push(s);
+        await nextFrame();
+      }
+    }
+  };
+
   /* camera framing: fit the scene into the box at any width */
-  const fit = () => {
+  function fit() {
     const w = el.clientWidth || 1, h = el.clientHeight || 1;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
@@ -473,11 +541,124 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void): () =>
     camera.position.set(0, Math.sin(elev) * dist, Math.cos(elev) * dist);
     camera.lookAt(0, 0, 0);
     camera.updateProjectionMatrix();
-  };
-  const ro = new ResizeObserver(fit);
+  }
+  const ro = new ResizeObserver(() => fit());
   ro.observe(el);
 
-  /* pointer and scroll make it feel alive */
+  /* ---------- her hands: drag to turn, tap to spin, hover to lift ---------- */
+  const ray = new THREE.Raycaster();
+  const ndc = new THREE.Vector2();
+  const hit = (e: PointerEvent): Part | null => {
+    const r = cv.getBoundingClientRect();
+    ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    let best: Part | null = null, bestD = Infinity;
+    for (const p of parts) {
+      const h = ray.intersectObject(p.body, true)[0];
+      if (h && h.distance < bestD) {
+        best = p;
+        bestD = h.distance;
+      }
+    }
+    return best;
+  };
+  let grab: { part: Part; x: number; y: number; lastX: number; lastT: number; moved: boolean; id: number } | null = null;
+  const onDown = (e: PointerEvent) => {
+    const p = hit(e);
+    if (!p) return;
+    grab = { part: p, x: e.clientX, y: e.clientY, lastX: e.clientX, lastT: performance.now(), moved: false, id: e.pointerId };
+  };
+  const onMoveCv = (e: PointerEvent) => {
+    if (grab && e.pointerId === grab.id) {
+      const dx = e.clientX - grab.x, dy = e.clientY - grab.y;
+      if (!grab.moved && Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) {
+        grab.moved = true;
+        grab.part.held = true;
+        grab.part.spin = -1;
+        cv.setPointerCapture(e.pointerId);
+      }
+      if (grab.moved) {
+        const now = performance.now();
+        const step = (e.clientX - grab.lastX) * 0.012;
+        grab.part.yaw += step;
+        grab.part.pitch = clamp(dy * 0.004, -0.35, 0.35);
+        grab.part.vyaw = step / Math.max(0.008, (now - grab.lastT) / 1000);
+        grab.lastX = e.clientX;
+        grab.lastT = now;
+        e.preventDefault();
+      }
+      return;
+    }
+    if (e.pointerType === "mouse") {
+      const p = hit(e);
+      for (const q of parts) q.hover = q === p ? 1 : 0;
+      cv.style.cursor = p ? "grab" : "";
+    }
+  };
+  const onUp = (e: PointerEvent) => {
+    if (!grab || e.pointerId !== grab.id) return;
+    const p = grab.part;
+    if (grab.moved) {
+      p.held = false;
+      p.letGo = 0;
+    } else if (p.spin < 0) {
+      p.spin = 0; // a tap: turn all the way round and face her again
+    }
+    grab = null;
+  };
+  const onLeave = () => {
+    for (const q of parts) q.hover = 0;
+  };
+  cv.addEventListener("pointerdown", onDown);
+  cv.addEventListener("pointermove", onMoveCv);
+  cv.addEventListener("pointerup", onUp);
+  cv.addEventListener("pointercancel", onUp);
+  cv.addEventListener("pointerleave", onLeave);
+
+  /* ---------- keyboard: the same key goes down on the laptop ---------- */
+  const onKey = (e: KeyboardEvent) => {
+    let k = e.key;
+    if (!k || k === "Unidentified" || k === "Process") k = "a"; // phone keyboards often hide the key
+    if (k.length === 1) k = k.toLowerCase();
+    const shifted: Record<string, string> = { "!": "1", "@": "2", "#": "3", $: "4", "%": "5", "^": "6", "&": "7", "*": "8", "(": "9", ")": "0", _: "-", "+": "=", "{": "[", "}": "]", "|": "\\", ":": ";", '"': "'", "<": ",", ">": ".", "?": "/", "~": "`" };
+    k = shifted[k] || k;
+    if (k.length === 1 && !/[a-z0-9`\-=[\]\\;',./ ]/.test(k)) k = "abcdefghijklmnopqrstuvwxyz"[(k.codePointAt(0) || 0) % 26]; // Yorùbá letters and the like
+    const now = performance.now();
+    for (const p of parts) {
+      const kb = p.keyboard;
+      if (!kb) continue;
+      for (const i of kb.byKey.get(k) || []) kb.pressed.set(i, now);
+    }
+    if (document.activeElement === cv && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      for (const p of parts) {
+        p.yaw += e.key === "ArrowLeft" ? -0.25 : 0.25;
+        p.letGo = 0;
+      }
+      e.preventDefault();
+    }
+    if (document.activeElement === cv && (e.key === "Enter" || e.key === " ")) {
+      for (const p of parts) if (p.spin < 0) p.spin = 0;
+      e.preventDefault();
+    }
+  };
+  window.addEventListener("keydown", onKey);
+  const tmpM = new THREE.Matrix4(), tmpP = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3(), tmpC = new THREE.Color();
+  const pressKeys = (kb: Keyboard, now: number) => {
+    if (!kb.pressed.size) return;
+    for (const [i, at] of kb.pressed) {
+      const f = clamp((now - at) / 320);
+      const down = f < 0.25 ? f / 0.25 : 1 - (f - 0.25) / 0.75;
+      kb.rest[i].decompose(tmpP, tmpQ, tmpS);
+      tmpP.y -= 0.006 * down;
+      kb.mesh.setMatrixAt(i, tmpM.compose(tmpP, tmpQ, tmpS));
+      kb.mesh.setColorAt(i, tmpC.copy(KEY_BASE).lerp(KEY_LIT, 1 - f));
+      if (f >= 1) kb.pressed.delete(i);
+    }
+    kb.mesh.instanceMatrix.needsUpdate = true;
+    if (kb.mesh.instanceColor) kb.mesh.instanceColor.needsUpdate = true;
+  };
+
+  /* ---------- pointer lean and scroll turn ---------- */
   let px = 0, py = 0, tx = 0, ty = 0, sx = 0;
   const fine = window.matchMedia("(pointer: fine)").matches;
   const onMove = (e: PointerEvent) => {
@@ -487,17 +668,17 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void): () =>
   if (fine && !reduce) window.addEventListener("pointermove", onMove, { passive: true });
 
   let visible = false, started = -1, last = 0, raf = 0, shown = false;
-  const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting), { threshold: 0.15 });
+  const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting), { threshold: 0.05 });
   io.observe(el);
 
   const loop = (now: number) => {
     raf = requestAnimationFrame(loop);
     const dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
     last = now;
-    if (!visible || !parts.length) return;
+    if (!visible || !parts.length) return; // nothing is drawn while it is off screen
     if (started < 0) started = now;
     const clock = (window as unknown as { __jg3dClock?: number }).__jg3dClock;
-    const t = reduce ? 20 : clock ?? (now - started) / 1000;
+    const t = reduce ? 20 : (clock ?? (now - started) / 1000);
 
     const r = el.getBoundingClientRect();
     const scroll = clamp((r.top + r.height / 2 - window.innerHeight / 2) / window.innerHeight, -1, 1);
@@ -510,26 +691,51 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void): () =>
 
     for (const p of parts) {
       p.enter(t, p);
-      const bob = reduce ? 0 : Math.sin(t * 0.9 + p.phase) * 0.035;
-      p.body.position.y = p.floatY + bob;
+      // after she lets go: keep a little momentum, then come back to face her
+      if (!p.held) {
+        p.letGo += dt;
+        p.yaw += p.vyaw * dt;
+        p.vyaw *= Math.exp(-dt * 5);
+        if (p.letGo > 0.35) {
+          const home = Math.round(p.yaw / TAU) * TAU; // the nearest way back to the front
+          p.yaw = lerp(p.yaw, home, 1 - Math.exp(-dt * 4));
+          if (Math.abs(p.yaw - home) < 0.0005) p.yaw = 0;
+        }
+        p.pitch = lerp(p.pitch, 0, 1 - Math.exp(-dt * 5));
+      }
+      let spinYaw = 0, hop = 0;
+      if (p.spin >= 0) {
+        p.spin += dt;
+        const f = clamp(p.spin / 1.25);
+        spinYaw = ease(f) * TAU;
+        hop = Math.sin(f * PI) * 0.18;
+        if (f >= 1) p.spin = -1;
+      }
+      p.body.rotation.y += p.yaw + spinYaw;
+      p.body.rotation.x += p.pitch;
       if (!reduce) p.body.rotation.z += Math.sin(t * 0.6 + p.phase) * 0.012;
-      const lift = clamp(1 + (p.floatY + bob) * 1.4, 0.3, 1);
+      const bob = reduce ? 0 : Math.sin(t * 0.9 + p.phase) * 0.035;
+      p.body.position.y = p.floatY + bob + hop + p.hover * 0.06 * (1 - hop);
+      const lift = clamp(1 + (p.floatY + bob + hop) * 1.4, 0.3, 1);
       p.shadow.material.opacity = lift;
       p.shadow.scale.setScalar(1.12 - lift * 0.12);
       p.screen.update(dt);
+      if (p.keyboard) pressKeys(p.keyboard, now);
     }
     renderer.render(three, camera);
     if (!shown) {
       shown = true;
       onReady();
+      loadLater();
     }
   };
 
-  ready.then(() => {
-    if (!alive) return;
-    fit();
-    raf = requestAnimationFrame(loop);
-  });
+  ready
+    .then(() => {
+      if (!alive) return;
+      raf = requestAnimationFrame(loop);
+    })
+    .catch(onFail);
 
   return () => {
     alive = false;
@@ -537,19 +743,23 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void): () =>
     ro.disconnect();
     io.disconnect();
     window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("keydown", onKey);
+    cv.removeEventListener("webglcontextlost", lost);
+    const geos = new Set<THREE.BufferGeometry>(), mats = new Set<THREE.Material>(), texs = new Set<THREE.Texture>();
     three.traverse((o) => {
       const mesh = o as THREE.Mesh;
-      if (mesh.geometry) mesh.geometry.dispose();
+      if (mesh.geometry) geos.add(mesh.geometry);
       const mt = mesh.material as THREE.Material | THREE.Material[] | undefined;
-      if (mt) (Array.isArray(mt) ? mt : [mt]).forEach((x) => {
-        const map = (x as THREE.MeshBasicMaterial).map;
-        if (map) map.dispose();
-        x.dispose();
-      });
+      if (mt) (Array.isArray(mt) ? mt : [mt]).forEach((x) => mats.add(x));
     });
+    for (const p of parts) p.screen.shots.forEach((s) => texs.add(s.tex));
+    texs.add(sTex);
+    geos.forEach((g) => g.dispose());
+    mats.forEach((x) => x.dispose());
+    texs.forEach((x) => x.dispose());
     three.environment?.dispose();
-    pmrem.dispose();
     renderer.dispose();
+    renderer.forceContextLoss(); // give the GPU back at once, so Chrome never runs short of 3D contexts
     cv.remove();
   };
 }
