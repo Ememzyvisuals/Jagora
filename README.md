@@ -183,19 +183,19 @@ millions of cloud browsers.
 
 <p align="center"><img src="docs/media/cards.png" alt="What Jagora does" width="92%"></p>
 
-| Capability | In practice |
-|---|---|
-| **Say it, it does it** | "Forúkọ mi sílẹ̀ fún Skills Fair" and Jagora opens the site, fills the form from your saved details, and asks before submitting. |
-| **Proof from official sources** | Checks the site is the real one, finds the exact line in the page or PDF, and highlights it as evidence. |
-| **Snap a letter, it reads it** | A photo, PDF or short video of a bill, letter or result slip becomes facts, deadlines and scam signs (Muse Wonder). |
-| **Shows you in pictures** | For people who find reading hard, the steps become a short picture guide with the same character in every frame (Muse Image). |
-| **Websites in your language** | English pages are shown in Yorùbá, Hausa or Igbo while the agent still reads the original. |
-| **Logins that stay yours** | Passwords, PINs, OTPs, NIN and BVN go through a private box the model never sees. Saved logins are sealed (AES-256-GCM) and bound to their own site. |
-| **Works while you sleep** | "Try JAMB at midnight and keep checking until the portal is up": scheduled tasks with retries, results on your lock screen. |
-| **Writes it up** | Research turns into a document with sources, as PDF, Word or Markdown. |
-| **Link checker** | Unmasks shorteners, redirect chains, IP loggers and tracking codes before anyone opens a link. |
-| **Reads the terms for you** | Before you sign up or pay, the site's terms and privacy policy are reviewed in the background and red flags are said aloud. |
-| **Gets better at each site** | Steps that worked on a site are remembered (page words only, never personal values) and guide the next run. |
+| | Capability | In practice |
+|:-:|---|---|
+| <img src="docs/media/icons/say.png" width="28" alt=""> | **Say it, it does it** | "Forúkọ mi sílẹ̀ fún Skills Fair" and Jagora opens the site, fills the form from your saved details, and asks before submitting. |
+| <img src="docs/media/icons/proof.png" width="28" alt=""> | **Proof from official sources** | Checks the site is the real one, finds the exact line in the page or PDF, and highlights it as evidence. |
+| <img src="docs/media/icons/snap.png" width="28" alt=""> | **Snap a letter, it reads it** | A photo, PDF or short video of a bill, letter or result slip becomes facts, deadlines and scam signs (Muse Wonder). |
+| <img src="docs/media/icons/pictures.png" width="28" alt=""> | **Shows you in pictures** | For people who find reading hard, the steps become a short picture guide with the same character in every frame (Muse Image). |
+| <img src="docs/media/icons/language.png" width="28" alt=""> | **Websites in your language** | English pages are shown in Yorùbá, Hausa or Igbo while the agent still reads the original. |
+| <img src="docs/media/icons/logins.png" width="28" alt=""> | **Logins that stay yours** | Passwords, PINs, OTPs, NIN and BVN go through a private box the model never sees. Saved logins are sealed (AES-256-GCM) and bound to their own site. |
+| <img src="docs/media/icons/sleep.png" width="28" alt=""> | **Works while you sleep** | "Try JAMB at midnight and keep checking until the portal is up": scheduled tasks with retries, results on your lock screen. |
+| <img src="docs/media/icons/writes.png" width="28" alt=""> | **Writes it up** | Research turns into a document with sources, as PDF, Word or Markdown. |
+| <img src="docs/media/icons/links.png" width="28" alt=""> | **Link checker** | Unmasks shorteners, redirect chains, IP loggers and tracking codes before anyone opens a link. |
+| <img src="docs/media/icons/terms.png" width="28" alt=""> | **Reads the terms for you** | Before you sign up or pay, the site's terms and privacy policy are reviewed in the background and red flags are said aloud. |
+| <img src="docs/media/icons/learns.png" width="28" alt=""> | **Gets better at each site** | Steps that worked on a site are remembered (page words only, never personal values) and guide the next run. |
 
 ## How Meta AI powers Jagora
 
@@ -607,6 +607,8 @@ docs/              research notes and media
 - **Built by** Emmanuel Ariyo, ML Engineer at [PlotWeaver](https://www.plotweaver.app).
 - **Models:** Meta Muse Spark, Muse Wonder and Muse Image, via the Meta Model API. PlotWeaver STORM.
 - **Orb shader:** based on [AI-Orb](https://github.com/weeeha/AI-Orb) by Nick Vyhouski (MIT).
+- **Pixel icons:** [Pixelarticons](https://github.com/halfmage/pixelarticons) by Gerrit Halfmann (MIT), drawn in Jagora blue.
+- **Amina, the guide on the site:** "Cursed Amy" from the [100Avatars](https://github.com/toxsam/open-source-avatars) collection by Polygonal Mind (CC0), recoloured for Jagora, shown with [three-vrm](https://github.com/pixiv/three-vrm) by pixiv (MIT).
 - **Fonts:** Vollkorn (SIL OFL), Boiling (Alit Design), Bricolage Grotesque (SIL OFL).
 - **Blocklists:** StevenBlack hosts, URLhaus (abuse.ch), Phishing.Database, HaGeZi DNS blocklists.
 
