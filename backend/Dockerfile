@@ -1,7 +1,8 @@
 # Jagora backend: FastAPI + Playwright Chromium + ffmpeg
 FROM mcr.microsoft.com/playwright/python:v1.63.0-noble
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fonts-noto-core && rm -rf /var/lib/apt/lists/*
+# security updates for the base system (including Python 3.12), then ffmpeg and fonts
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends ffmpeg fonts-noto-core && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY pyproject.toml ./
 COPY jagora ./jagora
