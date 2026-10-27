@@ -169,6 +169,7 @@ class Browser:
             w = int(max(1024, min(1440, d.get("w") or settings.viewport_width)))
             h = int(max(640, min(1000, d.get("h") or settings.viewport_height)))
         self.viewport = {"width": w, "height": h}
+        self.dsf = 2 if self.mobile else 1  # screenshot pixels per page pixel
         self._pw = None
         self._browser: PWBrowser | None = None
         self._ctx: BrowserContext | None = None
@@ -409,6 +410,89 @@ class Browser:
     async def set_checked(self, eid: int, checked: bool) -> None:
         loc = await self._locate(eid)
         await loc.set_checked(checked, timeout=5000, force=True)
+
+    # ---- everything else a person does with a mouse and keyboard ----------------------------------------------------
+
+    async def hover(self, eid: int) -> None:
+        await (await self._locate(eid)).hover(timeout=5000)
+        await asyncio.sleep(0.4)  # menus open on hover
+
+    async def double_click(self, eid: int) -> None:
+        await (await self._locate(eid)).dblclick(timeout=5000)
+
+    async def right_click(self, eid: int) -> None:
+        await (await self._locate(eid)).click(button="right", timeout=5000)
+
+    async def drag(self, src: int, dst: int | None = None, to: tuple[float, float] | None = None) -> None:
+        a = await self._locate(src)
+        if dst is not None:
+            await a.drag_to(await self._locate(dst), timeout=8000)
+            return
+        box = await a.bounding_box()
+        if not box or not to:
+            raise ActionError("nothing to drag")
+        m = self._need_page().mouse
+        await m.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        await m.down()
+        await m.move(to[0], to[1], steps=18)
+        await m.up()
+
+    async def keys(self, combo: str) -> None:
+        """A key or a combination, e.g. "Control+A", "Shift+Tab", "PageDown", "Escape"."""
+        allowed = re.fullmatch(r"((Control|Shift|Alt|Meta)\+){0,3}([A-Za-z0-9]|F\d{1,2}|Enter|Escape|Tab|Backspace|Delete|Space|"
+                               r"Arrow(Up|Down|Left|Right)|PageUp|PageDown|Home|End)", combo.strip())
+        if not allowed:
+            raise ActionError(f'"{combo}" is not a key Jagora presses')
+        await self._need_page().keyboard.press(combo.strip().replace("Space", " ") if combo.strip() == "Space" else combo.strip())
+
+    async def click_at(self, x: float, y: float, double: bool = False) -> str:
+        """Click a spot by sight (maps, charts, canvas apps, things with no element). x, y in screenshot pixels."""
+        px, py = x / self.dsf, y / self.dsf
+        if not (0 <= px <= self.viewport["width"] and 0 <= py <= self.viewport["height"]):
+            raise ActionError("that spot is outside the page")
+        what = await self.element_at(px, py)
+        p = self._need_page()
+        if self.mobile and not double:
+            await p.touchscreen.tap(px, py)
+        elif double:
+            await p.mouse.dblclick(px, py)
+        else:
+            await p.mouse.click(px, py)
+        return what.get("text", "")
+
+    async def upload(self, eid: int, paths: list[str]) -> None:
+        loc = await self._locate(eid)
+        kind = await loc.evaluate("e => e.tagName === 'INPUT' && e.type === 'file'")
+        if kind:
+            await loc.set_input_files(paths, timeout=8000)
+            return
+        # a styled "Upload" button: click it and catch the file chooser it opens
+        async with self._need_page().expect_file_chooser(timeout=6000) as fc:
+            await loc.click(timeout=5000)
+        await (await fc.value).set_files(paths)
+
+    async def set_date(self, eid: int, iso: str) -> str:
+        """A date box: native date inputs take YYYY-MM-DD; text date boxes get the date the way their hint asks."""
+        loc = await self._locate(eid)
+        info = await loc.evaluate("e => ({type: (e.type||'').toLowerCase(), ph: e.placeholder || '', ro: e.readOnly})")
+        y, m, d = iso.split("-")
+        if info["type"] == "date":
+            await loc.fill(iso, timeout=5000)
+            return iso
+        ph = info["ph"].lower()
+        text = f"{d}/{m}/{y}" if ph.startswith("dd") else f"{m}/{d}/{y}" if ph.startswith("mm") else f"{d}/{m}/{y}" if "/" in ph else iso
+        if info["ro"]:
+            raise ActionError("this date box only opens a calendar; pick the day in the calendar with click")
+        await loc.click(timeout=5000)
+        await loc.fill("", timeout=5000)
+        await loc.press_sequentially(text, delay=30)
+        await self._need_page().keyboard.press("Escape")
+        return text
+
+    async def element_at(self, x: float, y: float) -> dict:
+        """What is at this spot of the page (page pixels): the nearest thing she can use, its number if it has one,
+        and its words. Used when she points at something."""
+        return await self._need_page().evaluate(ELEMENT_AT_JS, {"x": x, "y": y})
 
     async def press(self, key: str, eid: int | None = None) -> None:
         if eid is not None:
@@ -698,7 +782,7 @@ class Browser:
         if mode != "dark":
             return "light"
         await asyncio.sleep(0.3)
-        lum = await p.evaluate("""() => { const c = getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g) || [255,255,255,1];
+        lum = await p.evaluate(r"""() => { const c = getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g) || [255,255,255,1];
             const a = c.length > 3 ? +c[3] : 1; const v = a < .1 ? 255 : (0.299*c[0] + 0.587*c[1] + 0.114*c[2]); return v; }""")
         if lum > 120:  # the site has no dark mode of its own
             await p.evaluate("""() => { const s = document.createElement('style'); s.id = '__jg_theme';
@@ -1018,6 +1102,19 @@ DATE_JS = r"""
 }
 """
 
+
+ELEMENT_AT_JS = r"""
+({x, y}) => {
+  let el = document.elementFromPoint(x, y);
+  if (!el) return {text: '', tag: '', id: null};
+  const use = el.closest('a,button,input,select,textarea,label,[role=button],[role=link],[role=tab],[role=menuitem],[onclick],[data-jg]') || el;
+  const r = use.getBoundingClientRect();
+  const text = (use.innerText || use.value || use.getAttribute('aria-label') || use.title || use.alt || use.placeholder || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+  const mark = use.getAttribute('data-jg') || use.querySelector?.('[data-jg]')?.getAttribute('data-jg') || null;
+  return {text, tag: use.tagName.toLowerCase(), id: mark ? +mark : null, rect: {x: r.left, y: r.top, w: r.width, h: r.height},
+          context: (use.parentElement?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 200)};
+}
+"""
 
 READ_JS = r"""
 () => {

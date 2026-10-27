@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { activeTask, useApp } from "@/lib/store";
 import { registerFrame } from "@/lib/engine/frame";
 import { live } from "@/lib/engine";
-import { onRemoteFrame, remoteInput, remoteTakeover, remoteTranslate } from "@/lib/engine/remote";
+import { onRemoteFrame, remoteInput, remotePoint, remoteTakeover, remoteTranslate } from "@/lib/engine/remote";
 import { PAGE_PILL, PILL } from "@/lib/glassRegistry";
 import { Glass } from "./glass/Glass";
 
@@ -76,6 +76,10 @@ export function PageView({ compact = false, bar = true, full = false, onClose }:
     const last = task?.messages.at(-1);
     return !!last && (last.kind === "handoff" || last.kind === "secret") && last.status === "waiting";
   })();
+  const pointAsk = (() => {
+    const m = task?.messages.findLast((x) => x.kind === "pointask");
+    return m && m.kind === "pointask" && m.status === "waiting" ? m : null;
+  })();
 
   return (
     <div className={full ? "relative h-full" : "flex h-full min-h-0 flex-col"}>
@@ -101,7 +105,7 @@ export function PageView({ compact = false, bar = true, full = false, onClose }:
       )}
       <div ref={stage} className={`${full ? "absolute inset-0" : "relative min-h-0 flex-1 rounded-[22px] shadow-[inset_0_0_0_1px_rgba(255,255,255,.8)]"} overflow-hidden bg-white ${takeover || needsHer ? "ring-2 ring-inset ring-accent" : ""}`}>
         {live ? (
-          <LiveStage taskId={task?.id ?? ""} interactive={takeover || needsHer || task?.status !== "working"} pointer={pointer} full={full} />
+          <LiveStage taskId={task?.id ?? ""} interactive={takeover || needsHer || task?.status !== "working"} pointer={pointer} full={full} pointAsk={pointAsk} />
         ) : (
           <>
             <iframe
@@ -157,7 +161,7 @@ function TakeOverButton({ taskId, on }: { taskId: string; on: boolean }) {
 
 /** The live picture of Jagora's browser, with the highlight and cursor placed on it at the right scale. While she has
     taken over (or Jagora waits for her), her taps, typing and scrolling go to the real page. */
-function LiveStage({ taskId, interactive, pointer, full }: { taskId: string; interactive: boolean; pointer: { x: number; y: number; visible: boolean; clicking: boolean }; full: boolean }) {
+function LiveStage({ taskId, interactive, pointer, full, pointAsk }: { taskId: string; interactive: boolean; pointer: { x: number; y: number; visible: boolean; clicking: boolean }; full: boolean; pointAsk: { id: string; question: string } | null }) {
   const size = useApp((s) => s.pageSize);
   const box = useRef<HTMLDivElement>(null);
   const img = useRef<HTMLImageElement>(null);
@@ -199,17 +203,30 @@ function LiveStage({ taskId, interactive, pointer, full }: { taskId: string; int
           alt="The page Jagora is working on"
           draggable={false}
           onClick={(e) => {
+            if (pointAsk) {
+              // she shows Jagora what she means
+              const p = toPage(e);
+              if (p) void remotePoint(taskId, pointAsk.id, p.x, p.y);
+              return;
+            }
             if (!interactive) return;
             const p = toPage(e);
             if (p) void remoteInput(taskId, { action: "tap", ...p });
             keys.current?.focus({ preventScroll: true });
           }}
-          className={`absolute top-0 select-none ${interactive ? "cursor-pointer" : ""}`}
+          className={`absolute top-0 select-none ${pointAsk ? "cursor-crosshair" : interactive ? "cursor-pointer" : ""}`}
           style={{ left: fit.left, width: fit.w, height: fit.h }}
         />
       ) : (
         <div className="grid h-full place-items-center text-sm text-ink-3">
           <span className="flex items-center gap-2"><span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Opening the page</span>
+        </div>
+      )}
+      {pointAsk && (
+        <div className={`pointer-events-none absolute inset-x-0 z-30 flex justify-center px-4 ${full ? "top-[calc(max(10px,env(safe-area-inset-top))+64px)]" : "top-3"}`}>
+          <Glass radius={22} lens={PILL} lensTint={0.6} className="max-w-[440px]">
+            <p className="px-4 py-2.5 text-center text-[15px] font-semibold text-ink">{pointAsk.question}</p>
+          </Glass>
         </div>
       )}
       {/* page coordinates -> screen: the highlight ring and cursor live in a layer the size of the page, scaled */}

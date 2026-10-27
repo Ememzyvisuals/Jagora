@@ -55,6 +55,8 @@ SAY = {
                 "ig": "{x} bụ saịtị nzọ. Ị chọrọ ka m mepee ya?"},
     "blocked": {"en": "I stopped {x}: {r}.", "pcm": "I block {x}: {r}.", "yo": "Mo dí {x} lọ́wọ́: {r}.",
                 "ha": "Na hana {x}: {r}.", "ig": "Egbochiri m {x}: {r}."},
+    "upload": {"en": "Should I upload {x} to {y}?", "pcm": "Make I upload {x} for {y}?", "yo": "Ṣé kí n gbé {x} sí {y}?",
+               "ha": "In loda {x} zuwa {y}?", "ig": "Ka m bulite {x} na {y}?"},
     "ad": {"en": "I closed an ad.", "pcm": "I close one ad.", "yo": "Mo pa ìpolówó kan dé.", "ha": "Na rufe talla.", "ig": "Emechiri m mgbasa ozi."},
 }
 
@@ -183,6 +185,9 @@ COMMON = [
     tool("fetch_code", "A site sent her a one-time code by email or SMS, and she agreed you may read it: open her mail in "
          "another tab first, then this copies the newest code from that tab into the code box. You never see the code.",
          {"from_tab": {"type": "integer"}, "element": EL}, ["from_tab", "element"]),
+    tool("ask_point", "When you are not sure which thing on the page she means, ask her to tap it on the live page. You get "
+         "back what she tapped.", {"question": {"type": "string", "description": "in her language, e.g. 'Tap the button you mean'"}},
+         ["question"]),
     tool("finish", "The task is done, or cannot be done. Tell her the result in her language: the answer, what you "
          "confirmed (and where), anything you could not confirm, and the next step.",
          {"summary": {"type": "string"}, "success": {"type": "boolean"}}, ["summary", "success"]),
@@ -198,7 +203,21 @@ ACT_TOOLS = [
     tool("choose", "Pick an option in a dropdown.", {"element": EL, "option": {"type": "string"}}, ["element", "option"]),
     tool("set_checkbox", "Tick or untick a checkbox, or pick a radio button.",
          {"element": EL, "checked": {"type": "boolean"}, "ask": ASK}, ["element", "checked"]),
-    tool("press_key", "Press a key (Enter, Escape, Tab) on the page.", {"key": {"type": "string", "enum": ["Enter", "Escape", "Tab"]}}, ["key"]),
+    tool("press_key", "Press a key or a combination on the page, e.g. Enter, Escape, Tab, PageDown, Control+A, Shift+Tab.",
+         {"key": {"type": "string"}}, ["key"]),
+    tool("hover", "Move the mouse over an element (opens hover menus and tooltips).", {"element": EL}, ["element"]),
+    tool("double_click", "Double-click an element.", {"element": EL, "ask": ASK}, ["element"]),
+    tool("right_click", "Right-click an element (opens its menu).", {"element": EL}, ["element"]),
+    tool("drag", "Drag one element onto another (or to a spot in screenshot pixels): sliders, reordering, drop zones.",
+         {"element": EL, "onto": EL, "x": {"type": "number"}, "y": {"type": "number"}}, ["element"]),
+    tool("click_at", "Click a spot by sight, for things with no number: maps, charts, canvas apps, images. x and y are pixels "
+         "in the screenshot.", {"x": {"type": "number"}, "y": {"type": "number"}, "double": {"type": "boolean"}, "step": STEP, "ask": ASK},
+         ["x", "y"]),
+    tool("upload_file", "Put one of the files she gave you in the chat (a photo, a certificate, a document) into a file box "
+         "or upload button on the page.", {"element": EL, "files": {"type": "array", "items": {"type": "string"},
+                                           "description": "names from 'Files she gave you'"}}, ["element", "files"]),
+    tool("set_date", "Fill a date box with a date (YYYY-MM-DD); works for date boxes that take typing.",
+         {"element": EL, "date": {"type": "string"}}, ["element", "date"]),
 ]
 DO_TOOLS = COMMON + ACT_TOOLS
 GUIDE_TOOLS = COMMON + [
@@ -206,7 +225,7 @@ GUIDE_TOOLS = COMMON + [
          "She does it herself; you wait for her.", {"element": EL, "message": {"type": "string"}}, ["element", "message"]),
 ]
 # In guide mode she still gets research help: links can be clicked to read, but forms are hers to fill.
-GUIDE_READ = {"click"}
+GUIDE_READ = {"click", "hover"}
 
 SYSTEM = """You are Jagora, a voice-first web agent for Nigerians. You speak {lang} with her: warm, clear, short everyday sentences, like a smart older sibling who knows the internet well. Many people you help read little English; some are students, traders, travellers and professionals.
 
@@ -242,6 +261,7 @@ HOW YOU WORK
 - Signing in: use her saved login (use_saved_login) when there is one for that site; otherwise ask_private, and for a task she may repeat or schedule, label it clearly (e.g. "JAMB password") so she can choose to save it.
 - Time-based help: if a portal is busy or she wants it done later ("try at midnight", "every morning check"), agree the time and what you may do, then schedule_task. Reminders are for her; scheduled tasks are for you.
 - Any website, by voice: sign in (her saved login, or ask_private once and let her save it), open dashboards and read the numbers to her, press buttons she names (approve, play, create), fill forms, switch a site to dark or light (page_theme), play audio or video for her (play_media), save pages or whole sites as PDF (save_page). Ask before anything that changes her account (create, delete, approve, send, pay).
+- If you cannot tell which thing she means on a page, use ask_point so she taps it. For things without a number (maps, charts, canvas, images), use click_at with screenshot pixels. Use hover for hover menus, drag for sliders and drop zones, upload_file for her files, set_date for date boxes.
 - One-time codes: ask her whether to read it from her email (open her mail in a new tab, then fetch_code) or whether she will type it (ask_private). Captchas and "are you human" checks: hand_over so she does it on the live page.
 - Private values (account number, NIN, BVN, card, OTP, PIN, password): use ask_private. Never type them yourself, never ask her to say them aloud, never repeat them.
 - Submitting, paying, sending, agreeing to terms, or leaving the website needs her yes: write the yes/no question in `ask`, in {lang}. If she says no, do not try again; ask what she wants.
@@ -289,6 +309,7 @@ class Agent:
     memory: Any = None  # reminders and saved moments (server: database; tests: in memory)
     pause_gate: Callable[[], Awaitable[None]] | None = None
     vault: Any = None  # her saved logins (values never reach the model)
+    files: dict = field(default_factory=dict)  # files she gave in the chat: name -> path on the server
     unattended: bool = False  # a scheduled run: nobody is watching
     _vault_names: list | None = None
     evidence: int = 0
@@ -361,7 +382,8 @@ class Agent:
         if snap is None:  # no page open yet: page tools make no sense
             page_only = {"click", "type_text", "choose", "set_checkbox", "press_key", "point_at", "hand_over", "ask_private",
                          "find_text", "list_links", "pdf_page", "show_evidence", "scroll", "go_back", "switch_tab", "close_tab",
-                         "read_page", "page_tables", "find_media", "use_saved_login", "page_theme", "save_page", "fetch_code"}
+                         "read_page", "page_tables", "find_media", "use_saved_login", "page_theme", "save_page", "fetch_code",
+                         "hover", "double_click", "right_click", "drag", "click_at", "upload_file", "set_date", "ask_point"}
             return [t for t in base if t["function"]["name"] not in page_only]
         return base
 
@@ -543,8 +565,27 @@ class Agent:
             if name == "press_key":
                 if self.mode == "guide":
                     return "in Guide me mode you do not act on the page", False, None
-                await b.press(str(a.get("key", "Enter")))
+                await b.keys(str(a.get("key", "Enter")))
                 return f"pressed {a.get('key')}", True, None
+            if name == "ask_point":
+                pick = getattr(self.io, "ask_point", None)
+                if not pick:
+                    return "she cannot point here; ask her in words", False, None
+                spot = await pick(str(a.get("question", "")))
+                if not spot or "x" not in spot:
+                    return f'she answered in words: "{(spot or {}).get("text", "")}"', True, None
+                what = await b.element_at(float(spot["x"]), float(spot["y"]))
+                num = f"element [{what['id']}]" if what.get("id") else "a spot with no number (use click_at)"
+                return (f'she tapped {num}: {what.get("tag")} "{what.get("text")}" (near: "{what.get("context", "")[:120]}") at page '
+                        f'x={round(spot["x"])}, y={round(spot["y"])} (screenshot x={round(spot["x"] * b.dsf)}, y={round(spot["y"] * b.dsf)})'), True, None
+            if name == "click_at":
+                if self.mode == "guide":
+                    return "in Guide me mode you do not act on the page", False, None
+                if a.get("ask") and not await self._approve(a, "that spot", "she should agree first"):
+                    return "she said no", True, None
+                await self.io.event("pointer", {"x": float(a["x"]) / b.dsf, "y": float(a["y"]) / b.dsf, "clicking": True})
+                hit = await b.click_at(float(a["x"]), float(a["y"]), bool(a.get("double")))
+                return f'clicked the spot{f" ({hit[:60]})" if hit else ""}', True, None
 
             el = snap.element(int(a.get("element", -1)))
             if el is None:
@@ -574,6 +615,38 @@ class Agent:
 
             if name == "click":
                 return await self._click(el, a)
+            if name == "hover":
+                await b.hover(el.id)
+                return f'hovering over "{el.label}"', True, None
+            if name == "double_click":
+                gate = check_click(el, snap.url, self.home_site)
+                if gate.verdict == Verdict.BLOCK:
+                    return f"refused: {gate.reason}", False, None
+                if gate.verdict == Verdict.CONFIRM and not await self._approve(a, el.label, gate.reason):
+                    return "she said no", True, None
+                await b.double_click(el.id)
+                return f'double-clicked "{el.label}"', True, None
+            if name == "right_click":
+                await b.right_click(el.id)
+                return f'right-clicked "{el.label}"', True, None
+            if name == "drag":
+                onto = snap.element(int(a["onto"])) if a.get("onto") is not None else None
+                to = (float(a["x"]) / b.dsf, float(a["y"]) / b.dsf) if a.get("x") is not None and a.get("y") is not None else None
+                await b.drag(el.id, onto.id if onto else None, to)
+                return f'dragged "{el.label}"' + (f' onto "{onto.label}"' if onto else ""), True, None
+            if name == "upload_file":
+                names = [str(x) for x in (a.get("files") or [])]
+                paths = [self.files[n] for n in names if n in self.files]
+                if not paths:
+                    return ("she has not given that file. Files she gave you: " + (", ".join(self.files) or "none") +
+                            ". Ask her to attach it in the chat."), False, None
+                if not await self.io.confirm(SAY["upload"].get(self.lang, SAY["upload"]["en"]).format(x=", ".join(names), y=site(snap.url)), "upload"):
+                    return "she said no to uploading", True, None
+                await b.upload(el.id, paths)
+                return f"uploaded {', '.join(names)}", True, None
+            if name == "set_date":
+                got = await b.set_date(el.id, str(a.get("date", "")))
+                return f'date box now "{got}"', True, None
             if name == "set_checkbox":
                 want = bool(a.get("checked", True))
                 if el.kind not in ("checkbox", "radio"):
@@ -851,6 +924,8 @@ class Agent:
         if self._vault_names:
             parts.append("Her saved logins (typed by code with use_saved_login, only on their own site; you never see them): "
                          + "; ".join(f'"{v["name"]}" for {v["site"]}' for v in self._vault_names))
+        if self.files:
+            parts.append("Files she gave you in the chat (for upload_file): " + ", ".join(self.files))
         if self.unattended:
             parts.append("This is a SCHEDULED run: she is not watching. Do the task with her saved details and logins. Do not "
                          "ask her questions; if something needed is missing or a step needs her yes, stop and finish with a "
@@ -859,7 +934,8 @@ class Agent:
             parts.append("She just said (while you were working): " + " / ".join(f'"{h}"' for h in heard))
         parts.append(f"What has happened in this task:\n{done}")
         if snap:
-            parts.append(f"The page now:\n{snap.describe()}")
+            dims = f"{self.browser.viewport['width'] * self.browser.dsf} x {self.browser.viewport['height'] * self.browser.dsf}" if self.browser else ""
+            parts.append(f"The page now (screenshot {dims} pixels):\n{snap.describe()}")
         else:
             parts.append("No web page is open. If her request needs the web, search or open an address. If it is just "
                          "conversation, answer with tell_user then finish.")

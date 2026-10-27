@@ -214,6 +214,7 @@ class Session:
         self.ws, self.user_id = ws, user_id
         self.lang, self.mode, self.profile = "en", "do", {}
         self.device: dict = {}
+        self.files: dict[str, str] = {}  # files she gave in the chat, kept for this session only
         self.translate = False
         self.runs: dict[str, Run] = {}
         self.browser: Browser | None = None
@@ -290,9 +291,11 @@ class Session:
                 self.translate = bool(ev.get("translate"))
                 if self.browser:
                     await self.browser.set_translate(self.lang if self.translate else "")
+            self.keep_file(ev.get("attachment"))
             await self.on_words(task, str(ev.get("goal") or ""), ev.get("attachment"), ev.get("history"))
         elif kind == "answer":
-            self._resolve(task, str(ev.get("id")), str(ev.get("value") or ""))
+            v = ev.get("value")
+            self._resolve(task, str(ev.get("id")), v if isinstance(v, dict) else str(v or ""))
         elif kind == "secret":
             # straight to the waiting box; never logged. "save" asks to keep it, encrypted, for this one site
             self._resolve(task, str(ev.get("id")), {"value": str(ev.get("value") or ""), "save": bool(ev.get("save"))})
@@ -312,6 +315,26 @@ class Session:
                 r.job.cancel()
             await self.send({"type": "status", "task": task, "status": "stopped"})
             await self.send({"type": "orb", "state": "idle"})
+
+    def keep_file(self, att: dict | None) -> None:
+        """A photo or document she attached: kept on the server for this session, so Jagora can upload it to a form."""
+        if not att or not str(att.get("data", "")).startswith("data:"):
+            return
+        try:
+            head, b64 = att["data"].split(",", 1)
+            raw = base64.b64decode(b64)
+            if len(raw) > 15 * 1024 * 1024:
+                return
+            name = re.sub(r"[^\w.\- ]+", "", str(att.get("name") or "file")).strip()[:80] or "file"
+            if "." not in name:
+                name += {"image/png": ".png", "image/jpeg": ".jpg", "application/pdf": ".pdf"}.get(head[5:].split(";")[0], "")
+            folder = FILES_DIR / "uploads" / self.user_id[:24]
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / name
+            path.write_bytes(raw)
+            self.files[name] = str(path)
+        except Exception as e:  # noqa: BLE001
+            log.info("attachment not kept: %s", e)
 
     # ---- her hands on the live page ----------------------------------------------------------------------------------
 
@@ -389,7 +412,7 @@ class Session:
                 if YES.search(text) or NO.search(text):
                     self._resolve(task, mid_, "yes" if YES.search(text) and not NO.search(text) else "no")
                     return
-            elif kind in ("choice", "handoff"):
+            elif kind in ("choice", "handoff", "point"):
                 self._resolve(task, mid_, text)
                 return
         if r and r.busy:
@@ -434,7 +457,7 @@ class Session:
                           conversation=convo[-14:], attachment=attachment, browser_factory=self.get_browser,
                           steering=r.steer, user_id=self.user_id, on_watch=io.watch,
                           memory=DbMemory(self.user_id, task, self.lang, self.mode, self.profile), pause_gate=r.free.wait,
-                          vault=Vault(db, self.user_id) if not self.user_id.startswith("guest-") else None)
+                          vault=Vault(db, self.user_id) if not self.user_id.startswith("guest-") else None, files=self.files)
             result = await agent.run(goal)
             await db.add_spend(agent.model.usage.dollars)
             await self.send({"type": "status", "task": task, "status": "done" if result.success else "stopped"})
@@ -510,6 +533,17 @@ class WsIO:
         if rect:
             await self.s.send({"type": "highlight", "task": self.task, "box": _box(rect), "tone": "stop"})
         return await self.point(None, text)
+
+    async def ask_point(self, question: str) -> dict:
+        """She taps the thing she means on the live page; returns the spot in page pixels (or her words)."""
+        self.s.speak(self.task, question)
+        m = {"id": mid(), "kind": "pointask", "question": question, "status": "waiting"}
+        v = await self._wait("point", m)
+        await self.s.send({"type": "update", "task": self.task, "id": m["id"], "patch": {"status": "done"}})
+        if isinstance(v, dict) and "x" in v:
+            await self.s.send({"type": "highlight", "task": self.task, "box": {"x": v["x"] - 18, "y": v["y"] - 18, "w": 36, "h": 36}, "tone": "point"})
+            return {"x": float(v["x"]), "y": float(v["y"])}
+        return {"text": str(v)}
 
     async def ask_private(self, rect: dict | None, label: str, field: str, digits: int | None) -> dict:
         if rect:

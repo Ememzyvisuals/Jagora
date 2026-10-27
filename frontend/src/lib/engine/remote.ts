@@ -233,6 +233,11 @@ function device() {
 export async function remoteInput(task: string, input: { action: "tap" | "type" | "key" | "scroll" | "back"; x?: number; y?: number; text?: string; key?: string; dy?: number }) {
   ws?.send(JSON.stringify({ type: "input", task, ...input }));
 }
+/** she tapped the thing she meant on the live page (page pixels) */
+export async function remotePoint(task: string, id: string, x: number, y: number) {
+  S().update(task, id, { status: "done" } as never);
+  (await connect()).send(JSON.stringify({ type: "answer", task, id, value: { x, y } }));
+}
 export async function remoteTakeover(task: string, on: boolean) {
   S().setTakeover(on);
   (await connect()).send(JSON.stringify({ type: "takeover", task, on }));

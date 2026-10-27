@@ -47,8 +47,17 @@ export function MobileApp() {
   // while Jagora works on a page the sheet steps aside so she can watch; it comes back when Jagora needs her
   const last = task?.messages.at(-1);
   const needsHer = !!last && ((last.kind === "confirm" && last.status === "waiting") || (last.kind === "choice" && !last.picked) || (last.kind === "handoff" && last.status === "waiting") || (last.kind === "secret" && last.status === "waiting"));
+  // Jagora asks her to tap what she means: the page comes into view
+  const pointing = last?.kind === "pointask" && last.status === "waiting";
+  useEffect(() => {
+    if (pointing) {
+      setSheet(false);
+      setScreen("page");
+    }
+  }, [pointing, setSheet]);
   useEffect(() => {
     if (!task || task.kind !== "browse" || !task.url) return;
+    if (pointing) return;
     if (needsHer) setSheet(true);
     else if (task.status === "working") setSheet(false);
   }, [task?.id, task?.kind, task?.url, task?.status, last?.id, needsHer, setSheet]);

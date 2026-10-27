@@ -53,6 +53,8 @@ export type Msg =
   /** a song, voice note or video from a website, played here (Jagora's live view has no sound) */
   | { id: string; kind: "media"; name: string; url: string; type: string; size: number; source?: string }
   /** a task Jagora will do on its own later */
+  /** Jagora is not sure what she means: she taps it on the live page */
+  | { id: string; kind: "pointask"; question: string; status: "waiting" | "done" }
   | { id: string; kind: "scheduled"; at: number; goal: string; allow: string[]; repeat: string }
   | { id: string; kind: "result"; title: string; reference?: string; lines: [string, string][] };
 

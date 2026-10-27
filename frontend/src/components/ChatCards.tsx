@@ -280,3 +280,20 @@ export function ScheduledCard({ m }: { m: Extract<Msg, { kind: "scheduled" }> })
     </div>
   );
 }
+
+const POINT: L = { en: "Show me on the page", pcm: "Show me for the page", yo: "Fi hàn mí lórí ojú-ìwé", ha: "Nuna mini a shafin", ig: "Gosi m na peeji" };
+/** Jagora is not sure what she means: she taps it on the live page */
+export function PointAskCard({ m }: { m: Extract<Msg, { kind: "pointask" }> }) {
+  const lang = useApp((s) => s.lang);
+  const setSheet = useApp((s) => s.setSheet);
+  return (
+    <div className={`rounded-[20px] p-4 ring-1 ${m.status === "waiting" ? "bg-white ring-accent/40 dark:bg-[#23262d]" : "bg-white/60 ring-black/5"}`}>
+      <p className="text-[15.5px] font-semibold leading-snug text-ink">{m.question}</p>
+      {m.status === "waiting" && (
+        <button onClick={() => setSheet(false)} className="btn btn-ink mt-3 h-10 px-4 text-[14px] md:hidden">
+          {POINT[lang]}
+        </button>
+      )}
+    </div>
+  );
+}
