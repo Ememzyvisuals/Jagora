@@ -605,12 +605,9 @@ docs/              research notes and media
 ## Credits
 
 - **Built by** Emmanuel Ariyo, ML Engineer at [PlotWeaver](https://www.plotweaver.app).
-- **Models:** Meta Muse Spark, Muse Wonder and Muse Image, via the Meta Model API. PlotWeaver STORM.
-- **Orb shader:** based on [AI-Orb](https://github.com/weeeha/AI-Orb) by Nick Vyhouski (MIT).
-- **Pixel icons:** [Pixelarticons](https://github.com/halfmage/pixelarticons) by Gerrit Halfmann (MIT), drawn in Jagora blue.
-- **Amina, the guide on the site:** "Cursed Amy" from the [100Avatars](https://github.com/toxsam/open-source-avatars) collection by Polygonal Mind (CC0), recoloured for Jagora, shown with [three-vrm](https://github.com/pixiv/three-vrm) by pixiv (MIT).
-- **Fonts:** Vollkorn (SIL OFL), Boiling (Alit Design), Bricolage Grotesque (SIL OFL).
-- **Blocklists:** StevenBlack hosts, URLhaus (abuse.ch), Phishing.Database, HaGeZi DNS blocklists.
+- **Models:** Meta Muse Spark, Muse Wonder and Muse Image, via the Meta Model API. Voice by PlotWeaver STORM.
+
+Open-source work Jagora builds on is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## License
 
