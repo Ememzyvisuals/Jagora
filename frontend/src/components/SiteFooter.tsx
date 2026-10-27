@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { siMeta } from "simple-icons";
 import { Mark } from "./Brand";
+import { startPageWars } from "./PageWars";
 import { CloudWordmark } from "./glass/CloudWordmark";
 import { BUILDER, PLOTWEAVER, REPO } from "@/lib/credits";
 import { Glass } from "./glass/Glass";
@@ -162,7 +163,12 @@ export function SiteFooter() {
         {/* bottom line */}
         <div className="mx-6 flex flex-col gap-2 border-t border-ink/10 py-5 text-[13.5px] text-ink-3 sm:mx-10 sm:flex-row sm:items-center sm:justify-between lg:mx-14">
           <span>© {new Date().getFullYear()} Jagora. Made in Nigeria, for everyone who speaks its languages.</span>
-          <span>Built for the Meta Global AI Developer Hackathon 2026</span>
+          <span className="flex items-center gap-3">
+            Built for the Meta Global AI Developer Hackathon 2026
+            <button onClick={startPageWars} className="rounded-full bg-black/5 px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10" title="Shift + G">
+              Bored? Play
+            </button>
+          </span>
         </div>
 
       </Glass>

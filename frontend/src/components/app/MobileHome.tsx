@@ -8,6 +8,7 @@ import {
   CaretLeft,
   CaretRight,
   CaretUp,
+  GameController,
   Info,
   DotsThree,
   Moon,
@@ -28,6 +29,7 @@ import {
   LockSimple,
 } from "@phosphor-icons/react";
 import { fly } from "../Effects";
+import { startPageWars } from "../PageWars";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useState, type ComponentType } from "react";
@@ -547,6 +549,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
                             { k: "home", Icon: House, label: NAV.home[lang], on: () => setScreen("home") },
                             { k: "fwd", Icon: CaretRight, label: NAV.fwd[lang], on: () => task?.kind === "browse" && setScreen("page") },
                             { k: "full", Icon: CornersOut, label: "Full screen", on: () => void toggleFullscreen() },
+                            { k: "game", Icon: GameController, label: "Play Page Wars", on: () => startPageWars() },
                             { k: "theme", Icon: theme === "dark" ? Sun : Moon, label: theme === "dark" ? THEME_L.light[lang] : THEME_L.dark[lang], on: toggleTheme },
                           ].map(({ k, Icon, label: l, on }) => (
                             <button key={k} onClick={() => (on(), setMenu(false))} className="flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-left text-[15px] font-medium text-ink hover:bg-black/5">

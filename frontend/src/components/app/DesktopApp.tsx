@@ -17,12 +17,14 @@ import {
   SpeakerHigh,
   SidebarSimple,
   Info,
+  GameController,
   CaretUp,
   Moon,
   Sun,
   X,
 } from "@phosphor-icons/react";
 import { fly } from "../Effects";
+import { startPageWars } from "../PageWars";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
@@ -213,6 +215,12 @@ export function DesktopApp() {
                 </span>
                 <span className="truncate text-[14px] font-medium text-ink">{profile.full_name || "My details"}</span>
               </Link>
+              <button onClick={startPageWars} className="flex items-center gap-2.5 rounded-[14px] p-2 text-left text-[14px] font-medium text-ink hover:bg-white/40">
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-white/70 text-ink-2">
+                  <GameController size={16} weight="bold" />
+                </span>
+                Play Page Wars
+              </button>
               <Link href="/about" className="flex items-center gap-2.5 rounded-[14px] p-2 text-[14px] font-medium text-ink hover:bg-white/40">
                 <span className="grid h-8 w-8 place-items-center rounded-full bg-white/70 text-ink-2">
                   <Info size={16} weight="bold" />
