@@ -111,6 +111,48 @@ const SOCIALS = [
   },
 ];
 
+const Meta = ({ label }: { label: string }) => (
+  <span className="flex items-center gap-2 font-display text-[16.5px] font-bold tracking-[-0.02em] text-ink">
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="#0866FF" aria-hidden="true">
+      <path d={siMeta.path} />
+    </svg>
+    {label}
+  </span>
+);
+const POWERS = [
+  {
+    title: "Listening and speaking",
+    href: PLOTWEAVER.url,
+    logo: (
+      <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/plotweaver-dark.png" alt="PlotWeaver" className="h-[22px] w-auto dark:hidden" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/plotweaver.png" alt="PlotWeaver" className="hidden h-[22px] w-auto dark:block" />
+      </>
+    ),
+    body: "STORM speech recognition turns what you say in Yorùbá, Hausa, Igbo, Pidgin or English into text, and STORM voices give Jagora its voice, Amina. From the PlotWeaver API at developer.plotweaver.app.",
+  },
+  {
+    title: "The browsing agent",
+    href: "https://ai.meta.com",
+    logo: <Meta label="Muse Spark" />,
+    body: "Understands what you asked, reads each page, decides the next step and works the website for you: searching, clicking, filling forms and checking every action before it moves on.",
+  },
+  {
+    title: "Reading what you show it",
+    href: "https://ai.meta.com",
+    logo: <Meta label="Muse Wonder" />,
+    body: "Reads photos of letters, bills and screens, short videos and voice notes, so you can show Jagora a paper and hear what it says and what to do next.",
+  },
+  {
+    title: "Picture guides",
+    href: "https://ai.meta.com",
+    logo: <Meta label="Muse Image" />,
+    body: "Draws a short picture story of the steps for people who cannot read easily: take your ID card, go to the bank, pay before the date.",
+  },
+];
+
 const head = "font-head text-[17px] leading-none text-ink";
 const link = "w-fit text-[15px] text-ink-2 transition-colors hover:text-ink";
 
@@ -163,27 +205,6 @@ export function SiteFooter() {
 
             {/* credits */}
             <div id="builder" className="col-span-2 space-y-5 md:col-span-1">
-              <div className="space-y-2">
-                <p className={head}>Voice by</p>
-                <a href={PLOTWEAVER.url} target="_blank" rel="noopener noreferrer" className="block w-fit transition-opacity hover:opacity-75" aria-label="PlotWeaver">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/brand/plotweaver-dark.png" alt="PlotWeaver" className="h-[22px] w-auto dark:hidden" />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/brand/plotweaver.png" alt="PlotWeaver" className="hidden h-[22px] w-auto dark:block" />
-                </a>
-                <a href={PLOTWEAVER.url} target="_blank" rel="noopener noreferrer" className="block w-fit text-[13.5px] text-ink-3 hover:text-ink">
-                  STORM speech AI, developer.plotweaver.app
-                </a>
-              </div>
-              <div className="space-y-2">
-                <p className={head}>Intelligence by</p>
-                <span className="flex items-center gap-2 font-display text-[17px] font-bold tracking-[-0.02em] text-ink">
-                  <svg viewBox="0 0 24 24" width="24" height="24" fill="#0866FF" aria-hidden="true">
-                    <path d={siMeta.path} />
-                  </svg>
-                  Meta Muse
-                </span>
-              </div>
               <div className="space-y-3">
                 <p className={head}>Designed and built by</p>
                 <a href={BUILDER.site} target="_blank" rel="noopener noreferrer" className="block w-fit text-[15px] text-ink hover:text-accent">
@@ -200,6 +221,22 @@ export function SiteFooter() {
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* what each part of Jagora runs on */}
+          <div className="border-t border-ink/10 pt-10">
+            <p className="font-head text-[22px] leading-none text-ink">What powers Jagora</p>
+            <div className="mt-7 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+              {POWERS.map((p) => (
+                <div key={p.title} className="space-y-2.5">
+                  <a href={p.href} target="_blank" rel="noopener noreferrer" className="flex h-7 w-fit items-center transition-opacity hover:opacity-75">
+                    {p.logo}
+                  </a>
+                  <p className="font-head text-[16px] leading-tight text-ink">{p.title}</p>
+                  <p className="text-[14px] leading-relaxed text-ink-2">{p.body}</p>
+                </div>
+              ))}
             </div>
           </div>
 
