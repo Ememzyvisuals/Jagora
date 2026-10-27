@@ -220,3 +220,22 @@ async def test_link_check_unmasks_shorteners_ip_loggers_and_tracking(monkeypatch
     assert r["verdict"] == "dangerous" and r["final"] == "https://grabify.link/K3Y9"
     text = " ".join(r["warnings"])
     assert "IP logger" in text and "shortened" in text and "utm_source" in text and "fbclid" in text
+
+
+async def test_ads_are_gone_on_any_site_and_on_youtube(rng):
+    async with Browser() as b:
+        await b.goto(rng.url("adnews.test"))
+        p = b.page
+        assert await p.locator("ins.adsbygoogle").is_hidden() and await p.locator("#div-gpt-ad-1").is_hidden()
+        assert await p.locator("text=Story text.").is_visible()
+        await b.goto(rng.url("youtube.test", "/watch"))
+        p = b.page
+        assert await p.locator("ytd-ad-slot-renderer").is_hidden()
+        pruned = await p.evaluate("""() => {
+            const a = JSON.parse('{"adPlacements":[1],"playerAds":[2],"videoDetails":{"title":"Film"}}');
+            window.ytInitialPlayerResponse = {adSlots: [3], streamingData: {}};
+            return [Object.keys(a), Object.keys(window.ytInitialPlayerResponse)];
+        }""")
+        assert pruned == [["videoDetails"], ["streamingData"]]  # the player never learns there were ads
+    from jagora.guard import guard
+    assert guard.is_ad("https://www.youtube.com/pagead/adview?ai=1") and not guard.is_ad("https://www.youtube.com/watch?v=x")

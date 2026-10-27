@@ -287,7 +287,16 @@ export function MediaCard({ m }: { m: Extract<Msg, { kind: "media" }> }) {
   return (
     <div className="overflow-hidden rounded-[20px] bg-white p-3 shadow-[0_10px_30px_-18px_rgba(10,30,70,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
       <p className="mb-2 truncate px-1 text-[14.5px] font-semibold text-ink">{m.name}</p>
-      {video ? (
+      {m.type === "youtube" ? (
+        <iframe
+          src={m.url}
+          title={m.name}
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+          allowFullScreen
+          referrerPolicy="strict-origin-when-cross-origin"
+          className="aspect-video w-full rounded-[14px] bg-black"
+        />
+      ) : video ? (
         <video src={m.url} controls autoPlay playsInline className="w-full rounded-[14px] bg-black" />
       ) : (
         <audio src={m.url} controls autoPlay className="w-full" />

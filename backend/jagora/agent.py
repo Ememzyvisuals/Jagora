@@ -1059,6 +1059,13 @@ class Agent:
             url = b.pdf.url
         if not url:
             return "give the file's address or its link on the page", False, None
+        yt = re.search(r"(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/)|youtu\.be/)([\w-]{11})", url)
+        if play and yt:
+            # played in her app from YouTube's privacy-enhanced player, without YouTube's tracking cookies
+            title = str(a.get("name") or (snap.title if snap else "") or "Video").replace(" - YouTube", "")[:90]
+            await self.io.event("media", {"name": title, "url": f"https://www.youtube-nocookie.com/embed/{yt.group(1)}?autoplay=1&rel=0&modestbranding=1",
+                                          "type": "youtube", "size": 0, "source": url})
+            return f'playing "{title}" for her in the app', False, None
         if INSTALLER.search(url):
             return "refused: app installers are never downloaded", False, None
         if b.pdf and b.pdf.url == url:

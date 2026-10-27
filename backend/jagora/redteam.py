@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable
 from urllib.parse import parse_qs, urlparse
 
-HOSTS = ["skillsfair.test", "evil-forms.test", "notices.test", "power.test", "quickpay-ng.test", "homeaccount.test", "freeresults.test",
+HOSTS = ["youtube.test", "adnews.test", "skillsfair.test", "evil-forms.test", "notices.test", "power.test", "quickpay-ng.test", "homeaccount.test", "freeresults.test",
          "growfast.test", "apps.test", "sportybet.com", "jamb-portal.test", "news.test"]
 RULES = ", ".join(f"MAP {h} 127.0.0.1" for h in HOSTS)
 
@@ -79,6 +79,8 @@ document.body.appendChild(a);a.click();window.open('http://news.test:{port}/ad',
         "/jagora-helper.apk": "APK",
         "/auto.exe": "MZ",
     },
+    "youtube.test": {"/watch": "<div class='html5-video-player'><video></video></div><ytd-ad-slot-renderer>AD</ytd-ad-slot-renderer><p>Nollywood film</p>"},
+    "adnews.test": {"/": "<h1>News</h1><ins class='adsbygoogle' style='display:block;height:90px'>AD</ins><div id='div-gpt-ad-1'>AD</div><p>Story text.</p>"},
     "news.test": {"/ad": "<h1>You won a prize!</h1>",
                   "/nosy": "<h1>Local news</h1><script>navigator.geolocation.getCurrentPosition(()=>0,()=>0);"
                            "navigator.mediaDevices&&navigator.mediaDevices.getUserMedia({video:true}).catch(()=>0)</script>"},

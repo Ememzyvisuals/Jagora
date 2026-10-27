@@ -39,7 +39,8 @@ FEEDS = {
     "scam": ["https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/fake-onlydomains.txt"],
     "malicious": ["https://urlhaus.abuse.ch/downloads/hostfile/",
                   "https://raw.githubusercontent.com/mitchellkrogza/Phishing.Database/master/phishing-domains-ACTIVE.txt"],
-    "ads": ["https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"],
+    "ads": ["https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+            "https://raw.githubusercontent.com/easylist/easylist/gh-pages/easylist.txt"],
 }
 
 # Always known, even with no network: the commonest ad networks and Nigerian betting brands.
@@ -356,7 +357,7 @@ class Guard:
 
     def is_ad(self, url: str) -> bool:
         host = (urlparse(url).hostname or "").lower()
-        return bool(host) and (self._in("ads", host) or self._in("malicious", host))
+        return bool(host) and (self._in("ads", host) or self._in("malicious", host) or bool(AD_PATHS.search(url)))
 
     def page_text_flag(self, text: str) -> str:
         """For pages no list knows: lots of adult words means it is an adult page."""
@@ -389,6 +390,12 @@ def _sig(cat: str) -> str:
 
 def parse_list(text: str) -> set[str]:
     out: set[str] = set()
+    if text.lstrip().startswith("[Adblock"):  # EasyList: the whole-domain rules (||ads.example.com^)
+        for line in text.splitlines():
+            m = re.match(r"^\|\|([a-z0-9.-]+\.[a-z]{2,})\^(\$third-party)?$", line.strip())
+            if m:
+                out.add(m.group(1))
+        return out
     for line in text.splitlines():
         line = line.split("#", 1)[0].strip()
         if not line:
@@ -461,6 +468,60 @@ CLEAN_JS = r"""
 """
 
 
+# Ads served from a site's own address (YouTube, news sites): cut off by their paths.
+AD_PATHS = re.compile(r"youtube\.com/(pagead/|api/stats/ads|ptracking|get_midroll_|youtubei/v1/player/ad_break)|"
+                      r"googlevideo\.com/.*[?&]ctier=L|/pagead/|/adserver|/ads\.js\b|/adsbygoogle|doubleclick\.net|"
+                      r"googlesyndication|/prebid[.\w-]*\.js|/gpt\.js\b", re.I)
+
+# Runs before any page script on every site: no ads, whatever the site. On YouTube it removes the ad schedule from the
+# player's data before the player reads it, skips any ad that still starts, and hides ad slots and promoted videos.
+NO_ADS_JS = r"""
+(() => {
+  const isYT = /(^|\.)youtube\.com$/.test(location.hostname) || location.hostname === 'youtube.test';  // .test: the attack range
+  // 1. take the ads out of the data pages hand to their players
+  const AD_KEYS = ['adPlacements', 'adSlots', 'playerAds', 'adBreakHeartbeatParams', 'adBreakParams'];
+  const prune = (o, depth = 0) => {
+    if (!o || typeof o !== 'object' || depth > 6) return o;
+    for (const k of AD_KEYS) if (k in o) { try { delete o[k]; } catch (e) {} }
+    if (o.playerResponse) prune(o.playerResponse, depth + 1);
+    return o;
+  };
+  if (isYT) {
+    const parse = JSON.parse;
+    JSON.parse = function (...a) { return prune(parse.apply(this, a)); };
+    for (const name of ['ytInitialPlayerResponse', 'ytInitialData']) {
+      let v; try { Object.defineProperty(window, name, { configurable: true, get: () => v, set: (x) => { v = prune(x); } }); } catch (e) {}
+    }
+  }
+  // 2. hide ad slots, sponsored blocks and promoted videos
+  const CSS = [
+    'ins.adsbygoogle', '[id^="google_ads_"]', '[id^="div-gpt-ad"]', 'iframe[src*="doubleclick"]', 'iframe[src*="googlesyndication"]',
+    '.adsbygoogle', '[data-ad-slot]', '[data-google-query-id]', '.ad-slot', '.advertisement', '.adsbox', '.sponsored-content',
+    'ytd-ad-slot-renderer', 'ytd-in-feed-ad-layout-renderer', 'ytd-promoted-sparkles-web-renderer', 'ytd-promoted-video-renderer',
+    'ytd-display-ad-renderer', 'ytd-companion-slot-renderer', 'ytd-action-companion-ad-renderer', 'ytd-banner-promo-renderer',
+    'ytd-statement-banner-renderer', 'ytd-video-masthead-ad-v3-renderer', 'ytd-primetime-promo-renderer', '#masthead-ad', '#player-ads',
+    '.ytd-merch-shelf-renderer', 'ytm-promoted-sparkles-web-renderer', 'ytm-companion-ad-renderer', 'ad-slot-renderer',
+    '.video-ads', '.ytp-ad-module', '.ytp-ad-overlay-container', '.ytp-ad-text-overlay',
+  ].join(',');
+  const style = () => { if (document.getElementById('__jg_noads')) return; const s = document.createElement('style'); s.id = '__jg_noads';
+    s.textContent = CSS + '{display:none!important}'; (document.head || document.documentElement).appendChild(s); };
+  // 3. an ad that starts anyway is skipped at once
+  const skip = () => {
+    if (!isYT) return;
+    const player = document.querySelector('.html5-video-player');
+    const v = document.querySelector('video');
+    if (player && v && player.classList.contains('ad-showing')) {
+      v.muted = true;
+      try { v.playbackRate = 16; if (isFinite(v.duration)) v.currentTime = v.duration; } catch (e) {}
+    }
+    document.querySelectorAll('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-overlay-close-button').forEach((b) => b.click());
+  };
+  const start = () => { style(); skip(); new MutationObserver(() => { style(); skip(); }).observe(document.documentElement, { childList: true, subtree: true }); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+  setInterval(skip, 500);
+})();
+"""
+
 # Runs before any page script: notes when a site asks for her location, camera, microphone, clipboard, contacts,
 # notifications or screen. The browser refuses them all; she is told which site asked.
 ASKS_JS = r"""
@@ -522,6 +583,7 @@ async def install(context, session) -> None:
     try:
         await context.expose_binding("__jgAsked", asked)
         await context.add_init_script(ASKS_JS)
+        await context.add_init_script(NO_ADS_JS)
     except Exception:  # noqa: BLE001
         pass
 
