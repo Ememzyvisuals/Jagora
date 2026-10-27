@@ -183,19 +183,19 @@ millions of cloud browsers.
 
 <p align="center"><img src="docs/media/cards.png" alt="What Jagora does" width="92%"></p>
 
-| | Capability | In practice |
-|---|---|---|
-| 🗣️ | **Say it, it does it** | "Forúkọ mi sílẹ̀ fún Skills Fair" and Jagora opens the site, fills the form from your saved details, and asks before submitting. |
-| 🔎 | **Proof from official sources** | Checks the site is the real one, finds the exact line in the page or PDF, and highlights it as evidence. |
-| 📷 | **Snap a letter, it reads it** | A photo, PDF or short video of a bill, letter or result slip becomes facts, deadlines and scam signs (Muse Wonder). |
-| 🖼️ | **Shows you in pictures** | For people who find reading hard, the steps become a short picture guide with the same character in every frame (Muse Image). |
-| 🌍 | **Websites in your language** | English pages are shown in Yorùbá, Hausa or Igbo while the agent still reads the original. |
-| 🔐 | **Logins that stay yours** | Passwords, PINs, OTPs, NIN and BVN go through a private box the model never sees. Saved logins are sealed (AES-256-GCM) and bound to their own site. |
-| 🌙 | **Works while you sleep** | "Try JAMB at midnight and keep checking until the portal is up": scheduled tasks with retries, results on your lock screen. |
-| 📄 | **Writes it up** | Research turns into a document with sources, as PDF, Word or Markdown. |
-| 🔗 | **Link checker** | Unmasks shorteners, redirect chains, IP loggers and tracking codes before anyone opens a link. |
-| 📜 | **Reads the terms for you** | Before you sign up or pay, the site's terms and privacy policy are reviewed in the background and red flags are said aloud. |
-| 🧠 | **Gets better at each site** | Steps that worked on a site are remembered (page words only, never personal values) and guide the next run. |
+| Capability | In practice |
+|---|---|
+| **Say it, it does it** | "Forúkọ mi sílẹ̀ fún Skills Fair" and Jagora opens the site, fills the form from your saved details, and asks before submitting. |
+| **Proof from official sources** | Checks the site is the real one, finds the exact line in the page or PDF, and highlights it as evidence. |
+| **Snap a letter, it reads it** | A photo, PDF or short video of a bill, letter or result slip becomes facts, deadlines and scam signs (Muse Wonder). |
+| **Shows you in pictures** | For people who find reading hard, the steps become a short picture guide with the same character in every frame (Muse Image). |
+| **Websites in your language** | English pages are shown in Yorùbá, Hausa or Igbo while the agent still reads the original. |
+| **Logins that stay yours** | Passwords, PINs, OTPs, NIN and BVN go through a private box the model never sees. Saved logins are sealed (AES-256-GCM) and bound to their own site. |
+| **Works while you sleep** | "Try JAMB at midnight and keep checking until the portal is up": scheduled tasks with retries, results on your lock screen. |
+| **Writes it up** | Research turns into a document with sources, as PDF, Word or Markdown. |
+| **Link checker** | Unmasks shorteners, redirect chains, IP loggers and tracking codes before anyone opens a link. |
+| **Reads the terms for you** | Before you sign up or pay, the site's terms and privacy policy are reviewed in the background and red flags are said aloud. |
+| **Gets better at each site** | Steps that worked on a site are remembered (page words only, never personal values) and guide the next run. |
 
 ## How Meta AI powers Jagora
 
@@ -275,24 +275,24 @@ what happens around it:
 
 ```mermaid
 flowchart LR
-    subgraph CTX["Chromium context · one per person · Playwright"]
-        direction TB
-        RT["Route interceptor<br/>every request"] -->|"page"| GV{"guard.check<br/>lists · lookalikes · schemes"}
-        GV -->|"blocked"| BP["Block page<br/>reason in plain words"]
-        GV -->|"allowed"| PG["Live page"]
-        RT -->|"ads · trackers"| AB["aborted"]
-        INIT["Init script<br/>permission watcher"] -.-> PG
-        PG -->|"pop-up tab"| PC["closed unless Jagora opened it"]
-        PG -->|"download"| DC["cancelled unless asked for"]
+    subgraph CTX["Chromium context, one per person, Playwright"]
+        RT["Route interceptor<br>every request"] -->|page| GV{"guard.check<br>lists, lookalikes, schemes"}
+        GV -->|blocked| BP["Block page<br>reason in plain words"]
+        GV -->|allowed| PG["Live page"]
+        RT -->|ads and trackers| AB["aborted"]
+        INIT["Init script<br>permission watcher"] -.-> PG
+        PG -->|pop-up tab| PC["closed unless Jagora opened it"]
+        PG -->|download| DC["cancelled unless asked for"]
     end
-    PG --> SNAP["Snapshot pipeline<br/>1 hide invisible text<br/>2 number every control<br/>3 screenshot with marks<br/>4 page content verdict<br/>5 cut orders to AI"]
+    PG --> SNAP["Snapshot pipeline<br>1 hide invisible text<br>2 number every control<br>3 screenshot with marks<br>4 page content verdict<br>5 cut orders to AI"]
     SNAP --> MS["Muse Spark"]
-    MS -->|"tool calls"| GATE["Safety gate<br/>+ action check"]
-    GATE -->|"click · type · drag · upload"| PG
-    PG --> CDP["CDP screencast<br/>JPEG q55 · every 2nd frame · ≤ 5 fps"]
-    CDP --> WSS["WebSocket"] --> APP["Her screen<br/>scaled live view<br/>tap and type to take over"]
-    PG <--> PDF["PDF viewer<br/>PyMuPDF · find_text · evidence crops"]
-    PG <--> TR["Translation layer<br/>STORM MT · original restored<br/>before every read"]
+    MS -->|tool calls| GATE["Safety gate<br>and action check"]
+    GATE -->|click, type, drag, upload| PG
+    PG --> CDP["CDP screencast<br>JPEG, up to 5 frames a second"]
+    CDP --> WSS["WebSocket"]
+    WSS --> APP["Her screen<br>scaled live view<br>tap and type to take over"]
+    PG --- PDF["PDF viewer<br>PyMuPDF, find_text, evidence crops"]
+    PG --- TR["Translation layer<br>STORM MT, original restored<br>before every read"]
 ```
 
 | Piece | How it works |
@@ -318,26 +318,25 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Bisi as Bísí (speaks Yorùbá)
+    participant Bisi as Bisi, speaks Yoruba
     participant App as Jagora app
     participant Srv as Agent server
-    participant STORM as STORM ASR/TTS
+    participant STORM as STORM ASR and TTS
     participant Spark as Muse Spark
-    participant Guard as Guard + gate
-    participant Web as JAMB site
-
-    Bisi->>App: "Ṣàyẹ̀wò àwọn ìlànà UNILAG fún Computer Science"
+    participant Guard as Guard and gate
+    participant Web as UNILAG site
+    Bisi->>App: Ṣàyẹ̀wò àwọn ìlànà UNILAG fún Computer Science
     App->>Srv: voice note
-    Srv->>STORM: transcribe (yo)
-    Srv->>Spark: goal + page + tools
-    Spark->>Guard: go_to official brochure
-    Guard->>Web: allowed (official .edu.ng)
-    Spark->>Srv: find_text + show_evidence
+    Srv->>STORM: transcribe, Yoruba
+    Srv->>Spark: goal, page and tools
+    Spark->>Guard: go_to the official brochure
+    Guard->>Web: allowed, official .edu.ng
+    Spark->>Srv: find_text and show_evidence
     Srv-->>App: evidence card with the exact highlighted line
     Spark->>Srv: finish
-    Srv->>Spark: independent checker: is it really done?
-    Srv->>STORM: speak the answer (streamed sentence by sentence)
-    STORM-->>Bisi: answer in Yorùbá
+    Srv->>Spark: independent checker, is it really done
+    Srv->>STORM: speak the answer, sentence by sentence
+    STORM-->>Bisi: the answer in Yoruba
 ```
 
 ## Safety model
@@ -405,13 +404,14 @@ phone reports a slow connection (2G or 3G) or its own data saver, and she can sw
 
 | | Normal | Data saver |
 |---|---|---|
-| Jagora's voice | 24 kHz, 16-bit: **516 kbit/s** while speaking | 16 kHz IMA ADPCM: **90 kbit/s** (5.7 times smaller, still clear speech) |
-| One live-view frame (phone layout, practice portal) | 42 KB | 25 KB, 360 px wide |
+| Jagora's voice | 24 kHz, 16-bit: **516 kbit/s** while speaking | 16 kHz IMA ADPCM: **87 kbit/s** (6 times smaller, still clear speech) |
+| One live-view frame (phone layout, practice portal) | 41.6 KB | 24.8 KB, 360 px wide |
 | Live-view frames | at most 5 a second, only when the page changes | at most 2 a second, only when the page changes |
 | App in the background (phone locked, another app open) | no frames sent | no frames sent |
 
 Every 0.2 s piece of compressed voice carries its own starting state, so a lost piece never garbles the next one.
-The figures above were measured with the measuring tool; run it yourself on any server:
+The figures above were measured on the production server on 27 October 2026, with Jagora's real STORM voice. Run the
+measuring tool yourself on any server:
 
 ```bash
 python -m jagora.netcheck
