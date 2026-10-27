@@ -12,6 +12,7 @@ Everything Jagora says is also sent as text, so the chat always has the words.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import io
 import logging
@@ -115,6 +116,76 @@ def speakable(text: str) -> str:
     t = re.sub(r"https?://\S+", "", text)
     t = re.sub(r"[*_`#>|]", "", t)
     return re.sub(r"\s+", " ", t).strip()
+
+
+CHUNK = 24000 * 2 // 5  # 0.2 s of 24 kHz 16-bit audio
+
+
+async def speak_stream(text: str, lang: str, ahead: int = 2) -> AsyncIterator[tuple[int, int, bytes]]:
+    """Jagora's voice as it is made: (sentence number, sample rate, PCM chunk). The first sound leaves within a few
+    hundred milliseconds because chunks are passed on as STORM streams them, and the next sentences are already being
+    made while this one plays (up to `ahead` at once). Finished sentences are cached by their text."""
+    if not enabled():
+        return
+    import httpx
+
+    TTS_CACHE.mkdir(parents=True, exist_ok=True)
+    parts = sentences(speakable(text))
+    if not parts:
+        return
+    queues: list[asyncio.Queue] = [asyncio.Queue() for _ in parts]
+    gate = asyncio.Semaphore(max(1, ahead))
+    client = httpx.AsyncClient(timeout=120)
+
+    async def make(i: int, s: str) -> None:
+        q = queues[i]
+        key = hashlib.sha256(f"{settings.voice}|{lang}|{s}".encode()).hexdigest()[:32]
+        cached = TTS_CACHE / f"{key}.wav"
+        try:
+            if cached.exists():
+                with wave.open(io.BytesIO(cached.read_bytes())) as w:
+                    rate, pcm = w.getframerate(), w.readframes(w.getnframes())
+                for k in range(0, len(pcm), CHUNK * 4):
+                    await q.put((rate, pcm[k:k + CHUNK * 4]))
+                return
+            async with gate:
+                body = {"text": s, "language": LANG.get(lang, "en"), "voice_id": settings.voice, "model": "storm-v1"}
+                got = bytearray()
+                async with client.stream("POST", f"{settings.plotweaver_base}/speech/stream", json=body,
+                                         headers={"X-API-Key": settings.plotweaver_key}) as r:
+                    if r.status_code != 200:
+                        log.warning("tts failed %s", r.status_code)
+                        return
+                    rate = int(r.headers.get("X-Sample-Rate", "24000"))
+                    buf = b""
+                    async for chunk in r.aiter_bytes():
+                        buf += chunk
+                        while len(buf) >= CHUNK:
+                            cut = CHUNK - (CHUNK % 2)
+                            await q.put((rate, buf[:cut]))
+                            got += buf[:cut]
+                            buf = buf[cut:]
+                    if len(buf) > 1:
+                        buf = buf[: len(buf) - (len(buf) % 2)]
+                        await q.put((rate, buf))
+                        got += buf
+                if len(got) > 200:
+                    with contextlib.suppress(OSError):
+                        cached.write_bytes(pcm_to_wav(bytes(got), rate))
+        except Exception as e:  # noqa: BLE001
+            log.warning("tts error: %s", e)
+        finally:
+            await q.put(None)
+
+    jobs = [asyncio.create_task(make(i, s)) for i, s in enumerate(parts)]
+    try:
+        for i, q in enumerate(queues):
+            while (item := await q.get()) is not None:
+                yield i, item[0], item[1]
+    finally:
+        for j in jobs:
+            j.cancel()
+        await client.aclose()
 
 
 async def speak(text: str, lang: str) -> AsyncIterator[bytes]:

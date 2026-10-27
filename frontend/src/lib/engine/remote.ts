@@ -23,7 +23,7 @@
                    {type:"pointer", task, x, y, visible, clicking}   in page pixels
                    {type:"highlight", task, box|null, tone}
                    {type:"orb", state}
-                   {type:"speech", task, audio}            base64 audio of Jagora's voice (STORM TTS)
+                   {type:"pcm", task, utt, n, rate, data}  Jagora's voice as it is made (16-bit PCM, played at once)
                    {type:"url", task, url}
                    {type:"speech_end", task}               Jagora finished talking (live mode listens again)
                    {type:"account", credits}  {type:"notify", task, title, text, url}  {type:"error", error, message}
@@ -104,12 +104,12 @@ function handle(ev: Record<string, unknown>) {
     case "orb":
       s.setOrb(ev.state as never);
       break;
-    case "speech":
-      queueSpeech(ev.audio as string);
+    case "pcm":
+      playPcm(ev.data as string, (ev.rate as number) || 24000, ev.utt as string);
       break;
     case "speech_end":
       speechDone = true;
-      if (!playing) s.setOrb("idle");
+      if (!voices.size) s.setOrb("idle");
       break;
     case "notify":
       notify(ev);
@@ -120,38 +120,80 @@ function handle(ev: Record<string, unknown>) {
   }
 }
 
-/* Jagora's voice, one sentence after another (never two at once). The orb shows speaking until the last one ends. */
-const clips: string[] = [];
-let playing = false;
-let speechDone = false;
-let current: HTMLAudioElement | null = null;
-function queueSpeech(b64: string) {
+/* Jagora's voice, played as it arrives: each 0.2 s piece of PCM is scheduled right after the one before, so speech
+   starts within a moment of the reply and never overlaps. hush() stops it at once (she started talking or tapped)
+   and tells the server to drop whatever it was still going to say. */
+let actx: AudioContext | null = null;
+let nextAt = 0;
+let speechDone = true;
+const voices = new Set<AudioBufferSourceNode>();
+function audio(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  if (!actx) {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return null;
+    actx = new AC();
+  }
+  if (actx.state === "suspended") void actx.resume();
+  return actx;
+}
+// phones only allow sound after a touch: wake the audio on the first one
+if (typeof window !== "undefined") {
+  const wake = () => audio();
+  window.addEventListener("pointerdown", wake, { once: true, capture: true });
+  window.addEventListener("keydown", wake, { once: true, capture: true });
+}
+let lastUtt = "";
+let hushedAt = 0;
+const hushed = new Set<string>();
+function playPcm(b64: string, rate: number, utt = "") {
   if (S().muted) return;
-  clips.push(b64);
+  // what was already on its way when she cut in stays silent
+  if (hushed.has(utt) || performance.now() - hushedAt < 700) return;
+  lastUtt = utt;
+  const c = audio();
+  if (!c) return;
+  const bin = atob(b64);
+  const n = bin.length >> 1;
+  if (!n) return;
+  const buf = c.createBuffer(1, n, rate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) {
+    let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8);
+    if (v >= 32768) v -= 65536;
+    ch[i] = v / 32768;
+  }
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  src.connect(c.destination);
+  const at = Math.max(c.currentTime + 0.04, nextAt);
+  src.start(at);
+  nextAt = at + buf.duration;
+  voices.add(src);
   speechDone = false;
-  if (!playing) void next();
-}
-async function next() {
-  const b64 = clips.shift();
-  if (!b64) {
-    playing = false;
-    if (speechDone || !clips.length) S().setOrb("idle");
-    return;
-  }
-  playing = true;
   S().setOrb("speaking");
-  current = new Audio(`data:audio/wav;base64,${b64}`);
-  current.onended = current.onerror = () => void next();
-  try {
-    await current.play();
-  } catch {
-    void next();
-  }
+  src.onended = () => {
+    voices.delete(src);
+    if (!voices.size && speechDone) S().setOrb("idle");
+  };
 }
+/** Is Jagora talking (or about to)? */
+export const isSpeaking = () => voices.size > 0 || !speechDone;
 export function hush() {
-  clips.length = 0;
-  current?.pause();
-  playing = false;
+  const was = isSpeaking();
+  if (was) {
+    if (lastUtt) hushed.add(lastUtt);
+    hushedAt = performance.now();
+  }
+  for (const v of voices) {
+    try {
+      v.stop();
+    } catch {}
+  }
+  voices.clear();
+  nextAt = 0;
+  speechDone = true;
+  if (was) ws?.send(JSON.stringify({ type: "hush" }));
 }
 
 function notify(ev: Record<string, unknown>) {

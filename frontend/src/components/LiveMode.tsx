@@ -12,7 +12,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ask, live as backendLive, voiceNote } from "@/lib/engine";
 import type { Lang } from "@/lib/i18n";
 import { activeTask, useApp } from "@/lib/store";
-import { blobToDataUrl, useSpeakingPulse, useVoice } from "@/lib/voice";
+import { hush } from "@/lib/engine/remote";
+import { blobToDataUrl, useSpeakingPulse, useVoice, watchForVoice } from "@/lib/voice";
 import { browserRecognizer } from "./Composer";
 import { Glass } from "./glass/Glass";
 import { Orb } from "./Orb";
@@ -34,7 +35,7 @@ const SAY: Record<"listen" | "think" | "speak" | "paused" | "hint" | "end" | "li
 };
 
 const SPEECH_ON = 0.09; // level that counts as talking
-const SILENCE_MS = 1100; // pause that ends her turn
+const SILENCE_MS = 900; // pause that ends her turn
 const MAX_TURN_MS = 20000;
 
 /** The black "Live" pill that starts a session. */
@@ -133,6 +134,22 @@ export function LiveMode() {
     }
   }, [voice, lang, setOrb]);
 
+  // barge-in: while Jagora speaks, talking over her (or tapping the orb) stops her and she listens at once
+  const interrupt = useCallback(() => {
+    hush();
+    setOrb("idle");
+  }, [setOrb]);
+  useEffect(() => {
+    if (!on || muted || phase !== "speak") return;
+    let stop = () => {};
+    let gone = false;
+    void watchForVoice(interrupt).then((s) => (gone ? s() : (stop = s)));
+    return () => {
+      gone = true;
+      stop();
+    };
+  }, [on, muted, phase, interrupt]);
+
   // start listening when live mode opens; listen again each time Jagora finishes speaking
   useEffect(() => {
     if (!on) return;
@@ -206,7 +223,13 @@ export function LiveMode() {
               <span className="rounded-full bg-white/70 px-3 py-1 text-[12.5px] font-semibold text-ink-2">{SAY.live[lang]}</span>
             </div>
             <div className="flex flex-1 flex-col items-center justify-center">
-              <motion.div animate={{ scale: phase === "listen" ? 1 : 0.94 }} transition={{ type: "spring", stiffness: 200, damping: 20 }}>
+              <motion.div
+                animate={{ scale: phase === "listen" ? 1 : 0.94 }}
+                transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                onClick={() => phase === "speak" && interrupt()}
+                className={phase === "speak" ? "cursor-pointer" : ""}
+                title={phase === "speak" ? "Tap to interrupt" : undefined}
+              >
                 <Orb size={260} state={phase === "speak" ? "speaking" : phase === "think" ? "thinking" : muted ? "idle" : "listening"} levelRef={level} />
               </motion.div>
               <p className="mt-2 text-[17px] font-semibold text-ink" aria-live="polite">

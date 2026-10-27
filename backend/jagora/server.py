@@ -7,7 +7,7 @@ WebSocket protocol (JSON), matching frontend/src/lib/engine/remote.ts:
                  {type:"answer", task, id, value}      {type:"secret", task, id, value}
                  {type:"audio", task, id?, data, lang?} her voice note or live turn (base64 webm/opus)
                  {type:"stop", task}
-  server -> app  {type:"task"|"msg"|"update"|"status"|"frame"|"pointer"|"highlight"|"orb"|"speech"|"url"|"account"|"error"}
+  server -> app  {type:"task"|"msg"|"update"|"status"|"frame"|"pointer"|"highlight"|"orb"|"pcm"|"speech_end"|"url"|"account"|"error"}
 Everything Jagora says is sent as text (a chat message) and, when speech is set up, as audio after it.
 """
 
@@ -38,6 +38,7 @@ from jagora.browser import Browser
 from jagora.config import FILES_DIR, INGESTED, PORTALS_DIR, settings
 from jagora.db import DB
 from jagora.guard import guard, registrable
+from jagora.push import Push
 from jagora.vault import Vault
 
 log = logging.getLogger("jagora.server")
@@ -49,6 +50,7 @@ YES = re.compile(r"^\s*(yes|yeah|yep|ok(ay)?|sure|go ahead|do it|correct|right|b
 NO = re.compile(r"^\s*(no|nope|don'?t|do not|stop|cancel|wait|rárá|rara|bẹ́ẹ̀ kọ́|a'a|aa|mba|ewo|no o|abeg no)\b", re.I)
 
 db = DB()
+push = Push(db)
 SESSIONS: dict[str, "Session"] = {}  # user id -> live session (one per signed-in user)
 
 
@@ -71,6 +73,10 @@ async def lifespan(app: FastAPI):
     if INGESTED:
         log.info("secrets.txt merged into .env: %s", ", ".join(INGESTED))  # names only
     await db.start()
+    try:
+        await push.start()
+    except Exception as e:  # noqa: BLE001
+        log.warning("push not started: %s", e)
     guard.load_cached()
     tasks = [asyncio.create_task(_lists_daily()), asyncio.create_task(_watch_loop()), asyncio.create_task(_reminder_loop()),
              asyncio.create_task(_job_loop())]
@@ -141,6 +147,31 @@ async def me(request: Request):
     if not acc:
         raise HTTPException(401)
     return acc
+
+
+@app.get("/push/key")
+async def push_key():
+    return {"key": push.public}
+
+
+@app.post("/push/subscribe")
+async def push_subscribe(request: Request):
+    uid = _user_from(request)
+    if not uid or uid.startswith("~"):
+        raise HTTPException(401)
+    body = await request.json()
+    if not await push.subscribe(uid, body.get("subscription") or {}):
+        raise HTTPException(400, "bad subscription")
+    await db.log(uid, "push", "notifications on")
+    return {"ok": True}
+
+
+@app.post("/push/unsubscribe")
+async def push_unsubscribe(request: Request):
+    if not _user_from(request):
+        raise HTTPException(401)
+    await push.unsubscribe(str((await request.json()).get("endpoint", "")))
+    return {"ok": True}
 
 
 @app.get("/chats")
@@ -229,6 +260,7 @@ class Session:
         self.doing = ""  # the request being worked on now
         self._send_lock = asyncio.Lock()
         self._speech_q: asyncio.Queue = asyncio.Queue()
+        self._gen = 0  # speech generation: a hush makes everything older silent
         self._speaker = asyncio.create_task(self._speak_loop())
         self._last_frame = 0.0
 
@@ -267,20 +299,32 @@ class Session:
     # ---- speech: queued so sentences never overlap ----------------------------------------------------------------
 
     async def _speak_loop(self) -> None:
+        """Her phone plays the PCM as it arrives. `hush` (she starts talking, or taps) bumps the generation, so the
+        sentence being spoken stops at once and nothing queued is said."""
         while True:
-            task, text, lang = await self._speech_q.get()
+            task, text, lang, gen = await self._speech_q.get()
+            if gen != self._gen:
+                continue
             try:
                 await self.send({"type": "orb", "state": "speaking"})
-                async for wav in speech.speak(text, lang):
-                    await self.send({"type": "speech", "task": task, "audio": base64.b64encode(wav).decode()})
+                utt = mid()
+                async for i, rate, pcm in speech.speak_stream(text, lang):
+                    if gen != self._gen:
+                        break
+                    await self.send({"type": "pcm", "task": task, "utt": utt, "n": i, "rate": rate, "data": base64.b64encode(pcm).decode()})
             except Exception as e:  # noqa: BLE001
                 log.warning("speech failed: %s", e)
-            if self._speech_q.empty():
+            if self._speech_q.empty() and gen == self._gen:
                 await self.send({"type": "speech_end", "task": task})
+
+    def hush(self) -> None:
+        self._gen += 1
+        while not self._speech_q.empty():
+            self._speech_q.get_nowait()
 
     def speak(self, task: str, text: str) -> None:
         if speech.enabled() and text.strip():
-            self._speech_q.put_nowait((task, text, self.lang))
+            self._speech_q.put_nowait((task, text, self.lang, self._gen))
 
     # ---- input from the app --------------------------------------------------------------------------------------
 
@@ -312,7 +356,11 @@ class Session:
             if self.browser:
                 await self.browser.set_translate(self.lang if self.translate else "")
         elif kind == "audio":
+            self.hush()  # she is talking: Jagora stops
             await self.on_audio(task, ev)
+        elif kind == "hush":
+            self.hush()
+            await self.send({"type": "speech_end", "task": task})
         elif kind == "input":
             await self.on_input(task, ev)
         elif kind == "takeover":
@@ -929,6 +977,7 @@ async def fire_reminders() -> None:
                 else:
                     await db.exec("insert into notices (id, user_id, t, chat_id, title, text, delivered) values (?,?,?,?,?,?,0)",
                                   (uuid.uuid4().hex[:12], r["user_id"], time.time(), r["chat_id"], head, text))
+                    await push.send(r["user_id"], head, r["text"], f"/app?chat={r['chat_id']}", tag=f"r-{r['id']}")
                 if r["repeat"] in REPEAT:
                     await db.exec("update reminders set at=? where id=?", (r["at"] + REPEAT[r["repeat"]], r["id"]))
                 elif r["repeat"] == "monthly":
@@ -1053,6 +1102,7 @@ async def run_job(job: dict, last_try: bool = True) -> bool:
     else:
         await db.exec("insert into notices (id, user_id, t, chat_id, title, text, delivered, payload) values (?,?,?,?,?,?,0,?)",
                       (uuid.uuid4().hex[:12], job["user_id"], time.time(), job["chat_id"], title, text, json.dumps(io.msgs, ensure_ascii=False)))
+        await push.send(job["user_id"], title, text, f"/app?chat={job['chat_id']}", tag=f"j-{job['id']}")
     return ok or bool(io.needs)
 
 

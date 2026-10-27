@@ -3,6 +3,7 @@
 /* Microphone capture for the orb and for sending her voice to the backend. Levels go into a ref (not React state)
    so the orb can follow the voice every frame without re-rendering the page. */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { hush } from "@/lib/engine/remote";
 
 export function useVoice() {
   const level = useRef(0);
@@ -29,6 +30,8 @@ export function useVoice() {
 
   const start = useCallback(async () => {
     setError(null);
+    if (parts.current) return;
+    hush(); // she is about to talk: Jagora stops
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
       const ctx = new AudioContext();
@@ -98,4 +101,45 @@ export function blobToDataUrl(b: Blob): Promise<string> {
     r.onerror = () => resolve("");
     r.readAsDataURL(b);
   });
+}
+
+/* Barge-in: while Jagora speaks, listen (with echo cancellation, so her own voice from the speaker is ignored) for
+   the person talking over her. A clear voice held for a moment calls onVoice once. Returns a stop function. */
+export async function watchForVoice(onVoice: () => void, { threshold = 0.2, holdMs = 220 } = {}): Promise<() => void> {
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  } catch {
+    return () => {};
+  }
+  const ctx = new AudioContext();
+  const an = ctx.createAnalyser();
+  an.fftSize = 512;
+  ctx.createMediaStreamSource(stream).connect(an);
+  const buf = new Uint8Array(an.fftSize);
+  let over = 0, last = performance.now(), raf = 0, done = false;
+  const stop = () => {
+    if (done) return;
+    done = true;
+    cancelAnimationFrame(raf);
+    stream.getTracks().forEach((t) => t.stop());
+    void ctx.close();
+  };
+  const tick = (now: number) => {
+    if (done) return;
+    an.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (const v of buf) sum += ((v - 128) / 128) ** 2;
+    const lvl = Math.min(1, Math.sqrt(sum / buf.length) * 5.5);
+    over = lvl > threshold ? over + (now - last) : Math.max(0, over - (now - last) * 2);
+    last = now;
+    if (over >= holdMs) {
+      stop();
+      onVoice();
+      return;
+    }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+  return stop;
 }

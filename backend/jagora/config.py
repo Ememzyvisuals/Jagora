@@ -124,6 +124,8 @@ class Settings:
     vault_key: str = field(default_factory=lambda: env("VAULT_KEY"))
     access_codes: tuple[str, ...] = field(default_factory=lambda: tuple(c.strip().upper() for c in env("ACCESS_CODES").split(",") if c.strip()))
     admin_code: str = field(default_factory=lambda: env("ADMIN_CODE").strip().upper())
+    vapid_private: str = field(default_factory=lambda: env("VAPID_PRIVATE"))  # optional; otherwise made once and kept in the database
+    push_contact: str = field(default_factory=lambda: env("PUSH_CONTACT", "info@plotweaver.app"))
     alert_webhook: str = field(default_factory=lambda: env("ALERT_WEBHOOK"))  # optional: Discord, Slack or any JSON webhook
     require_account: bool = field(default_factory=lambda: env("REQUIRE_ACCOUNT", "true").lower() != "false")
     credits_free: int = field(default_factory=lambda: env_int("CREDITS_FREE", 30))

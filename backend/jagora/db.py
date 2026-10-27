@@ -48,6 +48,8 @@ SCHEMA = [
     """create table if not exists notices (
          id text primary key, user_id text not null, t real not null, chat_id text not null, title text not null,
          text text not null, delivered integer not null default 0, payload text not null default '')""",
+    """create table if not exists kv (k text primary key, v text not null)""",
+    """create table if not exists push_subs (endpoint text primary key, user_id text not null, keys text not null, t real not null)""",
     """create table if not exists events (
          id integer primary key autoincrement, t real not null, user_id text not null, kind text not null,
          detail text not null default '')""",
