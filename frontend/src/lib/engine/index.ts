@@ -131,7 +131,7 @@ export function quick(kind: "scam" | "paper") {
 const pending = new Map<string, "scam" | "paper">();
 
 /** What she typed for a private field: show only a masked hint here, send the value on to the website. */
-export function giveSecret(taskId: string, msgId: string, value: string | null) {
+export function giveSecret(taskId: string, msgId: string, value: string | null, save = false) {
   const s = useApp.getState();
   if (value === null) {
     s.update(taskId, msgId, { status: "skipped" } as never);
@@ -143,7 +143,7 @@ export function giveSecret(taskId: string, msgId: string, value: string | null) 
   const shown = v.length > 6 ? `••••${v.slice(-4)}` : "••••";
   s.update(taskId, msgId, { status: "done", shown } as never);
   s.setStatus(taskId, "working");
-  if (live) void remoteSecret(taskId, msgId, v);
+  if (live) void remoteSecret(taskId, msgId, v, save);
   else demo.answer(msgId, v);
 }
 

@@ -157,13 +157,11 @@ export function hush() {
 function notify(ev: Record<string, unknown>) {
   const s = S();
   const task = ev.task as string;
-  if (!s.tasks.some((t) => t.id === task)) {
-    const id = s.newTask({ title: (ev.title as string) || "Update", kind: "browse", url: (ev.url as string) || "" });
-    s.closeTask(id);
-  }
-  s.push(task, { id: uid(), kind: "agent", text: ev.text as string });
+  s.ensureTask(task, (ev.title as string) || "Update");
+  if (ev.kind !== "job") s.push(task, { id: uid(), kind: "agent", text: ev.text as string });
+  s.setToast({ task, title: (ev.title as string) || "Jagora", text: ev.text as string });
   try {
-    if ("Notification" in window && Notification.permission === "granted") new Notification("Jagora", { body: ev.text as string });
+    if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") new Notification("Jagora", { body: ev.text as string });
   } catch {}
 }
 
@@ -193,13 +191,13 @@ export async function remoteStart(task: string, goal: string, attachment?: { kin
     return;
   }
   s.setOrb("thinking");
-  sock.send(JSON.stringify({ type: "start", task, goal, lang: s.lang, mode: s.mode, profile: s.profile, attachment, history: historyOf(task), device: device() }));
+  sock.send(JSON.stringify({ type: "start", task, goal, lang: s.lang, mode: s.mode, profile: s.profile, attachment, history: historyOf(task), device: device(), translate: wantsTranslation() }));
 }
 export async function remoteAnswer(task: string, id: string, value: string) {
   (await connect()).send(JSON.stringify({ type: "answer", task, id, value }));
 }
-export async function remoteSecret(task: string, id: string, value: string) {
-  (await connect()).send(JSON.stringify({ type: "secret", task, id, value }));
+export async function remoteSecret(task: string, id: string, value: string, save = false) {
+  (await connect()).send(JSON.stringify({ type: "secret", task, id, value, save }));
 }
 export async function remoteAudio(task: string, blob: Blob, id?: string) {
   const data = await new Promise<string>((r) => {
@@ -219,6 +217,12 @@ export async function remoteAudio(task: string, blob: Blob, id?: string) {
   st.setOrb("thinking");
   sock.send(JSON.stringify({ type: "audio", task, id, data, lang: st.lang, mode: st.mode, profile: st.profile, history: historyOf(task) }));
 }
+const wantsTranslation = () => S().translatePages && ["yo", "ha", "ig"].includes(S().lang);
+export async function remoteTranslate(on: boolean) {
+  S().setTranslatePages(on);
+  ws?.send(JSON.stringify({ type: "translate", on: on && ["yo", "ha", "ig"].includes(S().lang) }));
+}
+
 /** her screen, so Jagora's browser shows pages the way her device would (phone layout on a phone) */
 function device() {
   const mobile = matchMedia("(max-width: 767px)").matches || matchMedia("(pointer: coarse) and (max-width: 1024px)").matches;

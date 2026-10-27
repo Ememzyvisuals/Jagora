@@ -3,14 +3,14 @@
 import { CheckCircle, CircleNotch, Eye, EyeSlash, Hand, Image as ImageIcon, LinkSimple, Paperclip, ShieldCheck, WarningOctagon, XCircle } from "@phosphor-icons/react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { answer, giveSecret } from "@/lib/engine";
+import { answer, giveSecret, live } from "@/lib/engine";
 import { celebrate } from "./Effects";
 import { DocCard } from "./DocView";
 import type { Lang } from "@/lib/i18n";
 import { t } from "@/lib/i18n";
 import { useApp, type Msg, type Task } from "@/lib/store";
 import { IconLock, IconScam, IconShield } from "./icons";
-import { Evidence, FileCard, MomentCard, PlanCard, ReminderCard, VoiceBubble } from "./ChatCards";
+import { Evidence, FileCard, MediaCard, MomentCard, PlanCard, ReminderCard, ScheduledCard, VoiceBubble } from "./ChatCards";
 
 const enter = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as const } };
 
@@ -90,6 +90,10 @@ function Item({ m, task }: { m: Msg; task: Task }) {
       return <ReminderCard m={m} />;
     case "moment":
       return <MomentCard m={m} />;
+    case "media":
+      return <MediaCard m={m} />;
+    case "scheduled":
+      return <ScheduledCard m={m} />;
   }
 }
 
@@ -173,7 +177,21 @@ function Handoff({ m, task }: { m: Extract<Msg, { kind: "handoff" }>; task: Task
   );
 }
 
-const SECRET: Record<"why" | "fill" | "skip" | "filled" | "skipped", Record<Lang, string>> = {
+const SECRET: Record<"why" | "fill" | "skip" | "filled" | "skipped" | "keep" | "keepWhy", Record<Lang, string>> = {
+  keep: {
+    en: "Save it for {site}, so Jagora can sign in for me next time",
+    pcm: "Save am for {site}, make Jagora fit sign in for me next time",
+    yo: "Fi pamọ́ fún {site}, kí Jagora lè wọlé fún mi nígbà míì",
+    ha: "Adana shi don {site}, don Jagora ta iya shiga mini a gaba",
+    ig: "Chekwaa ya maka {site}, ka Jagora nwee ike ịbanye maka m ọzọ",
+  },
+  keepWhy: {
+    en: "Locked with encryption on Jagora's server and only ever typed on this one site.",
+    pcm: "E go dey locked for Jagora server, and na only this site e go ever type am.",
+    yo: "A tì í pa pẹ̀lú ìfipamọ́ lórí Jagora, a ò sì ní tẹ̀ ẹ́ sí ibòmíì ju ojú-òpó yìí lọ.",
+    ha: "An kulle shi a sabar Jagora, kuma ana rubuta shi a wannan shafin kawai.",
+    ig: "Ekpochiri ya na sava Jagora, a ga-apịnye ya naanị na saịtị a.",
+  },
   why: {
     en: "Only you see this. Jagora types it straight into the website and never says it aloud.",
     pcm: "Na only you dey see am. Jagora go type am enter the website, e no go talk am out.",
@@ -193,8 +211,12 @@ function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Tas
   const lang = useApp((s) => s.lang);
   const [v, setV] = useState("");
   const [see, setSee] = useState(false);
+  const [keep, setKeep] = useState(false);
   const box = useRef<HTMLInputElement>(null);
   const waiting = m.status === "waiting";
+  const site = task.url ? task.url.replace(/^https?:\/\/(www\.)?/, "").split("/")[0] : "";
+  // one-time codes change every time: nothing to save
+  const canKeep = live && !!site && m.field !== "otp";
   const isLast = task.messages.at(-1)?.id === m.id;
   useEffect(() => {
     if (waiting && isLast) {
@@ -207,7 +229,7 @@ function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Tas
   const ok = m.digits ? clean.length === m.digits : clean.trim().length > 0;
   const send = () => {
     if (!ok) return;
-    giveSecret(task.id, m.id, clean);
+    giveSecret(task.id, m.id, clean, keep && canKeep);
     setV("");
   };
 
@@ -251,6 +273,15 @@ function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Tas
           {see ? <EyeSlash size={17} /> : <Eye size={17} />}
         </button>
       </div>
+      {canKeep && (
+        <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-[13.5px] leading-snug text-ink-2">
+          <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-accent)]" />
+          <span>
+            {SECRET.keep[lang].replace("{site}", site)}
+            <span className="block text-[12px] text-ink-3">{SECRET.keepWhy[lang]}</span>
+          </span>
+        </label>
+      )}
       <div className="mt-3 flex items-center gap-2">
         <button type="submit" disabled={!ok} className="btn btn-ink h-11 flex-1 text-[15px] disabled:opacity-40">
           {SECRET.fill[lang]}

@@ -50,6 +50,10 @@ export type Msg =
   | { id: string; kind: "plan"; steps: { text: string; status: "todo" | "doing" | "done" | "skipped" }[] }
   | { id: string; kind: "reminder"; at: number; text: string; repeat: string }
   | { id: string; kind: "moment"; title: string; tags: string[]; note: string; url: string }
+  /** a song, voice note or video from a website, played here (Jagora's live view has no sound) */
+  | { id: string; kind: "media"; name: string; url: string; type: string; size: number; source?: string }
+  /** a task Jagora will do on its own later */
+  | { id: string; kind: "scheduled"; at: number; goal: string; allow: string[]; repeat: string }
   | { id: string; kind: "result"; title: string; reference?: string; lines: [string, string][] };
 
 export type TaskStatus = "working" | "waiting" | "done" | "stopped";
@@ -82,6 +86,14 @@ type State = {
   starters: { guide: string[]; do: string[] };
   /** Jagora's voice off: she still gets every word as text */
   muted: boolean;
+  /** show websites' main content in her language (Yoruba, Hausa, Igbo) */
+  translatePages: boolean;
+  setTranslatePages: (v: boolean) => void;
+  /** a chat with this id (one that started on the server: a finished scheduled task, a reminder) */
+  ensureTask: (id: string, title: string) => void;
+  /** a short banner: something finished while she was away */
+  toast: { task: string; title: string; text: string } | null;
+  setToast: (t: { task: string; title: string; text: string } | null) => void;
   // live, not saved
   sheetOpen: boolean;
   live: boolean;
@@ -143,6 +155,12 @@ export const useApp = create<State>()(
       visits: {},
       starters: { guide: ["", "", ""], do: ["", "", ""] },
       muted: false,
+      translatePages: true,
+      setTranslatePages: (translatePages) => set({ translatePages }),
+      ensureTask: (id, title) =>
+        set((s) => (s.tasks.some((t) => t.id === id) ? {} : { tasks: [{ id, title, kind: "chat" as const, url: "", status: "done" as TaskStatus, createdAt: Date.now(), messages: [] }, ...s.tasks].slice(0, 30) })),
+      toast: null,
+      setToast: (toast) => set({ toast }),
       sheetOpen: false,
       live: false,
       showPage: false,
@@ -204,7 +222,7 @@ export const useApp = create<State>()(
           return sessionStorage;
         }
       }),
-      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, starters: s.starters, muted: s.muted }),
+      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, starters: s.starters, muted: s.muted, translatePages: s.translatePages }),
     },
   ),
 );

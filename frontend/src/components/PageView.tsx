@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { activeTask, useApp } from "@/lib/store";
 import { registerFrame } from "@/lib/engine/frame";
 import { live } from "@/lib/engine";
-import { onRemoteFrame, remoteInput, remoteTakeover } from "@/lib/engine/remote";
+import { onRemoteFrame, remoteInput, remoteTakeover, remoteTranslate } from "@/lib/engine/remote";
 
 export function Cursor({ x, y, visible, clicking }: { x: number; y: number; visible: boolean; clicking: boolean }) {
   return (
@@ -81,6 +81,7 @@ export function PageView({ compact = false, bar = true, onClose }: { compact?: b
           <span className="truncate">{host || "Ready"}</span>
           {task?.status === "working" && <span className="ml-auto h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" />}
         </div>
+        {live && task && <TranslateButton />}
         {live && task && <TakeOverButton taskId={task.id} on={takeover} />}
         {onClose && (
           <button onClick={onClose} className="btn btn-glass h-10 w-10 shrink-0" aria-label="Close page">
@@ -110,6 +111,23 @@ export function PageView({ compact = false, bar = true, onClose }: { compact?: b
         <AgentGlow />
       </div>
     </div>
+  );
+}
+
+const LANG_NAME: Record<string, string> = { yo: "Yorùbá", ha: "Hausa", ig: "Igbo" };
+/** the page in her language, or as published */
+export function TranslateButton({ small = false }: { small?: boolean }) {
+  const lang = useApp((s) => s.lang);
+  const on = useApp((s) => s.translatePages);
+  if (!LANG_NAME[lang]) return null;
+  return (
+    <button
+      onClick={() => void remoteTranslate(!on)}
+      title={on ? "Show the page as published" : `Show the page in ${LANG_NAME[lang]}`}
+      className={`shrink-0 rounded-full font-semibold transition active:scale-95 ${small ? "-mr-1 h-7 px-3 text-[12.5px]" : "h-10 px-3.5 text-[13.5px]"} ${on ? "bg-ink text-paper" : small ? "bg-white/80 text-ink" : "glass-2 text-ink"}`}
+    >
+      {on ? LANG_NAME[lang] : "Original"}
+    </button>
   );
 }
 

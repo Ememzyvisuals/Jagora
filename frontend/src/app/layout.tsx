@@ -1,3 +1,4 @@
+import { Toast } from "@/components/Toast";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Pwa } from "@/components/Pwa";
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="min-h-dvh antialiased">
         <Pwa />
         <Effects />
+        <Toast />
         <PageWars />
         {children}
       </body>

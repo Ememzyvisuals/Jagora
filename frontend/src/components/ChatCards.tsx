@@ -247,3 +247,36 @@ export function MomentCard({ m }: { m: Extract<Msg, { kind: "moment" }> }) {
     </div>
   );
 }
+
+/** a song, voice note or video from a website, playing here */
+export function MediaCard({ m }: { m: Extract<Msg, { kind: "media" }> }) {
+  const video = m.type.startsWith("video") || /\.(mp4|webm|mov)$/i.test(m.name);
+  return (
+    <div className="overflow-hidden rounded-[20px] bg-white p-3 shadow-[0_10px_30px_-18px_rgba(10,30,70,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
+      <p className="mb-2 truncate px-1 text-[14.5px] font-semibold text-ink">{m.name}</p>
+      {video ? (
+        <video src={m.url} controls autoPlay playsInline className="w-full rounded-[14px] bg-black" />
+      ) : (
+        <audio src={m.url} controls autoPlay className="w-full" />
+      )}
+      {m.source && <p className="mt-1.5 truncate px-1 text-[12px] text-ink-3">{new URL(m.source).hostname.replace(/^www\./, "")}</p>}
+    </div>
+  );
+}
+
+const LATER: L = { en: "Jagora will do this on its own", pcm: "Jagora go do am by itself", yo: "Jagora á ṣe èyí fúnra rẹ̀", ha: "Jagora za ta yi wannan da kanta", ig: "Jagora ga-eme nke a n'onwe ya" };
+const MAY: L = { en: "Allowed without asking on", pcm: "E fit submit without asking for", yo: "Ó lè fi ránṣẹ́ láì béèrè lórí", ha: "Za ta iya aikawa ba tare da tambaya ba a", ig: "O nwere ike ịzipu na-ajụghị na" };
+
+/** a task Jagora will do later by itself */
+export function ScheduledCard({ m }: { m: Extract<Msg, { kind: "scheduled" }> }) {
+  const lang = useApp((s) => s.lang);
+  const when = new Date(m.at).toLocaleString(LOCALE[lang], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return (
+    <div className="rounded-[20px] bg-ink p-4 text-paper shadow-[0_14px_34px_-20px_rgba(10,30,70,.7)]">
+      <p className="text-[12.5px] font-semibold text-paper/70">{LATER[lang]}</p>
+      <p className="mt-0.5 text-[20px] leading-tight">{when}</p>
+      <p className="mt-1.5 line-clamp-3 text-[14.5px] leading-snug text-paper/90">{m.goal}</p>
+      {m.allow?.length > 0 && <p className="mt-2 text-[12.5px] text-paper/70">{MAY[lang]} {m.allow.join(", ")}</p>}
+    </div>
+  );
+}

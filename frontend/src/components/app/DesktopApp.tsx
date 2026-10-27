@@ -30,6 +30,7 @@ import { hush, remoteTakeover } from "@/lib/engine/remote";
 import { fly } from "../Effects";
 import { setAutoFullscreen, toggleFullscreen, useAutoFullscreen } from "../Pwa";
 import { Starters, openSite, useTopSites } from "./NewTabBits";
+import { TranslateButton } from "../PageView";
 import { startPageWars } from "../PageWars";
 import { motion } from "motion/react";
 import Link from "next/link";
@@ -188,6 +189,7 @@ export function DesktopApp() {
               <LockSimple size={14} weight="bold" className="text-ok" />
               <span className="truncate">{url}</span>
               <span className="ml-auto shrink-0 text-[12px] font-medium text-ink-3">{task?.status === "working" ? "Jagora is browsing" : ""}</span>
+              {live && task && <TranslateButton small />}
               {live && task && <TakeOver taskId={task.id} />}
             </div>
           </div>
