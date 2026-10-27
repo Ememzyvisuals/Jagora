@@ -1,6 +1,8 @@
 # Runs beside Speech Studio without touching it: own container, no published ports, reached through Caddy on the
 # shared network. Secrets live in ./.env, made on the host from secrets.txt by `python3 -m jagora.config`
 # (which also deletes secrets.txt); data in ./data.
+# Own project name: this folder is also called backend, like Speech Studio's, and must never share its project.
+name: jagora
 services:
   jagora-agent:
     build: .
