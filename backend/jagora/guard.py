@@ -34,9 +34,9 @@ LISTS_DIR = DATA_DIR / "blocklists"
 FEEDS = {
     "adult": ["https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn-only/hosts"],
     "gambling": ["https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-only/hosts",
-                 "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/gambling.txt"],
-    "piracy": ["https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/anti.piracy.txt"],
-    "scam": ["https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/fake.txt"],
+                 "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/gambling-onlydomains.txt"],
+    "piracy": ["https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/anti.piracy-onlydomains.txt"],
+    "scam": ["https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/fake-onlydomains.txt"],
     "malicious": ["https://urlhaus.abuse.ch/downloads/hostfile/",
                   "https://raw.githubusercontent.com/mitchellkrogza/Phishing.Database/master/phishing-domains-ACTIVE.txt"],
     "ads": ["https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"],
@@ -267,7 +267,7 @@ class Guard:
 
     def load_cached(self) -> None:
         for cat in FEEDS:
-            f = LISTS_DIR / f"{cat}.txt"
+            f = LISTS_DIR / f"{cat}-{_sig(cat)}.txt"
             if f.exists():
                 self.lists[cat] |= set(f.read_text().split())
         self.loaded_at = time.time()
@@ -279,7 +279,7 @@ class Guard:
         LISTS_DIR.mkdir(parents=True, exist_ok=True)
         async with httpx.AsyncClient(timeout=60, follow_redirects=True) as c:
             for cat, urls in FEEDS.items():
-                f = LISTS_DIR / f"{cat}.txt"
+                f = LISTS_DIR / f"{cat}-{_sig(cat)}.txt"
                 if f.exists() and time.time() - f.stat().st_mtime < 86400:
                     continue
                 found: set[str] = set()
@@ -378,6 +378,13 @@ class Guard:
             if s >= 1 and (w >= 1 or not weak) or w >= 3 or (s >= 1 and cat != "gambling"):
                 return SiteVerdict(site, cat, reason=reason)
         return None
+
+
+def _sig(cat: str) -> str:
+    """Cache file name changes when a category's sources change, so new sources are fetched at once."""
+    import hashlib
+
+    return hashlib.sha1("|".join(FEEDS.get(cat, [])).encode()).hexdigest()[:8]
 
 
 def parse_list(text: str) -> set[str]:
