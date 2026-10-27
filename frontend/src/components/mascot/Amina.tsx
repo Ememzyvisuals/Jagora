@@ -138,8 +138,9 @@ function Stage() {
     let tapHint = false;
     let unlocked = false;
     const fetchClip = (lang: string) => {
+      // the address carries the line itself, so when a line changes the browser can't replay an old recording
       if (!files.has(lang))
-        files.set(lang, fetch(`${API}/voice/hello/${lang}`).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null));
+        files.set(lang, fetch(`${API}/voice/hello/${lang}?line=${encodeURIComponent(document.querySelector<HTMLElement>(`[data-amina-lang="${lang}"]`)?.dataset.aminaSay ?? "")}`).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null));
       return files.get(lang)!;
     };
     const sayAloud = async (lang: string) => {

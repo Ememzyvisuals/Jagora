@@ -226,7 +226,7 @@ HELLO = {  # exactly the lines shown in the languages section of the landing pag
 
 
 @app.get("/voice/hello/{lang}")
-async def voice_hello(lang: str):
+async def voice_hello(lang: str, line: str = ""):
     """Jagora's own STORM voice saying hello, as a small MP3, made once and then served from disk."""
     if lang not in HELLO or not speech.enabled():
         raise HTTPException(404, "no such line")
@@ -254,7 +254,9 @@ async def voice_hello(lang: str):
             raise HTTPException(503, "voice not available")
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_bytes(mp3)
-    return FileResponse(out, media_type="audio/mpeg", headers={"Cache-Control": "public, max-age=604800"})
+    # the page sends the line it shows; only an exact match may be kept by the browser
+    keep = "public, max-age=604800, immutable" if line == HELLO[lang] else "no-store"
+    return FileResponse(out, media_type="audio/mpeg", headers={"Cache-Control": keep})
 
 
 @app.get("/push/key")

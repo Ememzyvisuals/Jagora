@@ -118,3 +118,8 @@ def test_amina_hello_voice_is_a_small_mp3(monkeypatch, tmp_path):
     assert r.content[:3] == b"ID3" or r.content[0] == 0xFF  # an MP3
     assert len(r.content) < 20_000  # about a second of voice in a few KB
     assert c.get("/voice/hello/anything-else").status_code == 404
+    # the browser may keep the recording only when the page asked for the exact line it shows
+    assert r.headers["cache-control"] == "no-store"
+    same = c.get("/voice/hello/yo", params={"line": server.HELLO["yo"]})
+    assert "immutable" in same.headers["cache-control"]
+    assert c.get("/voice/hello/yo", params={"line": "an old line"}).headers["cache-control"] == "no-store"
