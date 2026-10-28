@@ -127,8 +127,8 @@ body {
   --sky: url(/sky/sky-phone.webp);
   --sky-fill: #2fa3ea;
 }
-/* computers and tablets: the same skies, made three times sharper (AI upscale), so they stay crisp on a wide screen */
-@media (min-width: 900px) {
+/* computers and tablets: the wide versions of the skies */
+@media (orientation: landscape) and (min-width: 700px) {
   :root {
     --sky: url(/sky/sky-desktop.webp);
   }
@@ -137,7 +137,7 @@ body {
   --sky: url(/sky/night-phone.webp);
   --sky-fill: #1d5f99;
 }
-@media (min-width: 900px) {
+@media (orientation: landscape) and (min-width: 700px) {
   [data-theme="dark"] {
     --sky: url(/sky/night-desktop.webp);
   }
@@ -621,7 +621,7 @@ h3,
    with a plain frosted blur where url() filters are not supported (Safari, iOS). */
 .liquid-glass {
   position: relative;
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.3);
   -webkit-backdrop-filter: blur(16px) saturate(160%);
   backdrop-filter: url(#liquid-glass-distortion) blur(2px) saturate(160%);
   border: 1px solid rgba(13, 13, 13, 0.1);
@@ -631,7 +631,7 @@ h3,
     0 10px 40px -12px rgba(13, 13, 13, 0.18);
 }
 [data-theme="dark"] .liquid-glass {
-  background: rgba(13, 13, 13, 0.45);
+  background: rgba(13, 13, 13, 0.36);
   border-color: rgba(245, 245, 245, 0.1);
   box-shadow:
     inset 0 1px 0 rgba(245, 245, 245, 0.08),
@@ -641,7 +641,7 @@ h3,
 
 /* the glass wordmark (components/glass/GlassWordmark.tsx): the portfolio's liquid glass, shaped like letters */
 .glass-word-body {
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.22);
   -webkit-backdrop-filter: blur(14px) saturate(175%) brightness(1.08);
   backdrop-filter: url(#liquid-glass-distortion) blur(3px) saturate(175%) brightness(1.08);
 }

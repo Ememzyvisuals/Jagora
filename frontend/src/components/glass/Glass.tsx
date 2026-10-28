@@ -104,7 +104,7 @@ export type GlassProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 export const Glass = forwardRef<HTMLDivElement, GlassProps>(function Glass(
-  { radius = 28, bezel = 22, refraction = 60, blur = 9, dispersion = 0.14, tint = "rgba(255,255,255,0.18)", frost = 0.16, flat = false, interactive = true, pressable = false, lens, lensTint = 0.06, overContent = false, className = "", style, children, ...rest },
+  { radius = 28, bezel = 22, refraction = 42, blur = 9, dispersion = 0.14, tint = "rgba(255,255,255,0.14)", frost = 0.13, flat = false, interactive = true, pressable = false, lens, lensTint = 0.06, overContent = false, className = "", style, children, ...rest },
   outer,
 ) {
   const el = useRef<HTMLDivElement>(null);
