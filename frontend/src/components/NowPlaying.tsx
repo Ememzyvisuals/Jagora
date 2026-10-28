@@ -45,7 +45,7 @@ export function NowPlaying() {
                 <audio src={m.url} controls autoPlay className="w-full" />
               </div>
             )}
-            {m.source && <p className="mt-2 truncate text-[12.5px] text-white/70">{new URL(m.source).hostname.replace(/^www\./, "")}</p>}
+            {m.source && <p className="mt-2 truncate text-[12.5px] text-white/70">{new URL(m.source, "https://x.invalid").hostname.replace(/^www\./, "")}</p>}
           </div>
         </motion.div>
       )}

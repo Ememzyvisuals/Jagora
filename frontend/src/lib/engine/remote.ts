@@ -246,7 +246,8 @@ function handle(ev: Record<string, unknown>) {
     }
     case "status":
       s.setStatus(task, ev.status as never);
-      if (ev.status !== "working" && s.orb === "working") s.setOrb("idle"); // the task ended: the orb rests
+      // the task ended: the orb rests (also from "thinking", e.g. when the end arrived while she was away)
+      if (ev.status !== "working" && (s.orb === "working" || s.orb === "thinking") && !isSpeaking()) s.setOrb("idle");
       break;
     case "url":
       s.setUrl(task, ev.url as string);
@@ -294,6 +295,18 @@ function handle(ev: Record<string, unknown>) {
       break;
     case "error":
       if (ev.error === "signin" && typeof window !== "undefined") window.location.href = "/start";
+      if (ev.error === "busy") {
+        // the server is full right now: say so in her chat instead of spinning
+        const t = s.tasks.find((x) => x.id === s.activeId) ?? s.tasks.find((x) => x.status === "working");
+        if (t) {
+          s.push(t.id, { id: uid(), kind: "agent", text: (ev.message as string) || "Jagora is very busy right now. Please try again in a minute." });
+          s.setStatus(t.id, "stopped");
+        }
+        if (s.orb !== "idle") s.setOrb("idle");
+      }
+      break;
+    case "voice": // Jagora's voice on LiveKit joined or left
+      if (!ev.on) clientLog("voice_worker_left");
       break;
   }
 }

@@ -208,7 +208,8 @@ def wrap_soon(turns: int, max_turns: int) -> bool:
 CHANGE_TOOLS = {"click", "type_text", "choose", "set_checkbox", "press_key", "hover", "double_click", "right_click", "drag",
                 "click_at", "upload_file", "set_date", "go_back", "fill_form"}
 
-FILL_TOOLS = {"type_text", "choose", "set_checkbox", "upload_file", "set_date", "fill_form", "drag", "use_saved_login"}
+FILL_TOOLS = {"type_text", "choose", "set_checkbox", "upload_file", "set_date", "fill_form", "drag", "use_saved_login",
+              "ask_private", "hand_over"}
 
 COMMON = [
     tool("tell_user", "Say something to them, in their language: what you found, what you are doing, or what the page says. "
@@ -552,6 +553,7 @@ class Agent:
     _want_look: bool = False  # the model asked to see the page as a picture next step
     _last_fp_same: bool = False  # the last action left the page exactly as it was
     _changed_any: bool = False
+    _heard_all: list = field(default_factory=list)  # everything she said during the task
     _goal: str = ""
     _fails: int = 0
     _terms: dict = field(default_factory=dict)  # site -> review, or "busy" / "none"
@@ -610,6 +612,7 @@ class Agent:
             if self.pause_gate:
                 await self.pause_gate()  # the user has taken over the page: wait until the user hands it back
             new = self._drain_steering()
+            self._heard_all += new
             for h in new:
                 self._flow.heard(h)
             heard += new
@@ -764,11 +767,14 @@ class Agent:
         return bool(self.VISUAL.search(self._goal))
 
     def _lean(self, base: list[dict], snap: Snapshot | None) -> list[dict]:
-        said = " ".join([self._goal] + [m.get("text", "") for m in self.conversation[-4:] if m.get("role") == "user"]).lower()
+        # her words and Jagora's last offer ("shall I remind you?" then her "yes") both count
+        said = " ".join([self._goal] + [m.get("text", "") for m in self.conversation[-4:]] + self._heard_all[-4:]).lower()
         drop: set[str] = set()
-        for names, rx in self.LEAN:
-            if not re.search(rx, said):
-                drop.update(names)
+        if getattr(self, "lang", "en") in ("en", "pcm"):
+            # the keyword lists are English (and Pidgin, close to it); in Yorùbá, Hausa and Igbo every tool stays
+            for names, rx in self.LEAN:
+                if not re.search(rx, said):
+                    drop.update(names)
         els = snap.elements if snap else []
         boxes = [e for e in els if e.kind == "text box"]
         if not any(e.kind == "file picker" for e in els) and not self.files:

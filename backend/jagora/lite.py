@@ -29,7 +29,7 @@ SCREENCAST = {
     "vlite": {"format": "jpeg", "quality": 75, "maxWidth": 412, "maxHeight": 900},
 }
 FRAME_GAP = {"full": 0.08, "lite": 0.5}  # photos: at most ~12 a second, or 2 in data saver
-VIDEO_GAP = {"full": 1 / 8, "lite": 1 / 5}  # video frames: at most 8 a second, or 5 in data saver (a one-core budget)
+VIDEO_GAP = {"full": 1 / 10, "lite": 1 / 5}  # video frames: at most 8 a second, or 5 in data saver (a one-core budget)
 
 STEPS = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97,
          107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796,

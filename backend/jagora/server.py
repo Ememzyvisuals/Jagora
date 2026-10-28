@@ -20,6 +20,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import re
 import secrets
 import time
@@ -425,7 +426,13 @@ async def voice_link(ws: WebSocket):
         return
     await ws.accept()
     s = SESSIONS.get(uid)
+    for _ in range(16):  # her app may still be connecting: wait a few seconds for her session
+        if s is not None:
+            break
+        await asyncio.sleep(0.5)
+        s = SESSIONS.get(uid)
     if s is None:
+        trace.write(uid, "voice_link_refused", note="no session for her when the voice joined")
         await ws.close(code=4404)
         return
     s.attach_voice(ws)
@@ -491,6 +498,10 @@ def is_stop(text: str) -> bool:
     plain = "".join(c for c in unicodedata.normalize("NFD", text or "") if not unicodedata.combining(c))
     return len(plain.split()) <= 6 and bool(STOP_RE.search(plain))
 
+
+# her voice message ends when no new words come for this long (people pause mid-thought, more so in Yorùbá, Hausa
+# and Igbo, where the speech recogniser also needs the whole sentence)
+TURN_GAP = float(os.environ.get("VOICE_TURN_GAP", "1.6"))
 
 # "are you there?" / "I'm not hearing you": a short answer at once, and the work goes on (it is not a new request)
 CHECKIN = re.compile(r"\b(are you (there|still there|hearing me|with me)|(i'?m|i am) not hearing|i no dey hear|you dey there|"
@@ -591,6 +602,10 @@ class Session:
         ws = self.ws
         if ws is self._dead_ws or self._send_lock.locked():
             self.stream["dropped_busy_line"] += 1
+            if data[:1] in (b"\x02", b"\x03"):
+                # a video frame lost: the next frames would smear without it, so the next one is a fresh keyframe
+                self._video_key = True
+                self._video_kick.set()
             return
         async with self._send_lock:
             try:
@@ -653,6 +668,7 @@ class Session:
             await self.close()
 
     async def close(self) -> None:
+        await self._to_voice({"type": "bye"})  # the voice worker leaves too, instead of talking into a closed session
         for r in self.runs.values():
             if r.busy:
                 r.job.cancel()
@@ -875,7 +891,7 @@ class Session:
         """She said stop: Jagora goes quiet on her phone at once and the task stops."""
         self.hush()
         self._unsaid = None
-        self._hearing = ""
+        self._reset_turn()
         r = self.runs.get(task)
         if r and r.busy and r.job:
             r.job.cancel()
@@ -1106,7 +1122,7 @@ class Session:
 
     def attach_voice(self, ws: WebSocket) -> None:
         self.voice_ws = ws
-        self._hearing = ""  # a new call: her words start a new bubble in the chat she has open now
+        self._reset_turn()  # a new call: her words start a new bubble in the chat she has open now
         log.info("voice on LiveKit for %s", self.user_id[:8])
         asyncio.create_task(self._to_voice({"type": "lang", "lang": self.lang}))
         asyncio.create_task(self.send({"type": "voice", "on": True}))
@@ -1129,6 +1145,9 @@ class Session:
             return False
 
     async def on_voice(self, ev: dict) -> None:
+        """Her voice on LiveKit. What she says is gathered into ONE message: pieces the voice sends at each pause are
+        joined, and Jagora answers only when she has really finished (no new words for TURN_GAP seconds), so a
+        thought said with pauses gets one answer, not one per piece."""
         kind = ev.get("type")
         trace.write(self.user_id, "voice_" + str(kind), **{k: v for k, v in ev.items() if k != "type"})
         task = self.active_task
@@ -1139,44 +1158,22 @@ class Session:
             if (self._speaking or self.voice_speaking) and is_stop(text):
                 await self.silence(task)  # "stop" while Jagora talks: quiet at once
                 return
+            self._wait_more()  # she is still talking
             self._partial = text
-            if self._commit:
-                self._commit.cancel()  # still talking: not finished yet
-                self._commit = None
-            if not self._hearing or self._hearing_task != task:
-                # a new bubble (also when she has moved to another chat, or the last call ended mid-sentence)
-                self._hearing, self._hearing_task = mid(), task
-                await self.send({"type": "msg", "task": task, "msg": {"id": self._hearing, "kind": "user", "text": text, "voice": True}})
-            else:
-                await self.send({"type": "update", "task": task, "id": self._hearing, "patch": {"text": text}})
+            await self._show_turn(task)
         elif kind == "words":
             text = str(ev.get("text") or "").strip()
-            if self._commit:
-                self._commit.cancel()
-                self._commit = None
-            self._partial = ""
-            if text and self._committed and time.time() - self._committed[1] < 20 and not ev.get("_from_partial"):
-                import difflib
-
-                was = self._committed[0]
-                self._committed = None
-                same = difflib.SequenceMatcher(None, was.lower(), text.lower()).ratio() > 0.75
-                if same and len(text.split()) <= len(was.split()) + 3:
-                    trace.write(self.user_id, "voice_turn_already_answered", text=text)
-                    return  # already answered from the words shown (see "user" below)
-            msg_id = self._hearing if self._hearing and self._hearing_task == task else None
-            self._hearing = ""
-            if task and text and is_noise(text) and not is_stop(text):
-                # a scrap the room made (a word from the TV, a cough heard as a word): not her, so nothing happens
-                log.info("voice: ignored a scrap: %r", text[:40])
-                if msg_id:
-                    await self.send({"type": "drop", "task": task, "id": msg_id})
+            if not task or not text:
                 return
-            if task and text:
-                # she has said more: anything Jagora had not said yet is out of date, so it is dropped and the
-                # answer covers everything she said
-                self.hush()
-                await self.heard(task, msg_id, text, self.lang, None)
+            if is_stop(text):
+                self._reset_turn()
+                await self.silence(task)
+                return
+            self._wait_more()
+            self._turn.append(text)
+            self._partial = ""
+            await self._show_turn(task)
+            self._flush_later(task, TURN_GAP)
         elif kind == "state":
             state = str(ev.get("agent") or "")
             self.voice_speaking = state == "speaking"
@@ -1191,30 +1188,74 @@ class Session:
             r = self.runs.get(task)
             self.speak(task, (HERE if r and r.busy else HERE_IDLE).get(self.lang, HERE["en"]))
         elif kind == "user" and ev.get("state") == "speaking":
+            self._wait_more()  # she started again: her next words join this message
             await self.send({"type": "orb", "state": "listening"})
-        elif kind == "user" and ev.get("state") in ("listening", "away") and self._partial and task:
-            # she stopped talking and her words are already showing: if the voice does not end her turn within a
-            # moment (sometimes it waits for her next words), Jagora answers what is showing
-            if self._commit:
-                self._commit.cancel()
-            self._commit = asyncio.create_task(self._commit_partial(task))
+        elif kind == "user" and ev.get("state") in ("listening", "away") and task and (self._partial or self._turn):
+            # she stopped. If the voice never ends her turn (sometimes it waits for more words), what is showing is
+            # answered after a longer moment
+            self._flush_later(task, TURN_GAP if not self._partial else TURN_GAP + 1.4)
 
     voice_speaking = False
     _hearing_task = ""
-    _partial = ""  # the latest words the voice showed while she spoke
-    _commit: asyncio.Task | None = None
-    _committed: tuple[str, float] | None = None  # words answered without waiting for the voice's own turn end
+    _partial = ""  # words showing now, not yet ended by the voice
+    _flush: asyncio.Task | None = None
 
-    async def _commit_partial(self, task: str, wait: float = 1.8) -> None:
-        await asyncio.sleep(wait)
-        text, self._partial = self._partial, ""
-        self._commit = None
+    @property
+    def _turn(self) -> list[str]:
+        if not hasattr(self, "_turn_parts"):
+            self._turn_parts: list[str] = []
+        return self._turn_parts
+
+    def _wait_more(self) -> None:
+        if self._flush:
+            self._flush.cancel()
+            self._flush = None
+
+    def _reset_turn(self) -> None:
+        self._wait_more()
+        self._turn.clear()
+        self._partial = ""
+        self._hearing = ""
+
+    async def _show_turn(self, task: str) -> None:
+        """One chat bubble for the whole message as it grows."""
+        text = " ".join(self._turn + ([self._partial] if self._partial else []))
+        if not self._hearing or self._hearing_task != task:
+            self._hearing, self._hearing_task = mid(), task
+            await self.send({"type": "msg", "task": task, "msg": {"id": self._hearing, "kind": "user", "text": text, "voice": True}})
+        else:
+            await self.send({"type": "update", "task": task, "id": self._hearing, "patch": {"text": text}})
+
+    def _flush_later(self, task: str, wait: float) -> None:
+        self._wait_more()
+        self._flush = asyncio.create_task(self._flush_turn(task, wait))
+
+    async def _flush_turn(self, task: str, wait: float) -> None:
+        try:
+            await asyncio.sleep(wait)
+        except asyncio.CancelledError:
+            return
+        self._flush = None
+        text = " ".join(self._turn + ([self._partial] if self._partial else [])).strip()
+        from_partial = bool(self._partial)
+        msg_id = self._hearing if self._hearing and self._hearing_task == task else None
+        self._turn.clear()
+        self._partial = ""
+        self._hearing = ""
         if not text:
             return
-        trace.write(self.user_id, "voice_turn_from_partial", text=text, note="the voice had not ended her turn")
-        self._committed = None
-        await self.on_voice({"type": "words", "text": text, "_from_partial": True})
-        self._committed = (text, time.time())
+        trace.write(self.user_id, "voice_message", text=text, from_partial=from_partial)
+        if is_noise(text):
+            # a scrap the room made (a word from the TV, a cough heard as a word): not her, so nothing happens
+            log.info("voice: ignored a scrap: %r", text[:40])
+            if msg_id:
+                await self.send({"type": "drop", "task": task, "id": msg_id})
+            await self.settle(task)
+            return
+        # she has said more: anything Jagora had not said yet is out of date, so it is dropped and the answer covers
+        # everything she said
+        self.hush()
+        await self.heard(task, msg_id, text, self.lang, None)
 
     async def on_binary(self, data: bytes) -> None:
         """Binary messages from her app: none are used now (her live voice goes through LiveKit)."""
@@ -1234,6 +1275,15 @@ class Session:
             text = ""
         await self.heard(task, msg_id, text, lang, ev.get("history"))
 
+    async def settle(self, task: str) -> None:
+        """Nothing new was started for her words: her app must not stay on "working" (the client marks a chat
+        working as soon as she sends something)."""
+        r = self.runs.get(task)
+        if not (r and r.busy):
+            await self.send({"type": "status", "task": task, "status": "done"})
+            if self._speech_q.empty() and not self._speaking:
+                await self.send({"type": "orb", "state": "idle"})
+
     async def heard(self, task: str, msg_id, text: str, lang: str, history) -> None:
         """Her words, however they came (live stream or a voice note): answered, or dropped if only a noise or echo."""
         trace.write(self.user_id, "heard", task=task, text=text, lang=lang, echo=bool(text) and self.echo(text))
@@ -1242,6 +1292,7 @@ class Session:
             if msg_id:
                 await self.send({"type": "drop", "task": task, "id": msg_id})
             self.resume(task)
+            await self.settle(task)
             return
         if not text:
             note = {"en": "I didn't catch that. Please say it again.", "pcm": "I no hear am well. Abeg talk am again.",
@@ -1250,14 +1301,14 @@ class Session:
             if msg_id:
                 await self.send({"type": "update", "task": task, "id": msg_id, "patch": {"text": "", "heard": False}})
             await self.agent_says(task, note)
-            await self.send({"type": "orb", "state": "idle"})
+            await self.settle(task)
             return
         if self.echo(text):
             # her phone's microphone heard Jagora's own voice: not her words, so nothing is answered
             log.info("dropped echo of Jagora's own words")
             if msg_id:
                 await self.send({"type": "drop", "task": task, "id": msg_id})
-            await self.send({"type": "orb", "state": "idle"})
+            await self.settle(task)
             return
         if msg_id:
             await self.send({"type": "update", "task": task, "id": msg_id, "patch": {"text": text}})
@@ -1268,6 +1319,7 @@ class Session:
     async def on_words(self, task: str, text: str, attachment: dict | None, history: list | None) -> None:
         """Whatever she said or typed: an answer to a waiting question, words for the running agent, or a new request."""
         if text and CONTINUE.search(text) and len(text.split()) <= 5 and self.resume(task):
+            await self.settle(task)
             return  # "continue": she wants the rest of what Jagora was saying
         r = self.runs.get(task)
         open_q = list(r.waiting.values())[-1][0] if r and r.waiting else ""
@@ -1295,6 +1347,7 @@ class Session:
         if text and CHECKIN.search(text) and len(text.split()) <= 9:
             # "are you there?": answer at once; it is not a new request and does not interrupt the work
             self.speak(task, (HERE if r and r.busy else HERE_IDLE).get(self.lang, HERE["en"]))
+            await self.settle(task)
             return
         if r and r.busy:
             # she spoke while it works: Jagora takes it into account at its next step and carries on from where it
@@ -1423,7 +1476,10 @@ class WsIO:
     async def ask(self, question: str, choices: list[str]) -> str:
         self.s.speak(self.task, question)
         await db.remember(self.s.user_id, self.task, "agent", question)
-        answer = await self._wait("choice", {"id": mid(), "kind": "choice", "question": question, "choices": choices[:6]})
+        m = {"id": mid(), "kind": "choice", "question": question, "choices": choices[:6]}
+        answer = await self._wait("choice", m)
+        # the question is closed in her app (its buttons stop working and it no longer waits for her)
+        await self.s.send({"type": "update", "task": self.task, "id": m["id"], "patch": {"picked": str(answer)[:200]}})
         await db.remember(self.s.user_id, self.task, "user", answer)
         return answer
 

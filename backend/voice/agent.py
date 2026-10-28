@@ -51,8 +51,9 @@ ASR_URL, ASR_KEY = env("STORM_ASR_WS_URL"), env("STORM_ASR_API_KEY")
 TTS_URL, TTS_KEY = env("STORM_TTS_WS_URL"), env("STORM_TTS_API_KEY")
 TTS_MIN_CHARS = int(env("TTS_MIN_CHARS", "220"))
 # turn timing, interruptions, the ASR gate and the VADs are Kivo's (kivo-demo/agent/agent.py), which work reliably
-ENDPOINT_MIN_DELAY_S = float(env("VOICE_ENDPOINT_MIN_DELAY", "0.3"))
-ENDPOINT_MAX_DELAY_S = float(env("VOICE_ENDPOINT_MAX_DELAY", "2.0"))
+# a little longer than Kivo's 0.3/2.0: people pause mid-sentence (Jagora's server also joins pieces into one message)
+ENDPOINT_MIN_DELAY_S = float(env("VOICE_ENDPOINT_MIN_DELAY", "0.6"))
+ENDPOINT_MAX_DELAY_S = float(env("VOICE_ENDPOINT_MAX_DELAY", "3.0"))
 STALL_S = float(env("STALL_SECONDS", "15"))
 SORRY = {
     "en": "Sorry, I missed that. Could you say it again?",

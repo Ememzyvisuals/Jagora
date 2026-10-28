@@ -52,8 +52,8 @@ export function TalkOrb({ size = 96 }: { size?: number }) {
   const toggle = useCallback(async () => {
     if (live && !voice.listening) {
       // talking live happens only in Live mode, where End and the microphone button are always in view
-      if (handsFree) void stopHandsFree();
-      return void useApp.getState().setLive(true);
+      useApp.getState().setLive(true); // Live opens, or comes back up if it was folded
+      return void useApp.getState().setLiveSmall(false);
     }
     if (voice.listening) {
       setOrb("thinking");

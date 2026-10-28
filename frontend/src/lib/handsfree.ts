@@ -6,7 +6,7 @@
    - If LiveKit is not set up: the speech detector here (lib/turns.ts) hears her turns and sends each one. */
 import { useEffect, useState } from "react";
 import { voiceNote } from "./engine";
-import { clientLog, duckVoice, hush, remoteFocus } from "./engine/remote";
+import { clientLog, duckVoice, hush, remoteFocus, remoteWake } from "./engine/remote";
 import { liveVoiceLost, liveVoiceOn, onLiveVoice, setLiveMic, startLiveVoice, stopLiveVoice, voiceLevels } from "./livevoice";
 import { useApp } from "./store";
 import { Listener } from "./turns";
@@ -56,6 +56,7 @@ export async function startHandsFree(): Promise<boolean> {
   wanted = true;
   if (starting) return starting;
   starting = (async () => {
+    await remoteWake(); // her session must exist on the server before Jagora's voice joins the call
     if (await startLiveVoice()) {
       if (!wanted) {
         await stopLiveVoice();
@@ -67,6 +68,8 @@ export async function startHandsFree(): Promise<boolean> {
       tell();
       return true;
     }
+    // Live mode runs its own listener when LiveKit is not available: never two at once
+    if (useApp.getState().live) return false;
     const l = new Listener({
       onTurn: async (wav, secs) => {
         const s = useApp.getState();

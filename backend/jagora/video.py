@@ -40,7 +40,7 @@ class Encoder:
         c.pix_fmt = "yuv420p"
         # the rate control works per frame from the frame rate: give it the real one (8, or 5 in data saver), not
         # millisecond timestamps, or it budgets the bitrate for 1000 frames a second and every frame turns to mush
-        self.fps = 5 if lite else 8
+        self.fps = 5 if lite else 10
         c.framerate = Fraction(self.fps, 1)
         c.time_base = Fraction(1, self.fps)
         kbps = KBPS[tier]

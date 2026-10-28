@@ -148,6 +148,8 @@ export function DesktopApp() {
       else if (action === "hide_page" || action === "go_home") setPageHidden(true);
       else if (action === "show_tabs" || action === "show_history") (setSide(true), setPanel(true));
       else if (action === "hide_tabs" || action === "hide_history") setSide(false);
+      else if (action === "show_chat") setPanel(true);
+      else if (action === "hide_chat") setPanel(false);
     };
     window.addEventListener("jagora:app", on);
     return () => window.removeEventListener("jagora:app", on);
@@ -250,9 +252,6 @@ export function DesktopApp() {
               <input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder={PLACEHOLDER[lang]} className="h-full min-w-0 flex-1 bg-transparent text-[14.5px] font-semibold text-ink outline-none placeholder:font-semibold placeholder:text-ink/70" />
             </form>
           )}
-          <button className={`${tool} ${side ? "bg-ink text-paper hover:bg-ink" : ""}`} onClick={() => (setPanel(true), setSide((v) => !(v && panel)))} aria-label="Your chats" title="Your chats" aria-pressed={side && panel}>
-            <List size={18} weight="bold" />
-          </button>
           <button className={`${tool} ${panel ? "bg-accent-soft" : ""}`} onClick={() => setPanel((v) => !v)} aria-label={panel ? "Hide Jagora" : "Show Jagora"} title={panel ? "Hide Jagora" : "Show Jagora"} aria-pressed={panel}>
             <Orb size={26} state={useApp.getState().orb} />
           </button>
@@ -273,7 +272,7 @@ export function DesktopApp() {
             aria-hidden={!panel}
           >
             <div className="flex h-full w-[384px] flex-col">
-              <div className="flex items-center justify-end gap-1 px-3 pt-3 text-ink-2">
+              <div className="relative z-10 flex items-center justify-end gap-1 px-3 pt-3 text-ink-2">
                 <button
                   onClick={() => setSide((v) => !v)}
                   className={`mr-auto grid h-8 w-8 place-items-center rounded-full ${side ? "bg-ink text-paper" : "hover:bg-black/5 dark:hover:bg-white/10"}`}

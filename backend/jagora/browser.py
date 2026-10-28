@@ -1247,6 +1247,10 @@ class Browser:
         await self._need_page().keyboard.type(text, delay=20)
 
     async def key(self, key: str) -> None:
+        if key == "F5":  # her Reload button
+            self.log("reload", url=self._need_page().url)
+            await self._need_page().reload(wait_until="domcontentloaded", timeout=30000)
+            return
         if key in ("Enter", "Backspace", "Tab", "Escape", "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Delete"):
             await self._need_page().keyboard.press(key)
 

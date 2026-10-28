@@ -22,6 +22,7 @@ async def test_her_turns_come_in_and_jagoras_words_go_out(monkeypatch):
 
     s = server.Session(WS(), "u1")
     monkeypatch.setattr(s, "on_words", words)
+    monkeypatch.setattr(server, "TURN_GAP", 0.02)
     s.active_task = "chat1"
     v = VoiceWS()
     s.attach_voice(v)
@@ -32,6 +33,7 @@ async def test_her_turns_come_in_and_jagoras_words_go_out(monkeypatch):
     await s.on_voice({"type": "partial", "text": "read the"})
     await s.on_voice({"type": "partial", "text": "read the news"})
     await s.on_voice({"type": "words", "text": "read the news to me"})
+    await asyncio.sleep(0.08)  # she has finished
     msgs = [m for m in s.ws.out if m.get("type") in ("msg", "update")]
     bubble = msgs[0]["msg"]["id"]
     assert msgs[0]["msg"]["text"] == "read the" and msgs[1]["patch"]["text"] == "read the news"
@@ -95,10 +97,8 @@ async def test_the_voice_listens_in_the_language_she_chose(monkeypatch):
     s._speaker.cancel()
 
 
-async def test_words_showing_are_answered_when_the_voice_does_not_end_her_turn(monkeypatch):
-    # the voice showed her words, she stopped, but its turn end never came: Jagora answers what is showing, once
-    from jagora import server
-
+async def test_a_thought_said_with_pauses_is_one_message(monkeypatch):
+    # the voice sends pieces at each pause; Jagora answers once, with everything, when she has finished
     s = server.Session(WS(), "u1")
     s.active_task = "t"
     got = []
@@ -107,10 +107,29 @@ async def test_words_showing_are_answered_when_the_voice_does_not_end_her_turn(m
         got.append(text)
 
     monkeypatch.setattr(s, "heard", heard)
+    monkeypatch.setattr(server, "TURN_GAP", 0.05)
+    await s.on_voice({"type": "words", "text": "ẹ jọ̀ọ́ ẹ bá mi wo"})
+    await s.on_voice({"type": "user", "state": "speaking"})  # she carries on
+    await asyncio.sleep(0.1)
+    assert got == []
+    await s.on_voice({"type": "words", "text": "ọjọ́ ìdìbò Nàìjíríà"})
+    await asyncio.sleep(0.15)
+    assert got == ["ẹ jọ̀ọ́ ẹ bá mi wo ọjọ́ ìdìbò Nàìjíríà"]
+    bubbles = [m for m in s.ws.out if m.get("type") == "msg" and m["msg"].get("kind") == "user"]
+    assert len(bubbles) == 1  # one bubble, updated as it grew
+
+
+async def test_words_showing_are_answered_when_the_voice_does_not_end_her_turn(monkeypatch):
+    s = server.Session(WS(), "u1")
+    s.active_task = "t"
+    got = []
+
+    async def heard(task, msg_id, text, lang, history):
+        got.append(text)
+
+    monkeypatch.setattr(s, "heard", heard)
+    monkeypatch.setattr(server, "TURN_GAP", 0.0)
     await s.on_voice({"type": "partial", "text": "when is jamb registration"})
-    await s.on_voice({"type": "user", "state": "listening"})
-    s._commit.cancel()
-    await s._commit_partial("t", wait=0)
-    assert got == ["when is jamb registration"]
-    await s.on_voice({"type": "words", "text": "When is JAMB registration?"})  # the late turn end: not answered twice
+    s._flush_later("t", 0)
+    await asyncio.sleep(0.05)
     assert got == ["when is jamb registration"]

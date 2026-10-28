@@ -9,7 +9,7 @@ from jagora import agent as A
 
 def bare(goal: str) -> A.Agent:
     ag = A.Agent.__new__(A.Agent)
-    ag._goal, ag.conversation, ag.files, ag._fails = goal, [], [], 0
+    ag._goal, ag.conversation, ag.files, ag._fails, ag._heard_all, ag.lang = goal, [], [], 0, [], "en"
     ag._want_look, ag._last_fp_same, ag._changed_any, ag.max_turns = False, False, False, 80
     return ag
 

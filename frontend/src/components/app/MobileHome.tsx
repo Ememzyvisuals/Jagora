@@ -596,8 +596,8 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
               
               // the chat comes up and Live mode opens: Jagora listens only there, with End and mute in view
               if (!sheet) setSheet(true);
-              if (handsFree) void stopHandsFree();
-              useApp.getState().setLive(true);
+              useApp.getState().setLive(true); // Live opens, or comes back up if it was folded
+              useApp.getState().setLiveSmall(false);
             }}
             aria-label={handsFree ? "Stop listening" : "Talk to Jagora"}
             data-tour="orb"

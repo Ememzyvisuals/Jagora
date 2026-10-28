@@ -102,7 +102,7 @@ export function FileCard({ m }: { m: Extract<Msg, { kind: "file" }> }) {
         <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{m.name}</p>
         <p className="truncate text-[12.5px] text-ink-3">
           {fmtSize(m.size)}
-          {m.source ? ` · ${new URL(m.source).hostname.replace(/^www\./, "")}` : ""}
+          {m.source ? ` · ${new URL(m.source, "https://x.invalid").hostname.replace(/^www\./, "")}` : ""}
         </p>
       </div>
       <a href={m.url} download={m.name} target="_blank" rel="noopener noreferrer" className="btn btn-ink h-10 shrink-0 px-4 text-[14px]">
@@ -300,7 +300,7 @@ export function MediaCard({ m }: { m: Extract<Msg, { kind: "media" }> }) {
     <div className="flex items-center gap-3 rounded-[20px] bg-white p-3 shadow-[0_10px_30px_-18px_rgba(10,30,70,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
       <div className="min-w-0 flex-1 px-1">
         <p className="truncate text-[14.5px] font-semibold text-ink">{m.name}</p>
-        {m.source && <p className="truncate text-[12px] text-ink-3">{new URL(m.source).hostname.replace(/^www\./, "")}</p>}
+        {m.source && <p className="truncate text-[12px] text-ink-3">{new URL(m.source, "https://x.invalid").hostname.replace(/^www\./, "")}</p>}
       </div>
       {!playing && (
         <button onClick={() => useApp.getState().setPlaying(m)} className="btn-ink shrink-0 rounded-full px-4 py-2 text-[13.5px] font-semibold">

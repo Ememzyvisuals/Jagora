@@ -35,6 +35,7 @@ export async function startLiveVoice(): Promise<boolean> {
   if (joining) return joining;
   joining = (async () => {
     if (!API || !getToken()) return false;
+    let rm: Room | null = null;
     try {
       const r = await fetch(`${API}/livekit/token`, {
         method: "POST",
@@ -51,7 +52,7 @@ export async function startLiveVoice(): Promise<boolean> {
         return false;
       }
       const { Room, RoomEvent, Track } = await import("livekit-client");
-      const rm = new Room({ adaptiveStream: true, dynacast: true });
+      rm = new Room({ adaptiveStream: true, dynacast: true });
       rm.on(RoomEvent.TrackSubscribed, (track) => {
         if (track.kind !== Track.Kind.Audio) return;
         const el = track.attach();
@@ -81,10 +82,11 @@ export async function startLiveVoice(): Promise<boolean> {
       lost = false;
       clientLog("livekit_connected", { room: rm.name, others: rm.remoteParticipants.size });
       // the orb follows whoever is talking
+      const joined = rm;
       poll = window.setInterval(() => {
-        const me = rm.localParticipant.audioLevel || 0;
+        const me = joined.localParticipant.audioLevel || 0;
         let them = 0;
-        rm.remoteParticipants.forEach((p) => (them = Math.max(them, p.audioLevel || 0)));
+        joined.remoteParticipants.forEach((p) => (them = Math.max(them, p.audioLevel || 0)));
         voiceLevels.me.current = Math.min(1, me * 2.2);
         voiceLevels.jagora.current = Math.min(1, them * 2.2);
       }, 50);
@@ -94,6 +96,9 @@ export async function startLiveVoice(): Promise<boolean> {
     } catch (e) {
       console.warn("live voice unavailable", e);
       clientLog("livekit_failed", { error: String(e).slice(0, 300) });
+      try {
+        await rm?.disconnect(); // a half-joined call (microphone refused) must not keep Jagora's voice in a room nobody hears
+      } catch {}
       return false;
     }
   })();
