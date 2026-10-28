@@ -38,6 +38,7 @@ class Decision:
         return self.verdict == Verdict.ALLOW
 
 
+SEARCHY = re.compile(r"\b(find|search|check|view|show|filter|see|look ?up|load more)\b", re.I)
 COMMIT = re.compile(
     r"\b(submit|send|pay|transfer|confirm|register|apply|buy|purchase|checkout|check out|order|book|subscribe|donate|"
     r"withdraw|delete|remove|cancel (my|subscription|account)|sign ?up|create account|finish|complete|proceed|"
@@ -75,6 +76,8 @@ def check_click(el: Element, current_url: str, home_site: str) -> Decision:
         return Decision(Verdict.CONFIRM, f'ticking "{el.label}" agrees to something on her behalf')
     if el.type == "reset":
         return Decision(Verdict.CONFIRM, f'"{el.label}" clears everything already filled in')
+    if el.kind in ("button", "link") and el.type == "submit" and SEARCHY.search(words) and not COMMIT.search(words):
+        return Decision(Verdict.ALLOW, "")  # "Find My Train", "Search", "Check result": looking, not committing
     if el.kind in ("button", "link") and (el.type == "submit" or COMMIT.search(words)):
         return Decision(Verdict.CONFIRM, f'"{el.label}" sends or commits something')
     if el.kind == "link" and el.href and home_site and site(el.href) and site(el.href) != home_site:

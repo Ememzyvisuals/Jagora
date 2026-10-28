@@ -94,6 +94,27 @@
     return "button";
   }
 
+  const STATE_WORDS = /(booked|reserved|occupied|taken|sold|unavailable|blocked|disabled|selected|active|chosen|available|vacant|free|open|ladies|female|male|window|aisle)/gi;
+  const colourName = (c) => {
+    const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/.exec(c || "");
+    if (!m || (m[4] !== undefined && Number(m[4]) < 0.15)) return "";
+    const [r, g, b] = [+m[1], +m[2], +m[3]];
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    if (max > 235 && min > 225) return "white";
+    if (max - min < 24) return max < 70 ? "black" : "grey";
+    if (r >= g && r >= b) return g > 150 && r > 200 ? (b < 120 ? "yellow" : "pink") : g > 100 && b < 80 ? "orange" : "red";
+    if (g >= r && g >= b) return "green";
+    return r > 120 ? "purple" : "blue";
+  };
+  function stateOf(el, cs) {
+    const cls = `${el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className || ""} ${el.getAttribute("data-status") || ""} ${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`;
+    const words = [...new Set((cls.match(STATE_WORDS) || []).map((w) => w.toLowerCase()))];
+    const look = [colourName(cs.backgroundColor) && `${colourName(cs.backgroundColor)} fill`,
+                  cs.borderStyle !== "none" && Number.parseFloat(cs.borderWidth) > 0 && colourName(cs.borderColor) && `${colourName(cs.borderColor)} border`]
+      .filter(Boolean);
+    return [...words, ...look].join(", ");
+  }
+
   const out = [];
   let n = 0;
   for (const el of document.querySelectorAll(SELECTOR)) {
@@ -114,6 +135,11 @@
       href: el.tagName === "A" ? el.href : "",
       rect: { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) },
     };
+    if (k === "button" && !["BUTTON", "A", "INPUT"].includes(el.tagName) && (item.label || "").length <= 14) {
+      const cs = getComputedStyle(el);
+      item.state = stateOf(el, cs);
+      if (cs.cursor === "not-allowed" || cs.pointerEvents === "none") item.disabled = true;
+    }
     if (k === "text box") item.value = el.type === "password" ? (el.value ? "(hidden)" : "") : clean(el.value ?? el.innerText, 120);
     if (k === "checkbox" || k === "radio") item.checked = !!(el.checked || el.getAttribute("aria-checked") === "true");
     if (el.tagName === "SELECT") {
@@ -121,6 +147,34 @@
       item.value = el.selectedIndex >= 0 ? clean(el.options[el.selectedIndex].text, 60) : "";
     }
     out.push(item);
+  }
+
+  // things made clickable only by the page's own script (seat maps, day pickers, size boxes): a hand cursor and a
+  // short label. Each gets a number like a button, with its state read from the page itself (its class words, its
+  // colours, disabled), so "free" and "taken" come from the site, not from guessing colours on a picture.
+  let extra = 0;
+  for (const el of document.body.querySelectorAll("div,span,li,td,p,i,b,label,section,svg,g,rect,circle,path,img")) {
+    if (extra >= 160) break;
+    if (el.hasAttribute(MARK) || el.closest(`[${MARK}]`) || el.querySelector(`[${MARK}]`)) continue;
+    const txt = clean(el.innerText || el.textContent || el.getAttribute("aria-label") || el.getAttribute("title") || "", 24);
+    if (!txt || txt.length > 14 || el.childElementCount > 3) continue;
+    const cs = getComputedStyle(el);
+    if (cs.cursor !== "pointer" && cs.cursor !== "not-allowed") continue;
+    // the innermost clickable: skip a box whose child is itself the pointer target with the same words
+    if ([...el.children].some((c) => getComputedStyle(c).cursor === cs.cursor && clean(c.innerText || c.textContent, 24) === txt)) continue;
+    const r = visible(el);
+    if (!r) continue;
+    const off = cs.cursor === "not-allowed" || el.getAttribute("aria-disabled") === "true" || cs.pointerEvents === "none";
+    n += 1;
+    extra += 1;
+    el.setAttribute(MARK, String(n));
+    el.__jgsig = SIG(el);
+    out.push({
+      id: n, kind: "button", tag: el.tagName.toLowerCase(), type: "", label: txt, group: "", name: "", autocomplete: "",
+      placeholder: "", required: false, disabled: off, href: "",
+      state: stateOf(el, cs),
+      rect: { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) },
+    });
   }
 
   const headings = [...document.querySelectorAll("h1,h2,h3")].filter((h) => h.offsetParent !== null)
