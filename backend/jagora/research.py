@@ -6,8 +6,55 @@ from __future__ import annotations
 import re
 from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
+import logging
+
 from jagora.browser import Browser
+from jagora.config import settings
 from jagora.guard import guard, registrable
+
+log = logging.getLogger("jagora.research")
+SERPER = "https://google.serper.dev/search"
+_spent: set[str] = set()  # Serper keys whose searches have run out (until the server restarts)
+
+
+async def serper(query: str, limit: int = 10) -> tuple[list[dict], str]:
+    """Google's results for Nigeria through Serper, in well under a second, with no search page to load (a server's
+    address gets empty or blocked search pages). Returns (results, Google's quick answer if it has one)."""
+    import httpx
+
+    for key in settings.serper_keys:
+        if key in _spent:
+            continue
+        try:
+            async with httpx.AsyncClient(timeout=10) as c:
+                r = await c.post(SERPER, headers={"X-API-KEY": key, "Content-Type": "application/json"},
+                                 json={"q": query, "gl": "ng", "hl": "en", "num": limit})
+        except Exception as e:  # noqa: BLE001
+            log.warning("serper unreachable: %s", e)
+            return [], ""
+        if r.status_code in (401, 402, 403, 429):
+            log.warning("serper key ...%s refused (%s); trying the next", key[-4:], r.status_code)
+            _spent.add(key)
+            continue
+        if r.status_code != 200:
+            log.warning("serper failed %s", r.status_code)
+            return [], ""
+        d = r.json()
+        quick = ""
+        box = d.get("answerBox") or {}
+        if box:
+            quick = " ".join(str(box.get(k, "")) for k in ("title", "answer", "snippet") if box.get(k)).strip()
+            if box.get("link"):
+                quick += f" (from {box['link']})"
+        elif d.get("knowledgeGraph", {}).get("description"):
+            kg = d["knowledgeGraph"]
+            quick = f"{kg.get('title', '')}: {kg['description']}" + (f" (from {kg['descriptionLink']})" if kg.get("descriptionLink") else "")
+        out = [{"title": o.get("title", ""), "url": o.get("link", ""), "snippet": o.get("snippet", ""), "date": o.get("date", "")}
+               for o in d.get("organic", [])]
+        out += [{"title": n.get("title", ""), "url": n.get("link", ""), "snippet": n.get("snippet", "") or n.get("source", ""),
+                 "date": n.get("date", "")} for n in d.get("topStories", [])[:3]]
+        return out, quick[:400]
+    return [], ""
 
 DDG = "https://html.duckduckgo.com/html/?q={q}&kl=ng-en"
 BING = "https://www.bing.com/search?q={q}&cc=NG&setlang=en"
@@ -37,7 +84,18 @@ def _clean_url(u: str) -> str:
 async def search(browser: Browser, query: str, limit: int = 8) -> list[dict]:
     """Search the web in her browser tab (she sees it happen). Each result says whether its site is official."""
     results: list[dict] = []
-    for engine in (DDG, BING):
+    raw, quick = await serper(query) if settings.serper_keys else ([], "")
+    for r in raw:
+        v = guard.check(r["url"])
+        if not r["url"].startswith("http") or v.blocked:
+            continue
+        results.append({"title": r["title"][:140], "url": r["url"], "site": v.site, "snippet": r["snippet"][:300],
+                        "date": r.get("date", ""), "official": v.official, "owner": v.owner,
+                        "betting": v.category == "gambling"})
+    if quick:
+        results.insert(0, {"title": "Google's quick answer", "url": "", "site": "", "snippet": quick, "date": "",
+                           "official": False, "owner": "", "betting": False, "quick": True})
+    for engine in (DDG, BING) if not results else ():
         try:
             await browser.goto(engine.format(q=quote_plus(query)))
             await browser._settle()
@@ -56,10 +114,10 @@ async def search(browser: Browser, query: str, limit: int = 8) -> list[dict]:
         if results:
             break
     # official sources first, keeping the engine's order otherwise
-    results.sort(key=lambda r: (not r["official"],))
+    results.sort(key=lambda r: (not r.get("quick"), not r["official"]))
     seen, out = set(), []
     for r in results:
-        if r["url"] in seen:
+        if r["url"] and r["url"] in seen:
             continue
         seen.add(r["url"])
         out.append(r)

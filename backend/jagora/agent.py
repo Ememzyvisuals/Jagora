@@ -1016,10 +1016,15 @@ class Agent:
                 if not results:
                     return "no results; try other words", True, None
                 for r in results:
-                    self._flow.link(r["url"])
-                lines = [f"{i + 1}. {'[OFFICIAL: ' + r['owner'] + '] ' if r['official'] else ''}{'[BETTING] ' if r['betting'] else ''}"
-                         f"{r['title']} | {r['url']} | {r['snippet'][:180]}" for i, r in enumerate(results)]
-                return "results (open the best official one to confirm):\n" + "\n".join(lines), False, None
+                    if r["url"]:
+                        self._flow.link(r["url"])
+                lines = [f"- Google's quick answer (a hint; confirm it on the page it came from): {r['snippet']}" if r.get("quick") else
+                         f"{i}. {'[OFFICIAL: ' + r['owner'] + '] ' if r['official'] else ''}{'[BETTING] ' if r['betting'] else ''}"
+                         f"{r['title']} | {r['url']}{' | ' + r['date'] if r.get('date') else ''} | {r['snippet'][:220]}"
+                         for i, r in enumerate(results, 0 if results[0].get("quick") else 1)]
+                return ("results (pick the ONE most relevant result, official first, newest for news and dates, and open it "
+                        "with go_to; read it and answer. Only open another if that page does not answer it):\n"
+                        + "\n".join(lines)), False, None
             if name in ("go_to", "new_tab"):
                 return await self._go_to(a, new_tab=name == "new_tab")
             if name == "download":

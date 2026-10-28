@@ -116,6 +116,10 @@ class Settings:
     # PlotWeaver STORM: speech to text and text to speech
     plotweaver_key: str = field(default_factory=lambda: env("PLOTWEAVER_API_KEY"))
     plotweaver_base: str = field(default_factory=lambda: env("PLOTWEAVER_BASE_URL", "https://api.plotweaver.app/v1"))
+    # Serper (Google results for Nigeria, made for agents): one or more keys, comma separated; when one account's
+    # searches run out, the next is used
+    serper_keys: tuple[str, ...] = field(default_factory=lambda: tuple(
+        k.strip() for k in (env("SERPER_API_KEYS") or env("SERPER_API_KEY")).split(",") if k.strip()))
     # LiveKit (live voice rooms)
     livekit_url: str = field(default_factory=lambda: env("LIVEKIT_URL"))
     livekit_key: str = field(default_factory=lambda: env("LIVEKIT_API_KEY"))
