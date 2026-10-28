@@ -441,7 +441,7 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
   const shade = "[text-shadow:0_0_10px_rgba(255,255,255,.95),0_0_2px_rgba(255,255,255,.9)] dark:[text-shadow:none]";
   return (
     <div className="no-scrollbar relative h-full overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-[1080px] flex-col px-7 pb-14 pt-6">
+      <div className="mx-auto flex w-full max-w-[1280px] flex-col px-10 pb-16 pt-10">
         {/* the sky card */}
         <section className="relative px-8 pb-8 pt-4">
           <div className="flex flex-col items-center">
@@ -449,11 +449,11 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
               <Orb size={132} state={orb} levelRef={pulse} />
               <CloudWordmark width={300} levelRef={pulse} className="-ml-4" />
             </div>
-            <p className="-mt-2 text-[17px] font-bold text-snow [text-shadow:0_1px_3px_rgba(5,30,80,.55),0_2px_14px_rgba(5,30,80,.6)]">{TAGLINE[lang]}</p>
+            <p className="-mt-1 text-[18px] font-bold text-snow [text-shadow:0_1px_3px_rgba(5,30,80,.55),0_2px_14px_rgba(5,30,80,.6)]">{TAGLINE[lang]}</p>
           </div>
-          <form onSubmit={(e) => (e.preventDefault(), send())} className="mx-auto mt-5 w-full max-w-[720px]">
+          <form onSubmit={(e) => (e.preventDefault(), send())} className="mx-auto mt-9 w-full max-w-[960px]">
             <Glass radius={30} bezel={20} refraction={50} blur={6} tint="rgba(255,255,255,.72)" lens={PILL} lensTint={0.14}>
-              <span className="flex h-[60px] items-center gap-3 pl-6 pr-2">
+              <span className="flex h-[66px] items-center gap-3 pl-7 pr-2.5">
                 <VoiceBars />
                 <input
                   value={text}
@@ -471,11 +471,11 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
               </span>
             </Glass>
           </form>
-          <div className="mx-auto mt-3 w-full max-w-[720px]">
+          <div className="mx-auto mt-5 w-full max-w-[960px]">
             <Starters lang={lang} />
           </div>
           {/* shortcuts in white tiles, as in the reference */}
-          <div className="mx-auto mt-6 flex max-w-[760px] flex-wrap justify-center gap-3">
+          <div className="mx-auto mt-10 flex max-w-[960px] flex-wrap justify-center gap-6">
             {top.slice(0, 8).map((s) => (
               <button key={s.goal} onClick={() => (openSite(s), onAsk())} className="group flex w-[78px] flex-col items-center gap-1.5 transition active:scale-95" title={s.name[lang]}>
                 <span className="grid h-[58px] w-[58px] place-items-center rounded-[18px] bg-white shadow-[0_10px_22px_-12px_rgba(10,30,80,.55)] transition group-hover:-translate-y-0.5 dark:bg-[#23262d]">
@@ -488,7 +488,7 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
         </section>
 
         {/* Discover: the day's news */}
-        <section className="mt-9">
+        <section className="mt-16">
           <div className="flex items-end justify-between px-1">
             <h2 className={`text-[26px] font-extrabold text-ink ${shade}`}>{DISCOVER[lang]}</h2>
             {news.length > 6 && (
@@ -497,7 +497,7 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
               </button>
             )}
           </div>
-          <div className="mt-4 grid grid-cols-3 gap-5">
+          <div className="mt-5 grid grid-cols-3 gap-6">
             {news.length === 0
               ? [0, 1, 2].map((i) => <div key={i} className="aspect-[4/3] animate-pulse rounded-[22px] bg-white/60 dark:bg-white/5" />)
               : news.slice(0, all ? 12 : 6).map((n) => (
@@ -507,9 +507,9 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
         </section>
 
         {/* things to try, under the news */}
-        <section className="mt-10">
+        <section className="mt-14">
           <h2 className={`px-1 text-[26px] font-extrabold text-ink ${shade}`}>{TRY_L[lang]}</h2>
-          <div className="mt-4 grid grid-cols-3 gap-5">
+          <div className="mt-5 grid grid-cols-3 gap-6">
             {CARDS.map((c) => (
               <NewsTile key={c.id} image={c.thumb} title={c.title[lang]} source={c.source} when={c.when[lang]} onOpen={() => run(c.id)} />
             ))}
