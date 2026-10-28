@@ -217,7 +217,7 @@ function handle(ev: Record<string, unknown>) {
       s.setOrb(ev.state as never);
       break;
     case "pcm":
-      playPcm(ev.data as string, (ev.rate as number) || 24000, ev.utt as string, ev.codec as string | undefined);
+      playPcm(ev.data as string, (ev.rate as number) || 24000, ev.utt as string, ev.codec as string | undefined, (ev.n as number) || 0);
       break;
     case "speech_end":
       speechDone = true;
@@ -239,6 +239,7 @@ let actx: AudioContext | null = null;
 let nextAt = 0;
 let speechDone = true;
 const voices = new Set<AudioBufferSourceNode>();
+const voiceAt = new Map<AudioBufferSourceNode, { n: number; start: number; end: number }>(); // which sentence each piece is
 function audio(): AudioContext | null {
   if (typeof window === "undefined") return null;
   if (!actx) {
@@ -276,7 +277,7 @@ let cushionUtt = "";
 let lastUtt = "";
 let hushedAt = 0;
 const hushed = new Set<string>();
-function playPcm(b64: string, rate: number, utt = "", codec?: string) {
+function playPcm(b64: string, rate: number, utt = "", codec?: string, n = 0) {
   if (S().muted) return;
   // what was already on its way when she cut in stays silent
   if (hushed.has(utt) || performance.now() - hushedAt < 700) return;
@@ -314,10 +315,12 @@ function playPcm(b64: string, rate: number, utt = "", codec?: string) {
   src.start(at);
   nextAt = at + buf.duration;
   voices.add(src);
+  voiceAt.set(src, { n, start: at, end: at + buf.duration });
   speechDone = false;
   S().setOrb("speaking");
   src.onended = () => {
     voices.delete(src);
+    voiceAt.delete(src);
     if (!voices.size && speechDone) S().setOrb("idle");
   };
 }
@@ -325,6 +328,10 @@ function playPcm(b64: string, rate: number, utt = "", codec?: string) {
 export const isSpeaking = () => voices.size > 0 || !speechDone;
 export function hush() {
   const was = isSpeaking();
+  // the sentence she was hearing when she cut in: Jagora can carry on from there ("continue")
+  let heard = 0;
+  const now = actx?.currentTime ?? 0;
+  for (const v of voiceAt.values()) if (v.start <= now) heard = Math.max(heard, v.n);
   if (was) {
     if (lastUtt) hushed.add(lastUtt);
     hushedAt = performance.now();
@@ -335,9 +342,10 @@ export function hush() {
     } catch {}
   }
   voices.clear();
+  voiceAt.clear();
   nextAt = 0;
   speechDone = true;
-  if (was) ws?.send(JSON.stringify({ type: "hush" }));
+  if (was) ws?.send(JSON.stringify({ type: "hush", heard }));
 }
 
 function notify(ev: Record<string, unknown>) {

@@ -391,6 +391,11 @@ class Run:
         return bool(self.job and not self.job.done())
 
 
+# "carry on" in her languages: Jagora picks up what an interruption cut off
+CONTINUE = re.compile(r"\b(continue|go on|carry on|keep (going|reading)|resume|finish (it|reading)|continue am|dey go|oya|"
+                      r"tẹ̀?síwájú|tesiwaju|máa bá a lọ|maa ba a lo|ci gaba|ci-gaba|ka ci gaba|gaa n'ihu|gaa n.ihu|nọgide)\b", re.I)
+OKAY = {"en": "Okay.", "pcm": "Okay.", "yo": "Ó dáa.", "ha": "To.", "ig": "Ọ dị mma."}
+
 class Session:
     def __init__(self, ws: WebSocket, user_id: str) -> None:
         self.ws, self.user_id = ws, user_id
@@ -404,6 +409,8 @@ class Session:
         self.since = time.time()
         self.who: dict = {}  # email, name, plan, code label: for the admin page
         self.screen = ""  # what the app shows right now, sent with every message (the agent reads it each step)
+        self._speaking: tuple[str, str, str] | None = None  # (task, text, lang) being spoken now
+        self._unsaid: tuple[str, str, float] | None = None  # what an interruption cut off: (task, text, when)
         self._said: list[tuple[float, str]] = []  # what Jagora said lately, to tell her voice from an echo of Jagora's
         self.lite = False  # data saver (lite.py): smaller voice and live view on slow or costly networks
         self.viewing = True  # False while the app is in the background: no live-view frames are sent then
@@ -584,6 +591,7 @@ class Session:
             task, text, lang, gen = await self._speech_q.get()
             if gen != self._gen:
                 continue
+            self._speaking = (task, text, lang)
             try:
                 await self.send({"type": "orb", "state": "speaking"})
                 utt = mid()
@@ -613,13 +621,37 @@ class Session:
                     await out(at, last_rate, fx.flush())
             except Exception as e:  # noqa: BLE001
                 log.warning("speech failed: %s", e)
+            if gen == self._gen:
+                self._speaking = None
             if self._speech_q.empty() and gen == self._gen:
                 await self.send({"type": "speech_end", "task": task})
 
-    def hush(self) -> None:
-        self._gen += 1
+    def hush(self, heard: int | None = None) -> None:
+        """Stop talking. What was not said yet is kept for a minute (from the sentence she was hearing when she cut
+        in), so "continue" picks up there, the way LiveKit resumes after an interruption."""
+        rest: list[str] = []
+        task = ""
+        if self._speaking:
+            task, text, _ = self._speaking
+            parts = speech.sentences(speech.speakable(text))
+            rest += parts[max(0, int(heard or 0)):]
         while not self._speech_q.empty():
-            self._speech_q.get_nowait()
+            t, text, _, _ = self._speech_q.get_nowait()
+            task = task or t
+            rest.append(text)
+        self._speaking = None
+        if rest:
+            self._unsaid = (task, " ".join(rest), time.time())
+        self._gen += 1
+
+    def resume(self, task: str) -> bool:
+        """Carry on with what was interrupted, if it was recent."""
+        if not self._unsaid or time.time() - self._unsaid[2] > 90:
+            return False
+        t, text, _ = self._unsaid
+        self._unsaid = None
+        self.speak(t or task, text)
+        return True
 
     def speak(self, task: str, text: str) -> None:
         if speech.enabled() and text.strip():
@@ -698,7 +730,7 @@ class Session:
         elif kind == "pictures":
             asyncio.create_task(self.pictures_for(task, str(ev.get("text") or "")[:2500]))
         elif kind == "hush":
-            self.hush()
+            self.hush(ev.get("heard") if isinstance(ev.get("heard"), int) else None)
             await self.send({"type": "speech_end", "task": task})
         elif kind == "input":
             await self.on_input(task, ev)
@@ -803,6 +835,12 @@ class Session:
         except Exception as e:  # noqa: BLE001
             log.warning("transcription failed: %s", e)
             text = ""
+        if (not text or self.echo(text)) and self._unsaid and time.time() - self._unsaid[2] < 6:
+            # she cut in, but it was only a noise (or Jagora's own voice): carry on reading
+            if msg_id:
+                await self.send({"type": "drop", "task": task, "id": msg_id})
+            self.resume(task)
+            return
         if not text:
             note = {"en": "I didn't catch that. Please say it again.", "pcm": "I no hear am well. Abeg talk am again.",
                     "yo": "Mi ò gbọ́ ọ dáadáa. Ẹ jọ̀ọ́ ẹ tún sọ ọ́.", "ha": "Ban ji ba sosai. Don Allah ka sake fada.",
@@ -827,6 +865,8 @@ class Session:
 
     async def on_words(self, task: str, text: str, attachment: dict | None, history: list | None) -> None:
         """Whatever she said or typed: an answer to a waiting question, words for the running agent, or a new request."""
+        if text and CONTINUE.search(text) and len(text.split()) <= 5 and self.resume(task):
+            return  # "continue": she wants the rest of what Jagora was saying
         r = self.runs.get(task)
         if r and r.waiting and text:
             # answer the most recent open question with her words
@@ -839,7 +879,9 @@ class Session:
                 self._resolve(task, mid_, text)
                 return
         if r and r.busy:
-            await r.steer.put(text)  # she spoke while it works: heard before its next step
+            # she spoke while it works: a quick spoken "okay" now, and Jagora acts on it before its next step
+            self.speak(task, OKAY.get(self.lang, "Okay."))
+            await r.steer.put(text)
             return
         await db.remember(self.user_id, task, "user", text or (attachment or {}).get("name", ""), title=text[:60])
         r = self.runs.setdefault(task, Run(task))
