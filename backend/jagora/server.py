@@ -251,7 +251,7 @@ def _hello_file(lang: str) -> Path:
     import hashlib
 
     tag = hashlib.sha256(HELLO[lang].encode()).hexdigest()[:10]  # a new line makes a new file
-    return speech.TTS_CACHE / f"hello-v{HELLO_VERSION}-{settings.voice}-{lang}-{tag}.mp3"
+    return speech.TTS_CACHE / f"hello-v{HELLO_VERSION}-amina-{lang}-{tag}.mp3"
 
 
 async def _make_hello(lang: str) -> Path | None:
@@ -259,7 +259,7 @@ async def _make_hello(lang: str) -> Path | None:
     out = _hello_file(lang)
     if out.exists():
         return out
-    clips = [w async for w in speech.speak(HELLO[lang], lang, fresh=True)]
+    clips = [w async for w in speech.speak(HELLO[lang], lang, fresh=True, voice="amina")]  # Amina speaks in her own voice
     if not clips:
         return None
     import io

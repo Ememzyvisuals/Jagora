@@ -352,7 +352,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
 
         {/* the orb, big and alive, and the word */}
         <div className="flex flex-col items-center">
-          <button onClick={() => (setActive(null), setSheet(true))} aria-label="Talk to Jagora" className="-mt-1 transition active:scale-95">
+          <button onClick={() => (setActive(null), setSheet(true))} aria-label="Talk to Jagora" data-tour="orb" className="-mt-1 transition active:scale-95">
             <Orb size={168} state={orb} levelRef={pulse} />
           </button>
           <CloudWordmark width={270} levelRef={pulse} className="-mt-7" />
@@ -581,14 +581,17 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
         >
           <CaretRight size={23} weight="bold" />
         </button>
-        <button
-          onClick={() => setSheet(!sheet)}
-          aria-label="Talk to Jagora"
-          data-tour="orb"
-          className="shrink-0 transition active:scale-90"
-        >
-          <Orb size={52} state={orb} levelRef={pulse} />
-        </button>
+        {/* on the home screen the big orb is already there, so the bar shows it only elsewhere */}
+        {screen !== "home" || sheet ? (
+          <button
+            onClick={() => setSheet(!sheet)}
+            aria-label="Talk to Jagora"
+            data-tour="orb"
+            className="shrink-0 transition active:scale-90"
+          >
+            <Orb size={52} state={orb} levelRef={pulse} />
+          </button>
+        ) : null}
         <button
           className={`${btn} ${screen === "tabs" ? "bg-ink text-paper" : ""}`}
           onClick={() => setScreen("tabs")}

@@ -105,7 +105,7 @@ def test_amina_hello_voice_is_a_small_mp3(monkeypatch, tmp_path):
 
     import jagora.server as server
 
-    async def fake_speak(text, lang, fresh=False):
+    async def fake_speak(text, lang, fresh=False, voice=""):
         pcm = b"".join(int(8000 * math.sin(i / 8)).to_bytes(2, "little", signed=True) for i in range(24000))
         yield speech.pcm_to_wav(pcm, 24000)
 

@@ -111,6 +111,16 @@ def pcm_to_wav(pcm: bytes, rate: int = 24000) -> bytes:
     return buf.getvalue()
 
 
+# Jagora's voice in each language (PlotWeaver STORM built-in voices). JAGORA_VOICE, if set, overrides all of them.
+VOICES = {"en": "john", "yo": "morenike", "ha": "john", "ig": "yemi", "pcm": "john"}
+
+
+def voice_for(lang: str) -> str:
+    import os
+
+    return os.environ.get("JAGORA_VOICE") or VOICES.get(lang, "john")
+
+
 def speakable(text: str) -> str:
     """What is read aloud: links, markdown marks and long reference codes are left to the screen."""
     t = re.sub(r"\[([^\]]+)\]\((?:https?://|www\.)[^)\s]+\)", r"\1", text)  # [link text](address): say the text
@@ -142,7 +152,7 @@ async def speak_stream(text: str, lang: str, ahead: int = 2) -> AsyncIterator[tu
 
     async def make(i: int, s: str) -> None:
         q = queues[i]
-        key = hashlib.sha256(f"{settings.voice}|{lang}|{s}".encode()).hexdigest()[:32]
+        key = hashlib.sha256(f"{voice_for(lang)}|{lang}|{s}".encode()).hexdigest()[:32]
         cached = TTS_CACHE / f"{key}.wav"
         try:
             if cached.exists():
@@ -152,7 +162,7 @@ async def speak_stream(text: str, lang: str, ahead: int = 2) -> AsyncIterator[tu
                     await q.put((rate, pcm[k:k + CHUNK * 4]))
                 return
             async with gate:
-                body = {"text": s, "language": LANG.get(lang, "en"), "voice_id": settings.voice, "model": "storm-v1"}
+                body = {"text": s, "language": LANG.get(lang, "en"), "voice_id": voice_for(lang), "model": "storm-v1"}
                 got = bytearray()
                 async with client.stream("POST", f"{settings.plotweaver_base}/speech/stream", json=body,
                                          headers={"X-API-Key": settings.plotweaver_key}) as r:
@@ -191,8 +201,10 @@ async def speak_stream(text: str, lang: str, ahead: int = 2) -> AsyncIterator[tu
         await client.aclose()
 
 
-async def speak(text: str, lang: str, fresh: bool = False) -> AsyncIterator[bytes]:
-    """WAV clips, one per sentence. `fresh`: ask STORM again instead of using stored clips."""
+async def speak(text: str, lang: str, fresh: bool = False, voice: str = "") -> AsyncIterator[bytes]:
+    """WAV clips, one per sentence. `fresh`: ask STORM again instead of using stored clips. `voice`: a fixed voice
+    (Amina, the mascot, always speaks in her own), else Jagora's voice for the language."""
+    voice = voice or voice_for(lang)
     if not enabled():
         return
     import httpx
@@ -200,12 +212,12 @@ async def speak(text: str, lang: str, fresh: bool = False) -> AsyncIterator[byte
     TTS_CACHE.mkdir(parents=True, exist_ok=True)
     async with httpx.AsyncClient(timeout=120) as c:
         for s in sentences(speakable(text)):
-            key = hashlib.sha256(f"{settings.voice}|{lang}|{s}".encode()).hexdigest()[:32]
+            key = hashlib.sha256(f"{voice}|{lang}|{s}".encode()).hexdigest()[:32]
             cached = TTS_CACHE / f"{key}.wav"
             if cached.exists() and not fresh:
                 yield cached.read_bytes()
                 continue
-            body = {"text": s, "language": LANG.get(lang, "en"), "voice_id": settings.voice, "model": "storm-v1"}
+            body = {"text": s, "language": LANG.get(lang, "en"), "voice_id": voice, "model": "storm-v1"}
             try:
                 async with c.stream("POST", f"{settings.plotweaver_base}/speech/stream", json=body,
                                     headers={"X-API-Key": settings.plotweaver_key}) as r:
