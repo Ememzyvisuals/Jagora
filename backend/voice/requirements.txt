@@ -1,0 +1,7 @@
+# The same pins as Kivo's voice agent (LiveKit Agents and its plugins move in lockstep)
+livekit-agents==1.8.8
+livekit-plugins-silero==1.8.8
+aiohttp==3.14.5
+numpy==2.5.4
+num2words==0.5.14
+python-dotenv==1.2.4

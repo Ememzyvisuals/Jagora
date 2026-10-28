@@ -18,6 +18,18 @@ services:
     mem_limit: 3g
     cpus: 2.0
     networks: [backend_default]
+  # Jagora's voice on LiveKit (voice/agent.py): joins her LiveKit room, STORM ASR in and STORM TTS out, and talks to
+  # jagora-agent over the voice link. Outbound connections only; no published ports.
+  jagora-voice:
+    build: ./voice
+    container_name: jagora-voice
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      JAGORA_VOICE_LINK: ws://jagora-agent:8000/voice-link
+    mem_limit: 1500m
+    cpus: 1.0
+    networks: [backend_default]
 networks:
   backend_default:
     external: true

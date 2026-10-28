@@ -501,6 +501,13 @@ export async function remoteWake() {
   } catch {}
 }
 
+/** The chat she has open: Jagora's voice (on LiveKit) talks into it. */
+export async function remoteFocus(task: string) {
+  try {
+    (await connect()).send(JSON.stringify({ type: "focus", task }));
+  } catch {}
+}
+
 export async function remoteStop(task: string) {
   hush();
   ws?.send(JSON.stringify({ type: "stop", task }));

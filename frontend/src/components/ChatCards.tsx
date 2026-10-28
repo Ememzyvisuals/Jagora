@@ -145,6 +145,15 @@ export function VoiceBubble({ m }: { m: Extract<Msg, { kind: "user" }> }) {
   };
   useEffect(() => () => audio.current?.pause(), []);
   const progress = dur ? Math.min(1, at / dur) : 0;
+  // heard live (her voice on LiveKit): no recording to play, just her words appearing as she speaks
+  if (!m.audio)
+    return (
+      <div className="flex justify-end">
+        <p className={`max-w-[85%] rounded-[20px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[15.5px] leading-snug text-paper ${m.text ? "" : "italic text-paper/60"}`}>
+          {m.text || (m.heard === false ? W.missed[lang] : "…")}
+        </p>
+      </div>
+    );
   return (
     <div className="flex justify-end">
       <div className="max-w-[85%] rounded-[20px] rounded-br-[6px] bg-ink px-3 py-2.5 text-paper">

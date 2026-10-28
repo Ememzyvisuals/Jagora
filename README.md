@@ -257,6 +257,7 @@ what happens around it:
 | App | Next.js 15, React 19, Tailwind v4, Motion, Zustand, WebGL (living orb, cloud-glass wordmark), three.js (3D devices), WebCodecs (live video), Silero VAD (turn-taking, in the browser) |
 | Server | Python 3.12, FastAPI, WebSockets, Playwright Chromium, PyAV (x264 live video), PyMuPDF, ffmpeg |
 | Models | Meta Model API (Muse Spark, Muse Wonder, Muse Image, SAM 3.1), PlotWeaver STORM speech; an optional open-weights hook, off in this demo |
+| Voice | LiveKit (WebRTC) with a LiveKit Agents worker (`backend/voice/`): STORM ASR streamed while she speaks, behind Silero VAD; STORM TTS over a persistent WebSocket; LiveKit turn taking and barge-in. The thinking stays in Jagora's server, over a private voice link |
 | Data | Turso (libSQL over HTTP), SQLite fallback, per-site encrypted vault |
 | Safety | Public blocklists (StevenBlack, URLhaus, Phishing.Database, HaGeZi), lookalike detection, content classifiers |
 | Delivery | Vercel (app), Docker behind Caddy on AWS EC2 (agent), Web Push (VAPID) |

@@ -52,7 +52,7 @@ import { toggleTheme, useTheme } from "@/lib/theme";
 import { Glass } from "../glass/Glass";
 import { PAGE_PILL, PILL } from "@/lib/glassRegistry";
 import { Bounce, Orb } from "../Orb";
-import { micLevel, startHandsFree, stopHandsFree, useHandsFree } from "@/lib/handsfree";
+import { jagoraLevel, micLevel, startHandsFree, stopHandsFree, throughLiveKit, useHandsFree } from "@/lib/handsfree";
 
 type L = Record<Lang, string>;
 
@@ -598,8 +598,8 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
             data-tour="orb"
             className="-my-2 shrink-0 transition active:scale-90"
           >
-            <Bounce level={orb === "speaking" ? pulse : micLevel} amount={0.24}>
-              <Orb size={62} state={orb} levelRef={orb === "speaking" ? pulse : micLevel} />
+            <Bounce level={orb === "speaking" ? (throughLiveKit() ? jagoraLevel : pulse) : micLevel} amount={0.24}>
+              <Orb size={62} state={orb} levelRef={orb === "speaking" ? (throughLiveKit() ? jagoraLevel : pulse) : micLevel} />
             </Bounce>
           </button>
         ) : null}

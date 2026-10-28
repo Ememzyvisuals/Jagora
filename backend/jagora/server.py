@@ -382,9 +382,44 @@ async def livekit_token(request: Request):
     if not uid or not settings.livekit_key:
         raise HTTPException(401)
     now = int(time.time())
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    lang = str(body.get("lang") or "en")[:4]
+    room = f"jagora-{uid[:12]}-{secrets.token_hex(3)}"  # a fresh room each time, so the voice joins it at once
     claims = {"iss": settings.livekit_key, "sub": uid, "nbf": now, "exp": now + 3600, "name": "Jagora user",
-              "video": {"room": f"jagora-{uid[:12]}", "roomJoin": True, "canPublish": True, "canSubscribe": True}}
-    return {"url": settings.livekit_url, "token": _jwt(claims, settings.livekit_secret)}
+              "video": {"room": room, "roomJoin": True, "canPublish": True, "canSubscribe": True},
+              # Jagora's voice (voice/agent.py) is sent into the room as she joins, the way Kivo's agent is
+              "roomConfig": {"agents": [{"agentName": settings.voice_agent_name,
+                                         "metadata": json.dumps({"uid": uid, "lang": lang})}]}}
+    return {"url": settings.livekit_url, "token": _jwt(claims, settings.livekit_secret), "voice": bool(settings.voice_link_secret)}
+
+
+@app.websocket("/voice-link")
+async def voice_link(ws: WebSocket):
+    """Jagora's voice worker on LiveKit, for one person: her finished turns come in, what Jagora says goes out."""
+    key, uid = ws.query_params.get("key", ""), ws.query_params.get("uid", "")
+    if not settings.voice_link_secret or not hmac.compare_digest(key, settings.voice_link_secret):
+        await ws.close(code=4403)
+        return
+    await ws.accept()
+    s = SESSIONS.get(uid)
+    if s is None:
+        await ws.close(code=4404)
+        return
+    s.attach_voice(ws)
+    try:
+        while True:
+            try:
+                ev = json.loads(await ws.receive_text())
+            except ValueError:
+                continue
+            asyncio.create_task(s.on_voice(ev))
+    except WebSocketDisconnect:
+        pass
+    finally:
+        s.detach_voice(ws)
 
 
 def _jwt(claims: dict, secret: str) -> str:
@@ -483,7 +518,9 @@ class Session:
         self._page_ready = asyncio.Event()
         self._page_ready.set()
         self._last_url = ""
-        self._missed: list[dict] = []  # chat messages that could not be sent, delivered when she reconnects
+        self._missed: list[dict] = []
+        self.voice_ws: WebSocket | None = None  # Jagora's voice worker on LiveKit, while she talks through it
+        self._hearing: str = ""  # the chat bubble showing what the voice hears as she speaks  # chat messages that could not be sent, delivered when she reconnects
 
     def _cast_mode(self) -> str:
         if self.video:
@@ -699,6 +736,8 @@ class Session:
                     pass
                 if gen != self._gen:
                     continue
+            if self.voice_ws is not None and await self._to_voice({"type": "say", "text": speech.speakable(text), "lang": lang}):
+                continue  # Jagora's voice on LiveKit says it (and handles her talking over it)
             self._speaking = (task, text, lang)
             try:
                 await self.send({"type": "orb", "state": "speaking"})
@@ -766,6 +805,8 @@ class Session:
         if rest:
             self._unsaid = (task, " ".join(rest), time.time())
         self._gen += 1
+        if self.voice_ws is not None:
+            asyncio.ensure_future(self._to_voice({"type": "hush"}))
 
     def resume(self, task: str) -> bool:
         """Carry on with what was interrupted, if it was recent."""
@@ -947,6 +988,70 @@ class Session:
         except Exception:  # noqa: BLE001
             pass
 
+    # ---- her live voice: streamed to the recogniser while she speaks ----------------------------------------------
+
+    # ---- her voice through LiveKit (voice/agent.py) --------------------------------------------------------------
+
+    def attach_voice(self, ws: WebSocket) -> None:
+        self.voice_ws = ws
+        log.info("voice on LiveKit for %s", self.user_id[:8])
+        asyncio.create_task(self._to_voice({"type": "lang", "lang": self.lang}))
+        asyncio.create_task(self.send({"type": "voice", "on": True}))
+
+    def detach_voice(self, ws: WebSocket) -> None:
+        if self.voice_ws is ws:
+            self.voice_ws = None
+            asyncio.create_task(self.send({"type": "voice", "on": False}))
+
+    async def _to_voice(self, msg: dict) -> bool:
+        ws = self.voice_ws
+        if ws is None:
+            return False
+        try:
+            await asyncio.wait_for(ws.send_text(json.dumps(msg, ensure_ascii=False)), SEND_WAIT)
+            return True
+        except Exception:  # noqa: BLE001
+            self.voice_ws = None
+            return False
+
+    async def on_voice(self, ev: dict) -> None:
+        kind = ev.get("type")
+        task = self.active_task
+        if kind == "partial":
+            text = str(ev.get("text") or "").strip()
+            if not text or not task:
+                return
+            if (self._speaking or self.voice_speaking) and is_stop(text):
+                await self.silence(task)  # "stop" while Jagora talks: quiet at once
+                return
+            if not self._hearing:
+                self._hearing = mid()
+                await self.send({"type": "msg", "task": task, "msg": {"id": self._hearing, "kind": "user", "text": text, "voice": True}})
+            else:
+                await self.send({"type": "update", "task": task, "id": self._hearing, "patch": {"text": text}})
+        elif kind == "words":
+            text = str(ev.get("text") or "").strip()
+            msg_id, self._hearing = self._hearing or None, ""
+            if task and text:
+                await self.heard(task, msg_id, text, self.lang, None)
+        elif kind == "state":
+            state = str(ev.get("agent") or "")
+            self.voice_speaking = state == "speaking"
+            if state == "speaking":
+                self._page_ready.set()
+                await self.send({"type": "orb", "state": "speaking"})
+            elif state == "listening":
+                await self.send({"type": "orb", "state": "listening"})
+                await self.send({"type": "speech_end", "task": task})
+        elif kind == "user" and ev.get("state") == "speaking":
+            await self.send({"type": "orb", "state": "listening"})
+
+    voice_speaking = False
+
+    async def on_binary(self, data: bytes) -> None:
+        """Binary messages from her app: none are used now (her live voice goes through LiveKit)."""
+        return
+
     async def on_audio(self, task: str, ev: dict) -> None:
         lang = ev.get("lang") or self.lang
         msg_id = ev.get("id")
@@ -956,6 +1061,10 @@ class Session:
         except Exception as e:  # noqa: BLE001
             log.warning("transcription failed: %s", e)
             text = ""
+        await self.heard(task, msg_id, text, lang, ev.get("history"))
+
+    async def heard(self, task: str, msg_id, text: str, lang: str, history) -> None:
+        """Her words, however they came (live stream or a voice note): answered, or dropped if only a noise or echo."""
         if (not text or self.echo(text)) and self._unsaid and time.time() - self._unsaid[2] < 6:
             # she cut in, but it was only a noise (or Jagora's own voice): carry on reading
             if msg_id:
@@ -982,7 +1091,7 @@ class Session:
             await self.send({"type": "update", "task": task, "id": msg_id, "patch": {"text": text}})
         else:
             await self.send({"type": "msg", "task": task, "msg": {"id": mid(), "kind": "user", "text": text, "voice": True}})
-        await self.on_words(task, text, None, ev.get("history"))
+        await self.on_words(task, text, None, history)
 
     async def on_words(self, task: str, text: str, attachment: dict | None, history: list | None) -> None:
         """Whatever she said or typed: an answer to a waiting question, words for the running agent, or a new request."""
@@ -1526,7 +1635,13 @@ async def ws_route(ws: WebSocket):
             await db.exec("update notices set delivered=1 where id=?", (n["id"],))
     try:
         while True:
-            raw = await ws.receive_text()
+            m = await ws.receive()
+            if m.get("type") == "websocket.disconnect":
+                raise WebSocketDisconnect(m.get("code") or 1000)
+            if m.get("bytes") is not None:
+                await s.on_binary(m["bytes"])  # her live voice: in order, at once
+                continue
+            raw = m.get("text") or ""
             if len(raw) > 12_000_000:
                 continue
             try:

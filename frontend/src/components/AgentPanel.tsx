@@ -11,7 +11,7 @@ import { Composer, StopButton, browserRecognizer } from "./Composer";
 import { Conversation } from "./Conversation";
 import { IconPasteMessage, IconRegister, IconSnapPaper } from "./icons";
 import { Bounce, Orb } from "./Orb";
-import { micLevel, startHandsFree, stopHandsFree, useHandsFree } from "@/lib/handsfree";
+import { jagoraLevel, micLevel, startHandsFree, stopHandsFree, throughLiveKit, useHandsFree } from "@/lib/handsfree";
 import { isSpeaking } from "@/lib/engine/remote";
 
 export function ModeSwitch() {
@@ -83,7 +83,7 @@ export function TalkOrb({ size = 96 }: { size?: number }) {
     setOrb("listening");
   }, [voice, rec, lang, setOrb, t0, handsFree]);
 
-  const level = orb === "speaking" ? speaking : handsFree ? micLevel : voice.level;
+  const level = orb === "speaking" ? (throughLiveKit() ? jagoraLevel : speaking) : handsFree ? micLevel : voice.level;
   const label = voice.error ? "Allow the microphone to talk to Jagora" : hint || t(orb === "idle" ? "idle" : orb, lang);
 
   return (

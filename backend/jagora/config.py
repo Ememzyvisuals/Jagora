@@ -120,6 +120,9 @@ class Settings:
     livekit_url: str = field(default_factory=lambda: env("LIVEKIT_URL"))
     livekit_key: str = field(default_factory=lambda: env("LIVEKIT_API_KEY"))
     livekit_secret: str = field(default_factory=lambda: env("LIVEKIT_API_SECRET"))
+    # Jagora's voice worker on LiveKit (voice/agent.py): its dispatch name and the secret of its link to this server
+    voice_agent_name: str = field(default_factory=lambda: env("VOICE_AGENT_NAME", "jagora-voice"))
+    voice_link_secret: str = field(default_factory=lambda: env("VOICE_LINK_SECRET"))
     # Turso (accounts, credits, chat memory); a local SQLite file when not set
     turso_url: str = field(default_factory=lambda: env("TURSO_DATABASE_URL"))
     turso_token: str = field(default_factory=lambda: env("TURSO_AUTH_TOKEN"))

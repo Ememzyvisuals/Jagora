@@ -14,6 +14,7 @@ import type { Lang } from "@/lib/i18n";
 import { activeTask, useApp } from "@/lib/store";
 import { duckVoice, hush } from "@/lib/engine/remote";
 import { Listener } from "@/lib/turns";
+import { startHandsFree, stopHandsFree, throughLiveKit } from "@/lib/handsfree";
 import { blobToDataUrl, useSpeakingPulse, useVoice, watchForVoice } from "@/lib/voice";
 import { browserRecognizer } from "./Composer";
 import { Glass } from "./glass/Glass";
@@ -160,6 +161,15 @@ export function LiveMode() {
   useEffect(() => {
     if (!on || !backendLive) return;
     let gone = false;
+    let viaLiveKit = false;
+    // first choice: Jagora's voice on LiveKit (as in Kivo); it hears her turns and her cutting in by itself
+    void startHandsFree().then((ok) => {
+      if (gone || !ok || !throughLiveKit()) return startListener();
+      viaLiveKit = true;
+      setSmart(true);
+    });
+    const startListener = () => {
+    if (gone) return;
     const l = new Listener({
       onTurn: async (wav, secs) => {
         if (!useApp.getState().live) return;
@@ -176,11 +186,14 @@ export function LiveMode() {
       if (ok) listener.current = l;
       setSmart(ok);
     });
+    };
     return () => {
       gone = true;
+      const l = listener.current;
       listener.current = null;
       setSmart(null);
-      void l.destroy();
+      void l?.destroy();
+      if (viaLiveKit) void stopHandsFree();
     };
   }, [on, interrupt, setOrb]);
   useEffect(() => {
