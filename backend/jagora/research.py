@@ -17,6 +17,33 @@ SERPER = "https://google.serper.dev/search"
 _spent: set[str] = set()  # Serper keys whose searches have run out (until the server restarts)
 
 
+async def videos(query: str, limit: int = 8) -> list[dict]:
+    """Videos for her (YouTube first) through Serper: the server never opens YouTube, which asks a server's address
+    to prove it is not a bot. The chosen one plays on her own device in YouTube's player."""
+    import httpx
+
+    for key in settings.serper_keys:
+        if key in _spent:
+            continue
+        try:
+            async with httpx.AsyncClient(timeout=10) as c:
+                r = await c.post("https://google.serper.dev/videos", headers={"X-API-KEY": key, "Content-Type": "application/json"},
+                                 json={"q": query, "gl": "ng", "hl": "en", "num": limit})
+        except Exception as e:  # noqa: BLE001
+            log.warning("serper videos unreachable: %s", e)
+            return []
+        if r.status_code in (401, 402, 403, 429):
+            _spent.add(key)
+            continue
+        if r.status_code != 200:
+            return []
+        out = [{"title": v.get("title", ""), "url": v.get("link", ""), "channel": v.get("channel", "") or v.get("source", ""),
+                "duration": v.get("duration", ""), "date": v.get("date", "")} for v in r.json().get("videos", [])]
+        out.sort(key=lambda v: "youtube.com" not in v["url"] and "youtu.be" not in v["url"])
+        return out[:limit]
+    return []
+
+
 async def serper(query: str, limit: int = 10) -> tuple[list[dict], str]:
     """Google's results for Nigeria through Serper, in well under a second, with no search page to load (a server's
     address gets empty or blocked search pages). Returns (results, Google's quick answer if it has one)."""

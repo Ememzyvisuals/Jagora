@@ -93,3 +93,24 @@ async def test_the_voice_listens_in_the_language_she_chose(monkeypatch):
     assert s.lang == "yo" and v.out[-1] == {"type": "lang", "lang": "yo"}
     assert s.active_task == "chat1"
     s._speaker.cancel()
+
+
+async def test_words_showing_are_answered_when_the_voice_does_not_end_her_turn(monkeypatch):
+    # the voice showed her words, she stopped, but its turn end never came: Jagora answers what is showing, once
+    from jagora import server
+
+    s = server.Session(WS(), "u1")
+    s.active_task = "t"
+    got = []
+
+    async def heard(task, msg_id, text, lang, history):
+        got.append(text)
+
+    monkeypatch.setattr(s, "heard", heard)
+    await s.on_voice({"type": "partial", "text": "when is jamb registration"})
+    await s.on_voice({"type": "user", "state": "listening"})
+    s._commit.cancel()
+    await s._commit_partial("t", wait=0)
+    assert got == ["when is jamb registration"]
+    await s.on_voice({"type": "words", "text": "When is JAMB registration?"})  # the late turn end: not answered twice
+    assert got == ["when is jamb registration"]

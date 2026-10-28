@@ -1139,6 +1139,10 @@ class Session:
             if (self._speaking or self.voice_speaking) and is_stop(text):
                 await self.silence(task)  # "stop" while Jagora talks: quiet at once
                 return
+            self._partial = text
+            if self._commit:
+                self._commit.cancel()  # still talking: not finished yet
+                self._commit = None
             if not self._hearing or self._hearing_task != task:
                 # a new bubble (also when she has moved to another chat, or the last call ended mid-sentence)
                 self._hearing, self._hearing_task = mid(), task
@@ -1147,6 +1151,19 @@ class Session:
                 await self.send({"type": "update", "task": task, "id": self._hearing, "patch": {"text": text}})
         elif kind == "words":
             text = str(ev.get("text") or "").strip()
+            if self._commit:
+                self._commit.cancel()
+                self._commit = None
+            self._partial = ""
+            if text and self._committed and time.time() - self._committed[1] < 20 and not ev.get("_from_partial"):
+                import difflib
+
+                was = self._committed[0]
+                self._committed = None
+                same = difflib.SequenceMatcher(None, was.lower(), text.lower()).ratio() > 0.75
+                if same and len(text.split()) <= len(was.split()) + 3:
+                    trace.write(self.user_id, "voice_turn_already_answered", text=text)
+                    return  # already answered from the words shown (see "user" below)
             msg_id = self._hearing if self._hearing and self._hearing_task == task else None
             self._hearing = ""
             if task and text and is_noise(text) and not is_stop(text):
@@ -1175,9 +1192,29 @@ class Session:
             self.speak(task, (HERE if r and r.busy else HERE_IDLE).get(self.lang, HERE["en"]))
         elif kind == "user" and ev.get("state") == "speaking":
             await self.send({"type": "orb", "state": "listening"})
+        elif kind == "user" and ev.get("state") in ("listening", "away") and self._partial and task:
+            # she stopped talking and her words are already showing: if the voice does not end her turn within a
+            # moment (sometimes it waits for her next words), Jagora answers what is showing
+            if self._commit:
+                self._commit.cancel()
+            self._commit = asyncio.create_task(self._commit_partial(task))
 
     voice_speaking = False
     _hearing_task = ""
+    _partial = ""  # the latest words the voice showed while she spoke
+    _commit: asyncio.Task | None = None
+    _committed: tuple[str, float] | None = None  # words answered without waiting for the voice's own turn end
+
+    async def _commit_partial(self, task: str, wait: float = 1.8) -> None:
+        await asyncio.sleep(wait)
+        text, self._partial = self._partial, ""
+        self._commit = None
+        if not text:
+            return
+        trace.write(self.user_id, "voice_turn_from_partial", text=text, note="the voice had not ended her turn")
+        self._committed = None
+        await self.on_voice({"type": "words", "text": text, "_from_partial": True})
+        self._committed = (text, time.time())
 
     async def on_binary(self, data: bytes) -> None:
         """Binary messages from her app: none are used now (her live voice goes through LiveKit)."""

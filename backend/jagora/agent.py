@@ -343,6 +343,9 @@ COMMON = [
     tool("ask_point", "When you are not sure which thing on the page the user means, ask them to tap it on the live page. You get "
          "back what the user tapped.", {"question": {"type": "string", "description": "in their language, e.g. 'Tap the button you mean'"}},
          ["question"]),
+    tool("find_video", "Find a video, song, film or trailer to play for them (YouTube first). Then play the best one with "
+         "play_media and its link. Never open youtube.com in the browser for this: it keeps asking the browser to prove it "
+         "is not a robot. The video plays on their own device.", {"query": {"type": "string"}}, ["query"]),
     tool("look", "See the page as a picture on your next step. Only when the text and the list of elements are not enough "
          "(pictures, maps, colours, layout, a button you cannot find).", {}, []),
     tool("finish", "The task is done, or cannot be done. Tell them the result in their language: the answer, what you "
@@ -736,7 +739,7 @@ class Agent:
         (("write_document",), r"doc|document|pdf|word|letter|cv|resume|write|summar|report|markdown|note"),
         (("picture_guide",), r"picture|draw|diagram|image|show me how|illustrat"),
         (("save_page", "page_theme"), r"save|pdf|print|download|dark|light|theme|night mode"),
-        (("play_media", "find_media"), r"play|song|music|video|movie|film|watch|listen|audio|sermon|podcast|clip"),
+        (("play_media", "find_media", "find_video"), r"play|song|music|video|movie|film|watch|listen|audio|sermon|podcast|clip"),
         (("give_verdict", "check_link", "review_terms"), r"real|fake|scam|legit|genuine|official|safe|trust|link|terms|verify|check (this|if)"),
         (("remember_about_her",), r"remember|my name is|i am a|i live|call me|i work|i study"),
     ]
@@ -989,6 +992,15 @@ class Agent:
                 answer = await self.io.ask(a.get("question", ""), list(a.get("choices") or []))
                 self._flow.heard(str(answer))
                 return f'the user answered: "{answer}"', True, None
+            if name == "find_video":
+                if not settings.serper_keys:
+                    return "video search is not set up; search the web instead", False, None
+                vids = await research.videos(str(a.get("query", "")))
+                if not vids:
+                    return "no videos found; try other words", False, None
+                return ("videos (pick the one that best matches what they asked, then play_media with its url):\n" + "\n".join(
+                    f"{i + 1}. {v['title']} | {v['url']} | {v['channel']} {v['duration']} {v['date']}".rstrip()
+                    for i, v in enumerate(vids))), False, None
             if name == "look":
                 self._want_look = True
                 return "you will see the page as a picture now", True, None
