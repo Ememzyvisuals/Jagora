@@ -102,7 +102,7 @@ class Pointing(Model):
         if self.turn == 0:
             calls = [("ask_point", {"question": "Tap the button you mean"})]
         elif self.turn == 1:
-            n = int(page.split("she tapped element [")[1].split("]")[0])
+            n = int(page.split("the user tapped element [")[1].split("]")[0])
             calls = [("upload_file", {"element": n, "files": ["passport.jpg"]})]
         else:
             calls = [("finish", {"summary": "Uploaded.", "success": True})]
@@ -123,6 +123,6 @@ async def test_she_points_and_jagora_uploads_her_photo(tmp_path):
         agent = Agent(model, b, io, files={"passport.jpg": str(photo)})
         res = await agent.run("upload my certificate")
         assert res.success, agent.history
-        assert "Files she gave you in the chat (for upload_file): passport.jpg" in model.seen[0]
+        assert "Files the user gave you in the chat (for upload_file): passport.jpg" in model.seen[0]
         assert await b.page.locator("#fn2").inner_text() == "passport.jpg"
         assert io.confirms and "passport.jpg" in io.confirms[0]  # she agreed before her file left the chat

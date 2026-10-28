@@ -90,7 +90,7 @@ async def test_when_she_says_no_nothing_is_submitted():
         await agent.run("register", PORTAL)
         page = await b.snapshot(marks=False)
     assert "You are registered" not in page.text
-    assert any("she said that is not right" in h for h in agent.history)  # the read-back "no" stopped the phone number
+    assert any("the user said that is not right" in h for h in agent.history)  # the read-back "no" stopped the phone number
 
 
 async def test_jagora_never_types_a_password():

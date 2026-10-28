@@ -341,7 +341,7 @@ async def test_learned_skills_remember_how_a_site_was_done():
     a._learn("click", {"element": 4}, snap, "refused: no")  # failures are not learned
     await a._save_skills()
     saved = store["jamb.gov.ng"]
-    assert saved["steps"] == ["open efacility.jamb.gov.ng/check", 'she types her registration number into "Registration number …"', 'press "Check result"']
+    assert saved["steps"] == ["open efacility.jamb.gov.ng/check", 'the user types their registration number into "Registration number …"', 'press "Check result"']
     assert "202612345678" not in json.dumps(saved) and "12345678" not in json.dumps(saved)
     b = Agent(None, None, None, memory=Mem())
     b._goal = "result"

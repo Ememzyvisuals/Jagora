@@ -264,7 +264,7 @@ class CarelessIO:
             self.out.guards.append(f"{data.get('kind')}: {data.get('text', '')}"[:160])
 
 
-STOP_NOTE = re.compile(r"-> (refused|not typed|STOPPED|not pressed|she did not|could not do that: .*(blocked|refused))", re.I)
+STOP_NOTE = re.compile(r"-> (refused|not typed|STOPPED|not pressed|she did not|the user did not|could not do that: .*(blocked|refused))", re.I)
 
 
 def who_stopped(out: Outcome, history: list[str]) -> str:
