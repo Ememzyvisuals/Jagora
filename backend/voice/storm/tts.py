@@ -123,7 +123,7 @@ class StormTTS(tts.TTS):
         self._pool = utils.ConnectionPool[aiohttp.ClientWebSocketResponse](
             connect_cb=self._connect,
             close_cb=self._close,
-            max_session_duration=600,
+            max_session_duration=45,  # the speech server drops idle sockets: never hand out an old one
             mark_refreshed_on_get=True,
         )
 
@@ -195,15 +195,28 @@ class StormChunkedStream(tts.ChunkedStream):
         payload = {**speaker_field(opts.speaker), "text": text[:1000], "fast": opts.fast}
         # Leaving this block by exception (including cancellation on interrupt)
         # removes the socket from the pool and closes it.
-        async with self._storm._pool.connection(timeout=self._conn_options.timeout) as ws:
+        self._got_audio = False
+        for attempt in range(3):
             try:
-                await self._speak(ws, payload, output_emitter, request_id)
-            except BaseException:
-                # Interrupted or failed mid-utterance: drop the connection now
-                # so the server stops streaming; the pool replaces it on the
-                # next sentence.
-                _hard_close(ws)
-                raise
+                async with self._storm._pool.connection(timeout=self._conn_options.timeout) as ws:
+                    if ws.closed:
+                        # the speech server closed this idle socket while it sat in the pool: take a fresh one
+                        raise ConnectionResetError("pooled socket already closed")
+                    try:
+                        await self._speak(ws, payload, output_emitter, request_id)
+                    except BaseException:
+                        # Interrupted or failed mid-utterance: drop the connection now
+                        # so the server stops streaming; the pool replaces it on the
+                        # next sentence.
+                        _hard_close(ws)
+                        raise
+                break
+            except (ConnectionResetError, APIConnectionError, aiohttp.ClientConnectionError) as e:
+                # a dead socket from the pool ("Cannot write to closing transport"): nothing was said yet, so the
+                # sentence is sent again on a new connection instead of being lost
+                if self._got_audio or attempt == 2:
+                    raise
+                logger.warning("STORM TTS socket was dead (%s); retrying on a fresh connection", e)
         output_emitter.flush()
 
     async def _speak(
@@ -229,6 +242,7 @@ class StormChunkedStream(tts.ChunkedStream):
                     carry = b""
                 if data:
                     got_audio = True
+                    self._got_audio = True
                     output_emitter.push(data)
             elif msg.type == aiohttp.WSMsgType.TEXT:
                 try:
