@@ -7,12 +7,13 @@
 import { useEffect, useState } from "react";
 import { voiceNote } from "./engine";
 import { duckVoice, hush, remoteFocus } from "./engine/remote";
-import { liveVoiceOn, onLiveVoice, startLiveVoice, stopLiveVoice, voiceLevels } from "./livevoice";
+import { liveVoiceOn, onLiveVoice, setLiveMic, startLiveVoice, stopLiveVoice, voiceLevels } from "./livevoice";
 import { useApp } from "./store";
 import { Listener } from "./turns";
 import { blobToDataUrl } from "./voice";
 
 let listener: Listener | null = null;
+let wanted = false; // false once she turns it off: a start still on its way is undone when it lands
 let starting: Promise<boolean> | null = null;
 const subs = new Set<(on: boolean) => void>();
 /** her voice level 0..1 while listening (the orb's edge and bounce follow it) */
@@ -30,6 +31,16 @@ export function isHandsFree() {
 }
 export const throughLiveKit = () => liveVoiceOn();
 
+/** Microphone off (true) or back on, without ending: nothing she says is heard while it is off. */
+export async function muteHandsFree(off: boolean) {
+  if (listener) {
+    if (off) listener.pause();
+    else listener.resume();
+  }
+  if (liveVoiceOn()) await setLiveMic(!off);
+  micLevel.current = 0;
+}
+
 /** The chat Jagora's voice talks into: the open one, or a new one. */
 function ensureChat(): string {
   const s = useApp.getState();
@@ -41,9 +52,14 @@ function ensureChat(): string {
 
 export async function startHandsFree(): Promise<boolean> {
   if (isHandsFree()) return true;
+  wanted = true;
   if (starting) return starting;
   starting = (async () => {
     if (await startLiveVoice()) {
+      if (!wanted) {
+        await stopLiveVoice();
+        return false;
+      }
       void remoteFocus(ensureChat());
       clearInterval(levelTimer);
       levelTimer = window.setInterval(() => (micLevel.current = voiceLevels.me.current), 50);
@@ -68,6 +84,10 @@ export async function startHandsFree(): Promise<boolean> {
     });
     const ok = await l.start();
     if (!ok) return false;
+    if (!wanted) {
+      await l.destroy();
+      return false;
+    }
     listener = l;
     l.setAgentTalking(useApp.getState().orb === "speaking");
     levelTimer = window.setInterval(() => (micLevel.current = l.level.current), 50);
@@ -84,11 +104,12 @@ export async function startHandsFree(): Promise<boolean> {
 }
 
 export async function stopHandsFree() {
+  wanted = false;
   const l = listener;
   listener = null;
   clearInterval(levelTimer);
   micLevel.current = 0;
-  if (liveVoiceOn()) await stopLiveVoice();
+  await stopLiveVoice(); // also drops a call that is still connecting
   if (useApp.getState().orb === "listening") useApp.getState().setOrb("idle");
   tell();
   await l?.destroy();

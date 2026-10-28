@@ -70,15 +70,23 @@ async def test_a_noise_that_cut_her_off_does_not_stop_the_reading(monkeypatch):
     s._speaker.cancel()
 
 
-async def test_words_while_jagora_works_get_an_instant_okay(monkeypatch):
+async def test_words_while_jagora_works_steer_it_without_an_okay(monkeypatch):
+    # her words go to the running task (no spoken "okay" every time); a scrap of noise does nothing; "are you
+    # there?" gets a short answer and the work goes on
     spoken = _setup(monkeypatch)
     s = server.Session(WS(), "u1")
     r = server.Run("t")
     r.job = asyncio.create_task(asyncio.sleep(5))  # a task in progress
     s.runs["t"] = r
     await s.on_words("t", "use my second email instead", None, None)
+    await s.on_words("t", "uh", None, None)
     await asyncio.sleep(0.15)
-    assert spoken and spoken[0] == "Okay."
+    assert not spoken
     assert r.steer.get_nowait() == "use my second email instead"
+    assert r.steer.empty()
+    await s.on_words("t", "are you there?", None, None)
+    await asyncio.sleep(0.15)
+    assert spoken and "still working" in spoken[0]
+    assert r.steer.empty() and not r.job.done()
     r.job.cancel()
     s._speaker.cancel()

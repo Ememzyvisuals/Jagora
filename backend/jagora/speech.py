@@ -17,6 +17,8 @@ import hashlib
 import io
 import logging
 import re
+import json
+import os
 import wave
 from collections.abc import AsyncIterator
 
@@ -31,8 +33,52 @@ class SpeechError(Exception):
     pass
 
 
+# STORM's own boxes (the same ones Jagora's LiveKit voice uses), preferred over the developer API when set
+STORM_TTS_WS = os.environ.get("STORM_TTS_WS_URL", "").strip()
+STORM_TTS_KEY = os.environ.get("STORM_TTS_API_KEY", "").strip()
+STORM_ASR_WS = os.environ.get("STORM_ASR_WS_URL", "").strip()
+STORM_ASR_KEY = os.environ.get("STORM_ASR_API_KEY", "").strip()
+# one fixed voice per language, the same table as voice/agent.py (John by his catalogue ID)
+STORM_VOICES = {"en": {"speaker_id": "slr70_ngm_09334"}, "ha": {"speaker_id": "slr70_ngm_09334"},
+                "yo": {"name": "Morenike"}, "ig": {"lang": "ig"}, "pcm": {"lang": "pcm"}}
+
+
+def storm_asr_http() -> str:
+    """ws://host:8000/ws/transcribe -> http://host:8000/transcribe"""
+    if not STORM_ASR_WS:
+        return ""
+    base = STORM_ASR_WS.split("/ws/")[0]
+    return base.replace("wss://", "https://").replace("ws://", "http://") + "/transcribe"
+
+
 def enabled() -> bool:
-    return bool(settings.plotweaver_key)
+    return bool(settings.plotweaver_key or (STORM_TTS_WS and STORM_TTS_KEY))
+
+
+async def _storm_ws(text: str, lang: str, q: asyncio.Queue) -> int:
+    """One passage through STORM's TTS WebSocket in her language's fixed voice; PCM chunks onto q. Returns bytes."""
+    import websockets
+
+    sep = "&" if "?" in STORM_TTS_WS else "?"
+    n = 0
+    async with websockets.connect(f"{STORM_TTS_WS}{sep}api_key={STORM_TTS_KEY}", max_size=None, open_timeout=10) as ws:
+        await ws.send(json.dumps({**STORM_VOICES.get(lang, STORM_VOICES["en"]), "text": text[:1000], "fast": True},
+                                 ensure_ascii=False))
+        carry = b""
+        while True:
+            msg = await asyncio.wait_for(ws.recv(), 20)
+            if isinstance(msg, bytes):
+                data = carry + msg
+                carry, data = (data[-1:], data[:-1]) if len(data) % 2 else (b"", data)
+                if data:
+                    n += len(data)
+                    await q.put((24000, data))
+                continue
+            ev = json.loads(msg)
+            if ev.get("event") == "done":
+                return n
+            if ev.get("event") == "error":
+                raise SpeechError(str(ev.get("detail"))[:200])
 
 
 async def to_wav16k(audio: bytes) -> bytes:
@@ -61,9 +107,11 @@ async def transcribe(audio: bytes, lang: str) -> str:
     wav = await to_wav16k(audio)
     if wav_seconds(wav) < 0.3:
         return ""
+    url, key = (storm_asr_http(), STORM_ASR_KEY) if STORM_ASR_WS and STORM_ASR_KEY else \
+        (f"{settings.plotweaver_base}/transcriptions", settings.plotweaver_key)
     async with httpx.AsyncClient(timeout=90) as c:
         for attempt in range(2):
-            r = await c.post(f"{settings.plotweaver_base}/transcriptions", headers={"X-API-Key": settings.plotweaver_key},
+            r = await c.post(url, headers={"X-API-Key": key},
                              data={"language": LANG.get(lang, "en")}, files={"file": ("voice.wav", wav, "audio/wav")})
             if r.status_code in (502, 503) and attempt == 0:
                 await asyncio.sleep(1.2)
@@ -162,7 +210,8 @@ async def speak_stream(text: str, lang: str, ahead: int = 2) -> AsyncIterator[tu
 
     async def make(i: int, s: str) -> None:
         q = queues[i]
-        key = hashlib.sha256(f"{voice_for(lang)}|{lang}|{s}".encode()).hexdigest()[:32]
+        who = json.dumps(STORM_VOICES.get(lang)) if STORM_TTS_WS and STORM_TTS_KEY else voice_for(lang)
+        key = hashlib.sha256(f"{who}|{lang}|{s}".encode()).hexdigest()[:32]
         cached = TTS_CACHE / f"{key}.wav"
         try:
             if cached.exists():
@@ -172,6 +221,26 @@ async def speak_stream(text: str, lang: str, ahead: int = 2) -> AsyncIterator[tu
                     await q.put((rate, pcm[k:k + CHUNK * 4]))
                 return
             async with gate:
+                if STORM_TTS_WS and STORM_TTS_KEY:
+                    # STORM's own box, same voice as the LiveKit voice: the audio is also kept for next time
+                    tee: asyncio.Queue = asyncio.Queue()
+                    got = bytearray()
+
+                    async def pump() -> None:
+                        while (item := await tee.get()) is not None:
+                            got.extend(item[1])
+                            await q.put(item)
+
+                    pumper = asyncio.create_task(pump())
+                    try:
+                        await _storm_ws(s, lang, tee)
+                    finally:
+                        await tee.put(None)
+                        await pumper
+                    if len(got) > 200:
+                        with contextlib.suppress(OSError):
+                            cached.write_bytes(pcm_to_wav(bytes(got), 24000))
+                    return
                 body = {"text": s, "language": LANG.get(lang, "en"), "voice_id": voice_for(lang), "model": "storm-v1"}
                 got = bytearray()
                 async with client.stream("POST", f"{settings.plotweaver_base}/speech/stream", json=body,

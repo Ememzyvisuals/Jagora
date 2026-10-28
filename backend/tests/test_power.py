@@ -226,6 +226,7 @@ async def test_parallel_sources_checker_and_memory(portal):
     model, mem = Checked(portal), Mem()
     async with Browser() as b:
         agent = Agent(model, b, IO(), memory=mem)
+        agent._changed_any = True  # the checker only reviews work that changed something; act as if it did
         res = await agent.run("tell me about the Oyo Empire")
         assert res.success and res.summary.startswith("Done, and I will remember")
         assert len(b.pages) == 3  # the first tab plus one per source, read at the same time

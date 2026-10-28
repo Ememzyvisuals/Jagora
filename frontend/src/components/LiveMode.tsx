@@ -12,9 +12,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ask, live as backendLive, voiceNote } from "@/lib/engine";
 import type { Lang } from "@/lib/i18n";
 import { activeTask, useApp } from "@/lib/store";
-import { duckVoice, hush } from "@/lib/engine/remote";
+import { duckVoice, hush, remoteStop } from "@/lib/engine/remote";
 import { Listener } from "@/lib/turns";
-import { startHandsFree, stopHandsFree, throughLiveKit } from "@/lib/handsfree";
+import { muteHandsFree, startHandsFree, stopHandsFree, throughLiveKit } from "@/lib/handsfree";
 import { blobToDataUrl, useSpeakingPulse, useVoice, watchForVoice } from "@/lib/voice";
 import { browserRecognizer } from "./Composer";
 import { Glass } from "./glass/Glass";
@@ -193,14 +193,18 @@ export function LiveMode() {
       listener.current = null;
       setSmart(null);
       void l?.destroy();
-      if (viaLiveKit) void stopHandsFree();
+      void viaLiveKit;
+      void stopHandsFree(); // the call ends for real: LiveKit (even one still connecting) and every listener
     };
   }, [on, interrupt, setOrb]);
+  // microphone off means nothing is heard at all: this listener, the hands-free one and the LiveKit microphone
   useEffect(() => {
     const l = listener.current;
-    if (!l) return;
-    if (muted) l.pause();
-    else l.resume();
+    if (l) {
+      if (muted) l.pause();
+      else l.resume();
+    }
+    void muteHandsFree(muted);
   }, [muted, smart]);
 
   // start listening when live mode opens; listen again each time Jagora finishes speaking
@@ -227,9 +231,15 @@ export function LiveMode() {
     }
   }, [on, voice]);
 
+  // End ends everything: the call, Jagora's voice, and the task it was doing
   const end = () => {
     setLive(false);
+    setMuted(false);
     void voice.stop();
+    void stopHandsFree();
+    hush();
+    const t = useApp.getState().tasks.find((x) => x.id === useApp.getState().activeId);
+    if (t && (t.status === "working" || t.status === "waiting")) void remoteStop(t.id);
     setOrb("idle");
   };
   const toggleMute = () => {

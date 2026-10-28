@@ -54,7 +54,10 @@ def resolve_speaker(speaker: str) -> str:
 
 
 def speaker_field(speaker: str) -> dict:
-    """STORM takes a display name ("John") or a raw catalogue ID ("slr70_ngm_09334")."""
+    """STORM takes a display name ("John"), a raw catalogue ID ("slr70_ngm_09334") or "lang:ig" (that language's
+    own main voice, the same one every time)."""
+    if speaker.startswith("lang:"):
+        return {"lang": speaker[5:]}
     if re.fullmatch(r"[a-z0-9]+(?:_[a-z0-9]+)+", speaker):
         return {"speaker_id": speaker}
     return {"name": speaker}

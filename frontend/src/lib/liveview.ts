@@ -32,6 +32,8 @@ export class Painter {
   private ready = false; // a keyframe has been decoded since the decoder was (re)configured
   private drawing = false;
   private pending: Blob | null = null;
+  private shown = false; // a video frame has been painted
+  private watchdog = 0;
   onSize?: (w: number, h: number) => void;
 
   constructor(
@@ -87,6 +89,8 @@ export class Painter {
         this.reset();
         this.decoder = new VideoDecoder({
           output: (frame) => {
+            this.shown = true;
+            clearTimeout(this.watchdog);
             this.size(frame.displayWidth, frame.displayHeight);
             this.ctx?.drawImage(frame, 0, 0);
             frame.close();
@@ -112,6 +116,15 @@ export class Painter {
       this.ready = false;
       return this.hooks.needKey();
     }
+    // a decoder that takes keyframes but never paints one (some computers' GPUs): photos instead, so the page shows
+    if (key && !this.shown && !this.watchdog)
+      this.watchdog = window.setTimeout(() => {
+        this.watchdog = 0;
+        if (!this.shown) {
+          this.reset();
+          this.hooks.videoBroken();
+        }
+      }, 2500);
     try {
       this.decoder.decode(new EncodedVideoChunk({ type: key ? "key" : "delta", timestamp: performance.now() * 1000, data }));
     } catch {
@@ -121,6 +134,8 @@ export class Painter {
   }
 
   reset() {
+    clearTimeout(this.watchdog);
+    this.watchdog = 0;
     try {
       if (this.decoder && this.decoder.state !== "closed") this.decoder.close();
     } catch {}

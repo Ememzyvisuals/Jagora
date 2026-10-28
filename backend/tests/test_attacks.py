@@ -196,10 +196,11 @@ async def test_scam_checks_are_still_answered(rng):
     assert model.seen  # this is a safety question, so Jagora helps
 
 
-async def test_she_is_told_when_a_site_asks_for_her_location_or_camera(rng):
+async def test_a_site_asking_for_her_location_is_refused_quietly(rng):
+    # refused without a row in her chat (it cluttered every page of some sites); Jagora still knows
     io, _, agent = await run(rng, lambda t, p: finish(), "Read the local news", ("news.test", "/nosy"))
-    asked = [d["text"] for k, d in io.events if k == "guard" and d.get("kind") == "permission"]
-    assert any("your location" in a for a in asked)
+    assert not [d for k, d in io.events if k == "guard" and d.get("kind") == "permission"]
+    assert any("your location" in h for h in agent.history)
 
 
 async def test_link_check_unmasks_shorteners_ip_loggers_and_tracking(monkeypatch):

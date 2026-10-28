@@ -53,8 +53,9 @@ TTS_MIN_CHARS = int(env("TTS_MIN_CHARS", "220"))
 # a short pause does not end her turn (she may be thinking, or a bus went past): one answer for the whole thought
 ENDPOINT_MIN_DELAY_S = float(env("VOICE_ENDPOINT_MIN_DELAY", "0.6"))
 ENDPOINT_MAX_DELAY_S = float(env("VOICE_ENDPOINT_MAX_DELAY", "2.5"))
-# Jagora's voice in each language (the same choice as the app's language)
-VOICES = {"en": "John", "ha": "John", "yo": "Morenike", "ig": "Adaeze", "pcm": "Yemi"}
+# Jagora's voice in each language: ONE fixed voice per language, chosen by the language picked in the app, never by
+# what a sentence looks like. The same table is in jagora/speech.py, so both ways of speaking sound the same.
+VOICES = {"en": "John", "ha": "John", "yo": "Morenike", "ig": "lang:ig", "pcm": "lang:pcm"}
 
 
 class Voice:
@@ -199,8 +200,7 @@ async def entrypoint(ctx: JobContext) -> None:
             if kind == "lang":
                 set_lang(str(d.get("lang") or "en"))
             elif kind == "say":
-                if d.get("lang"):
-                    set_lang(str(d["lang"]))
+                # the voice stays the one for her app language (set by "lang"); a message never switches it
                 text = str(d.get("text") or "").strip()
                 if text:
                     session.say(text, allow_interruptions=True, add_to_chat_ctx=False)

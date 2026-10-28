@@ -8,6 +8,7 @@ import { API, getToken } from "./account";
 import { useApp } from "./store";
 
 let room: Room | null = null;
+let wanted = false; // false once she ends the call: a join still on its way is dropped when it lands
 let joining: Promise<boolean> | null = null;
 let poll = 0;
 const subs = new Set<(on: boolean) => void>();
@@ -26,6 +27,7 @@ export function onLiveVoice(f: (on: boolean) => void) {
     listens the older way). */
 export async function startLiveVoice(): Promise<boolean> {
   if (room) return true;
+  wanted = true;
   if (joining) return joining;
   joining = (async () => {
     if (!API || !getToken()) return false;
@@ -51,6 +53,10 @@ export async function startLiveVoice(): Promise<boolean> {
         if (room === rm) void stopLiveVoice();
       });
       await rm.connect(d.url, d.token);
+      if (!wanted) {
+        await rm.disconnect(); // she ended the call while it was connecting
+        return false;
+      }
       await rm.localParticipant.setMicrophoneEnabled(true, { echoCancellation: true, noiseSuppression: true, autoGainControl: true });
       room = rm;
       // the orb follows whoever is talking
@@ -77,6 +83,7 @@ export async function startLiveVoice(): Promise<boolean> {
 }
 
 export async function stopLiveVoice() {
+  wanted = false;
   const rm = room;
   room = null;
   clearInterval(poll);
@@ -84,6 +91,9 @@ export async function stopLiveVoice() {
   document.querySelectorAll("[data-jagora-voice]").forEach((el) => el.remove());
   if (useApp.getState().orb === "listening") useApp.getState().setOrb("idle");
   tell();
+  try {
+    await rm?.localParticipant.setMicrophoneEnabled(false); // the mic light goes off at once
+  } catch {}
   await rm?.disconnect();
 }
 

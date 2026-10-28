@@ -472,7 +472,19 @@ def is_stop(text: str) -> bool:
     return len(plain.split()) <= 6 and bool(STOP_RE.search(plain))
 
 
-OKAY = {"en": "Okay.", "pcm": "Okay.", "yo": "Ó dáa.", "ha": "To.", "ig": "Ọ dị mma."}
+# "are you there?" / "I'm not hearing you": a short answer at once, and the work goes on (it is not a new request)
+CHECKIN = re.compile(r"\b(are you (there|still there|hearing me|with me)|(i'?m|i am) not hearing|i no dey hear|you dey there|"
+                     r"hello\??$|can you hear me|where are you|you still dey|ṣé o wà|se o wa|kana nan|ị nọ ebe a)\b", re.I)
+HERE = {"en": "I'm here, still working on it.", "pcm": "I dey here, I still dey do am.",
+        "yo": "Mo wà níbí, mo ṣì ń ṣe é.", "ha": "Ina nan, ina kan aikin.", "ig": "Anọ m ebe a, a ka m na-arụ ya."}
+HERE_IDLE = {"en": "I'm here. What would you like me to do?", "pcm": "I dey here. Wetin you want make I do?",
+             "yo": "Mo wà níbí. Kí ni kí n ṣe fún ọ?", "ha": "Ina nan. Me kake so in yi?", "ig": "Anọ m ebe a. Gịnị ka ị chọrọ ka m mee?"}
+
+
+def is_noise(text: str) -> bool:
+    """A scrap the microphone caught (one word, a cough read as a word): not something to act on mid-task."""
+    words = re.findall(r"\w+", text)
+    return len(words) < 2 or len("".join(words)) < 5
 
 SEND_WAIT = 6.0  # seconds a message may wait on her connection before the connection counts as gone
 RECONNECT_GRACE = 60.0
@@ -656,6 +668,15 @@ class Session:
         self.video = on
         if self.browser:
             await self.browser.set_cast(self._cast_mode())
+        if not on and self.browser and self.browser.page and self.viewing:
+            # back to photos (her app could not show the video): send the page as it is now, without waiting for it
+            # to change
+            try:
+                jpeg = await self.browser.full_frame()
+            except Exception:  # noqa: BLE001
+                jpeg = None
+            if jpeg:
+                await self._send_photo(jpeg)
         if on and not self._video_task:
             self._video_key = True
             self._video_task = asyncio.create_task(self._video_loop())
@@ -678,6 +699,12 @@ class Session:
                     self._video_kick.clear()  # this frame covers changes made while waiting
                 last = time.monotonic()
                 jpeg = await b.full_frame() if self._cast_mode() == "signal" else self._latest_jpeg
+                if not jpeg and self._cast_mode() != "signal":
+                    # no screencast picture yet (a still page sends none): take one directly
+                    try:
+                        jpeg = await b.full_frame()
+                    except Exception:  # noqa: BLE001
+                        jpeg = None
                 if not jpeg:
                     # the page was busy (loading, or Jagora reading it for itself): try again shortly. A still page
                     # sends no more change signals, so without this her screen could stay on "Opening the page"
@@ -1040,6 +1067,12 @@ class Session:
         elif kind == "words":
             text = str(ev.get("text") or "").strip()
             msg_id, self._hearing = self._hearing or None, ""
+            if task and text and is_noise(text) and not is_stop(text):
+                # a scrap the room made (a word from the TV, a cough heard as a word): not her, so nothing happens
+                log.info("voice: ignored a scrap: %r", text[:40])
+                if msg_id:
+                    await self.send({"type": "drop", "task": task, "id": msg_id})
+                return
             if task and text:
                 # she has said more: anything Jagora had not said yet is out of date, so it is dropped and the
                 # answer covers everything she said
@@ -1124,12 +1157,15 @@ class Session:
             elif kind in ("choice", "handoff", "point"):
                 self._resolve(task, mid_, text)
                 return
+        if text and CHECKIN.search(text) and len(text.split()) <= 9:
+            # "are you there?": answer at once; it is not a new request and does not interrupt the work
+            self.speak(task, (HERE if r and r.busy else HERE_IDLE).get(self.lang, HERE["en"]))
+            return
         if r and r.busy:
-            # she spoke while it works: Jagora acts on it before its next step (a quick spoken "okay" on the older
-            # voice; on LiveKit the orb already shows it heard her, and a stream of "okay"s gets in the way)
-            if self.voice_ws is None:
-                self.speak(task, OKAY.get(self.lang, "Okay."))
-            await r.steer.put(text)
+            # she spoke while it works: Jagora takes it into account at its next step and carries on from where it
+            # is (no spoken "okay": the chat already shows her words). Scraps of noise are not acted on.
+            if text and not is_noise(text):
+                await r.steer.put(text)
             return
         await db.remember(self.user_id, task, "user", text or (attachment or {}).get("name", ""), title=text[:60])
         r = self.runs.setdefault(task, Run(task))
