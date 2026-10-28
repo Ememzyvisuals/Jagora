@@ -6,7 +6,7 @@
    - If LiveKit is not set up: the speech detector here (lib/turns.ts) hears her turns and sends each one. */
 import { useEffect, useState } from "react";
 import { voiceNote } from "./engine";
-import { duckVoice, hush, remoteFocus } from "./engine/remote";
+import { clientLog, duckVoice, hush, remoteFocus } from "./engine/remote";
 import { liveVoiceOn, onLiveVoice, setLiveMic, startLiveVoice, stopLiveVoice, voiceLevels } from "./livevoice";
 import { useApp } from "./store";
 import { Listener } from "./turns";
@@ -33,6 +33,7 @@ export const throughLiveKit = () => liveVoiceOn();
 
 /** Microphone off (true) or back on, without ending: nothing she says is heard while it is off. */
 export async function muteHandsFree(off: boolean) {
+  clientLog("mute", { off });
   if (listener) {
     if (off) listener.pause();
     else listener.resume();
@@ -83,6 +84,7 @@ export async function startHandsFree(): Promise<boolean> {
       onSpeaking: (on) => on && useApp.getState().orb !== "speaking" && useApp.getState().setOrb("listening"),
     });
     const ok = await l.start();
+    clientLog("listener", { started: ok, note: "LiveKit not used: the app's own speech detector listens" });
     if (!ok) return false;
     if (!wanted) {
       await l.destroy();

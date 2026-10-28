@@ -29,8 +29,7 @@ import {
   List,
   MagnifyingGlass,
   CellSignalFull,
-  CellSignalLow,
-} from "@phosphor-icons/react";
+  CellSignalLow, DownloadSimple, Eraser } from "@phosphor-icons/react";
 import { hush, remoteInput, remoteTakeover } from "@/lib/engine/remote";
 import { fly } from "../Effects";
 import { setAutoFullscreen, toggleFullscreen, useAutoFullscreen } from "../Pwa";
@@ -46,6 +45,7 @@ import { useEffect, useState } from "react";
 import { ask, live, quick } from "@/lib/engine";
 import { ago } from "@/lib/hooks";
 import { LANGS, type Lang } from "@/lib/i18n";
+import { clearSessionLog, downloadSessionLog } from "@/lib/sessionlog";
 import { activeTask, isTab, useApp, type Task } from "@/lib/store";
 import { useSpeakingPulse } from "@/lib/voice";
 import { TalkOrb } from "../AgentPanel";
@@ -223,7 +223,7 @@ export function DesktopApp() {
         </div>
 
         {/* toolbar: back, forward, reload, home, the address bar, then her chats, Jagora and her profile */}
-        <div className="desk-glass-strong flex h-[52px] shrink-0 items-center gap-1 border-b border-white/30 px-3 dark:border-white/5">
+        <div className="desk-glass-strong relative z-30 flex h-[52px] shrink-0 items-center gap-1 border-b border-white/30 px-3 dark:border-white/5">
           <button className={tool} disabled={!showPage} onClick={() => task && void remoteInput(task.id, { action: "back" })} aria-label="Back">
             <CaretLeft size={18} weight="bold" />
           </button>
@@ -395,6 +395,12 @@ function DeskProfile({ lang, setLang, langOpen, setLangOpen, theme, initial }: {
             </button>
             <button onClick={() => (startPageWars(), setOpen(false))} className={item}>
               <GameController size={18} /> Play Page Wars
+            </button>
+            <button onClick={() => (void downloadSessionLog(), setOpen(false))} className={item}>
+              <DownloadSimple size={18} /> Download session log
+            </button>
+            <button onClick={() => (void clearSessionLog(), setOpen(false))} className={item}>
+              <Eraser size={18} /> Start a fresh log
             </button>
             <Link href="/about" className={item}>
               <Info size={18} /> About and credits

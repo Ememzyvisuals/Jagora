@@ -1972,6 +1972,9 @@ class Agent:
         return sum(1 for h in self.history[-8:] if h.startswith(key)) >= 3
 
     def _record(self, kind: str, data: dict) -> None:
+        from jagora import trace
+
+        trace.write(self.user_id, "agent_" + kind, run=self.run_id, **data)
         try:
             with open(self._log_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps({"t": round(time.time(), 2), "kind": kind, **data}, ensure_ascii=False) + "\n")

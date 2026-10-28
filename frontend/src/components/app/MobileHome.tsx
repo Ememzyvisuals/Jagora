@@ -28,8 +28,7 @@ import {
   ChatCircleText,
   Play,
   SpeakerHigh,
-  LockSimple,
-} from "@phosphor-icons/react";
+  LockSimple, DownloadSimple, Eraser } from "@phosphor-icons/react";
 import { fly } from "../Effects";
 import { Starters, openSite, useTopSites } from "./NewTabBits";
 import { startPageWars } from "../PageWars";
@@ -40,6 +39,7 @@ import { remoteInput } from "@/lib/engine/remote";
 import { useEffect, useState, type ComponentType } from "react";
 import { ask, live, quick } from "@/lib/engine";
 import { LANGS, type Lang } from "@/lib/i18n";
+import { clearSessionLog, downloadSessionLog } from "@/lib/sessionlog";
 import { activeTask, isTab, useApp } from "@/lib/store";
 import { ago } from "@/lib/hooks";
 import { useSpeakingPulse } from "@/lib/voice";
@@ -531,7 +531,13 @@ function ProfileMenu({ canFull }: { canFull: boolean }) {
               <button onClick={() => (startPageWars(), setOpen(false))} className={item}>
                 <GameController size={19} /> Play Page Wars
               </button>
-              <Link href="/about" className={item}>
+              <button onClick={() => (void downloadSessionLog(), setOpen(false))} className={item}>
+              <DownloadSimple size={19} /> Download session log
+            </button>
+            <button onClick={() => (void clearSessionLog(), setOpen(false))} className={item}>
+              <Eraser size={19} /> Start a fresh log
+            </button>
+            <Link href="/about" className={item}>
                 <Info size={19} /> About and credits
               </Link>
             </motion.div>

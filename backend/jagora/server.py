@@ -29,11 +29,11 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from jagora import auth, speech
-from jagora import lite, video, voicefx
+from jagora import lite, trace, video, voicefx
 from jagora.agent import Agent
 from jagora.browser import Browser
 from jagora.config import FILES_DIR, INGESTED, PORTALS_DIR, settings
@@ -375,6 +375,26 @@ async def files(token: str, name: str):
     return FileResponse(f, filename=name)
 
 
+@app.get("/trace")
+async def trace_download(request: Request, token: str = "", minutes: float = 0):
+    """Her session log as one text file (Profile > Download session log). Signed in only, her own log only."""
+    uid = _user_from(request) or (auth.read_token(token) if token else None)
+    if not uid:
+        raise HTTPException(401)
+    name = f"jagora-log-{time.strftime('%Y%m%d-%H%M')}.txt"
+    return PlainTextResponse(trace.download(uid, minutes), headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@app.post("/trace/clear")
+async def trace_clear(request: Request):
+    """Start a fresh log (before a test)."""
+    uid = _user_from(request)
+    if not uid:
+        raise HTTPException(401)
+    trace.clear(uid)
+    return {"ok": True}
+
+
 @app.post("/livekit/token")
 async def livekit_token(request: Request):
     """A LiveKit room token for live voice (room per user)."""
@@ -562,6 +582,7 @@ class Session:
         a send could wait forever and hold up everything after it. So a send waits a few seconds at most; after
         that this connection counts as gone, and what she must not miss (the chat, steps, status) is kept and sent
         when her app reconnects (attach)."""
+        trace.sent(self.user_id, msg)
         ws = self.ws
         if ws is not self._dead_ws:
             async with self._send_lock:
@@ -846,6 +867,7 @@ class Session:
         return True
 
     def speak(self, task: str, text: str) -> None:
+        trace.write(self.user_id, "speak", task=task, text=text, lang=self.lang, through="livekit" if self.voice_ws else "app")
         if speech.enabled() and text.strip():
             self._said.append((time.time(), text))
             del self._said[:-6]
@@ -872,6 +894,14 @@ class Session:
 
     async def handle(self, ev: dict) -> None:
         kind = ev.get("type")
+        if kind == "clientlog":
+            # her app's side of the story (Live on/off, mic, orb, the live picture, the player)
+            trace.write(self.user_id, "app_" + str(ev.get("event") or "event")[:40],
+                        **{k: v for k, v in ev.items() if k not in ("type", "event")})
+            return
+        if kind not in ("input",) or (ev.get("input") or {}).get("action") != "scroll":
+            trace.write(self.user_id, "from_app", **{k: ("[hidden]" if kind == "secret" and k == "value" else v)
+                                                     for k, v in ev.items() if k not in ("screen", "history", "profile")})
         if isinstance(ev.get("screen"), str):
             self.screen = ev["screen"][:2000]
         task = str(ev.get("task") or "")
@@ -1054,6 +1084,7 @@ class Session:
 
     async def on_voice(self, ev: dict) -> None:
         kind = ev.get("type")
+        trace.write(self.user_id, "voice_" + str(kind), **{k: v for k, v in ev.items() if k != "type"})
         task = self.active_task
         if kind == "partial":
             text = str(ev.get("text") or "").strip()
@@ -1107,7 +1138,10 @@ class Session:
         msg_id = ev.get("id")
         try:
             audio = base64.b64decode(ev.get("data") or "")
+            t_asr = time.monotonic()
             text = await speech.transcribe(audio, lang)
+            trace.write(self.user_id, "voice_note_transcribed", seconds=round(time.monotonic() - t_asr, 2),
+                        kb=len(audio) // 1024, lang=lang, via="storm box" if speech.STORM_ASR_WS else "developer api")
         except Exception as e:  # noqa: BLE001
             log.warning("transcription failed: %s", e)
             text = ""
@@ -1115,6 +1149,7 @@ class Session:
 
     async def heard(self, task: str, msg_id, text: str, lang: str, history) -> None:
         """Her words, however they came (live stream or a voice note): answered, or dropped if only a noise or echo."""
+        trace.write(self.user_id, "heard", task=task, text=text, lang=lang, echo=bool(text) and self.echo(text))
         if (not text or self.echo(text)) and self._unsaid and time.time() - self._unsaid[2] < 6:
             # she cut in, but it was only a noise (or Jagora's own voice): carry on reading
             if msg_id:
@@ -1236,6 +1271,7 @@ class Session:
             await self.send({"type": "status", "task": task, "status": "stopped"})
         except Exception as e:  # noqa: BLE001
             log.exception("run failed")
+            trace.write(self.user_id, "error", where="run", error=f"{type(e).__name__}: {e}")
             await db.log(self.user_id, "error", f"{goal[:200]} | {type(e).__name__}: {str(e)[:200]}")
             await self.agent_says(task, "Something went wrong on my side. Please try again." if "META" not in str(e)
                                   else "Jagora's brain is not connected yet.")

@@ -70,6 +70,12 @@ async function sendVideo() {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "video", on: videoOn }));
 }
 let keyAsked = 0;
+/** One line for the session log (backend trace.py): what the app did, from its side. Dropped when offline. */
+export function clientLog(event: string, data: Record<string, unknown> = {}) {
+  try {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "clientlog", event, ...data }));
+  } catch {}
+}
 export function requestKeyframe() {
   if (!videoOn || performance.now() - keyAsked < 800) return;
   keyAsked = performance.now();
@@ -77,6 +83,7 @@ export function requestKeyframe() {
 }
 export function videoFailed() {
   if (videoBroken) return;
+  clientLog("video_failed", { note: "this browser could not show the video picture: switching to photos" });
   videoBroken = true;
   void sendVideo();
 }
