@@ -183,19 +183,23 @@ millions of cloud browsers.
 
 <p align="center"><img src="docs/media/cards.png" alt="What Jagora does" width="92%"></p>
 
-| | Capability | In practice |
-|:-:|---|---|
-| <img src="docs/media/icons/say.png" width="28" alt=""> | **Say it, it does it** | "Forúkọ mi sílẹ̀ fún Skills Fair" and Jagora opens the site, fills the form from your saved details, and asks before submitting. |
-| <img src="docs/media/icons/proof.png" width="28" alt=""> | **Proof from official sources** | Checks the site is the real one, finds the exact line in the page or PDF, and highlights it as evidence. |
-| <img src="docs/media/icons/snap.png" width="28" alt=""> | **Snap a letter, it reads it** | A photo, PDF or short video of a bill, letter or result slip becomes facts, deadlines and scam signs (Muse Wonder). |
-| <img src="docs/media/icons/pictures.png" width="28" alt=""> | **Shows you in pictures** | For people who find reading hard, the steps become a short picture guide with the same character in every frame (Muse Image). |
-| <img src="docs/media/icons/language.png" width="28" alt=""> | **Websites in your language** | English pages are shown in Yorùbá, Hausa or Igbo while the agent still reads the original. |
-| <img src="docs/media/icons/logins.png" width="28" alt=""> | **Logins that stay yours** | Passwords, PINs, OTPs, NIN and BVN go through a private box the model never sees. Saved logins are sealed (AES-256-GCM) and bound to their own site. |
-| <img src="docs/media/icons/sleep.png" width="28" alt=""> | **Works while you sleep** | "Try JAMB at midnight and keep checking until the portal is up": scheduled tasks with retries, results on your lock screen. |
-| <img src="docs/media/icons/writes.png" width="28" alt=""> | **Writes it up** | Research turns into a document with sources, as PDF, Word or Markdown. |
-| <img src="docs/media/icons/links.png" width="28" alt=""> | **Link checker** | Unmasks shorteners, redirect chains, IP loggers and tracking codes before anyone opens a link. |
-| <img src="docs/media/icons/terms.png" width="28" alt=""> | **Reads the terms for you** | Before you sign up or pay, the site's terms and privacy policy are reviewed in the background and red flags are said aloud. |
-| <img src="docs/media/icons/learns.png" width="28" alt=""> | **Gets better at each site** | Steps that worked on a site are remembered (page words only, never personal values) and guide the next run. |
+| Capability | In practice |
+|---|---|
+| **Say it, it does it** | "Forúkọ mi sílẹ̀ fún Skills Fair" and Jagora opens the site, fills the form from your saved details, and asks before submitting. |
+| **Talks like a person** | It waits until you have finished speaking, stops the moment you cut in, and picks up where it was when you say "continue". Each language has its own voice. |
+| **News, read to you** | Tap a story and Jagora opens it and tells it in your language, in plain words. |
+| **Proof from official sources** | Checks the site is the real one, finds the exact line in the page or PDF, and highlights it as evidence. |
+| **Snap a letter, it reads it** | A photo, PDF or short video of a bill, letter or result slip becomes facts, deadlines and scam signs (Muse Wonder). |
+| **Shows you in pictures** | For people who find reading hard, the steps become a short picture guide with the same character in every frame (Muse Image). |
+| **Websites in your language** | English pages are shown in Yorùbá, Hausa or Igbo while the agent still reads the original. |
+| **Logins that stay yours** | Passwords, PINs, OTPs, NIN and BVN go through a private box the model never sees. Saved logins are sealed (AES-256-GCM) and bound to their own site. |
+| **Works while you sleep** | "Try JAMB at midnight and keep checking until the portal is up": scheduled tasks with retries, results on your lock screen. |
+| **Writes it up** | Research turns into a document with sources, as PDF, Word or Markdown. |
+| **Link checker** | Unmasks shorteners, redirect chains, IP loggers and tracking codes before anyone opens a link. |
+| **Reads the terms for you** | Before you sign up or pay, the site's terms and privacy policy are reviewed in the background and red flags are said aloud. |
+| **Gets better at each site** | Steps that worked on a site are remembered (page words only, never personal values) and guide the next run. |
+| **Your chats, your tabs** | Every chat is kept in a menu, like ChatGPT, on every device you sign in on; tabs are only the websites Jagora opened. |
+| **Drive the app by voice** | "Close this", "show me the page", "go back to my last chat", "make it dark": Jagora can see and change its own screen. |
 
 ## How Meta AI powers Jagora
 
@@ -226,45 +230,6 @@ Pidgin, so speech goes through PlotWeaver's STORM models, which were trained for
 
 <p align="center"><img src="docs/diagrams/architecture.svg" alt="Jagora system architecture, animated" width="100%"></p>
 
-<details>
-<summary>Same diagram as text (Mermaid)</summary>
-
-```mermaid
-flowchart TB
-    subgraph User["Her phone or computer"]
-        UI["<b>Jagora web app</b><br/>Next.js 15 · voice · chat · live page view"]
-    end
-
-    subgraph Server["Jagora agent server · FastAPI in Docker"]
-        direction LR
-        WS["WebSocket session<br/>frames · steps · voice"] --> AG["<b>Agent loop</b><br/>57 tools · checker · action check"]
-        AG --> GD["Guard + safety gate<br/>blocklists · injection removal · approvals"]
-        GD --> BR["Chromium per user<br/>Playwright · live screencast"]
-        SCH["Scheduler<br/>reminders · tasks · watches"] --> AG
-        AG --- VA["Vault<br/>AES-256-GCM"]
-    end
-
-    subgraph Meta["Meta AI"]
-        direction LR
-        SP["<b>Muse Spark 1.3</b><br/>agent · checker"]
-        WO["<b>Muse Wonder</b><br/>photos · PDFs · video"]
-        IM["<b>Muse Image</b><br/>picture guides"]
-        OW["<b>Muse Glimmer / Spark Open</b><br/>optional · off in this demo"]
-    end
-
-    ST["PlotWeaver STORM<br/>ASR · TTS · MT · 5 languages"]
-    DB[("Turso<br/>accounts · chats · skills")]
-    WEB(("The real web"))
-
-    UI <-->|"WebSocket"| WS
-    AG <--> Meta
-    BR --> WEB
-    WS <--> ST
-    AG <--> DB
-    SCH -.->|"Web Push"| UI
-```
-
-</details>
 
 ### Inside the browser
 
@@ -273,41 +238,21 @@ flowchart TB
 Jagora drives a real Chromium for each person (phone layout on phones, desktop layout on computers). This is
 what happens around it:
 
-```mermaid
-flowchart LR
-    subgraph CTX["Chromium context, one per person, Playwright"]
-        RT["Route interceptor<br>every request"] -->|page| GV{"guard.check<br>lists, lookalikes, schemes"}
-        GV -->|blocked| BP["Block page<br>reason in plain words"]
-        GV -->|allowed| PG["Live page"]
-        RT -->|ads and trackers| AB["aborted"]
-        INIT["Init script<br>permission watcher"] -.-> PG
-        PG -->|pop-up tab| PC["closed unless Jagora opened it"]
-        PG -->|download| DC["cancelled unless asked for"]
-    end
-    PG --> SNAP["Snapshot pipeline<br>1 hide invisible text<br>2 number every control<br>3 screenshot with marks<br>4 page content verdict<br>5 cut orders to AI"]
-    SNAP --> MS["Muse Spark"]
-    MS -->|tool calls| GATE["Safety gate<br>and action check"]
-    GATE -->|click, type, drag, upload| PG
-    PG --> CDP["CDP screencast<br>JPEG, up to 5 frames a second"]
-    CDP --> WSS["WebSocket"]
-    WSS --> APP["Her screen<br>scaled live view<br>tap and type to take over"]
-    PG --- PDF["PDF viewer<br>PyMuPDF, find_text, evidence crops"]
-    PG --- TR["Translation layer<br>STORM MT, original restored<br>before every read"]
-```
+<p align="center"><img src="docs/diagrams/around-browser.svg" alt="Around the browser: every request checked, the page read safely, the live page shown to her as video" width="100%"></p>
 
 | Piece | How it works |
 |---|---|
 | **Snapshot** | `snapshot.js` runs in the page. It numbers every control a person could use, skips anything covered by a pop-up (an occlusion check at each control's centre point), and reads each control's label the way a person would (label, nearby text, placeholder, group legend). The model sees the numbered list plus a marked screenshot. |
 | **Acting** | Clicks fall back step by step: a normal click, then a forced check for styled checkboxes and radios, then a script click. Clicks that jump to an unexpected site are checked by the guard and undone when needed. Typed values are read back and converted by code, so phone numbers, dates and names spoken in five languages come out right. |
-| **Seeing it live** | Chrome DevTools Protocol screencast frames go to her app, which overlays them at the right scale. She can tap and type on the live page to take over at any moment. |
+| **Seeing it live** | The page reaches her phone as H.264 video (8 frames a second, only when it changes), decoded by the phone's own video hardware (WebCodecs); older phones get sharp photos instead. She swipes to scroll and can tap and type to take over at any moment, and Jagora's voice waits until a new page is on her screen. |
 | **PDFs** | Opened in a built-in viewer (PyMuPDF), searched page by page, and cropped as highlighted evidence. |
 | **Translation** | Pages are shown in her language, and the original is restored before every read, so the agent never reasons over a translation. |
 
 
 | Layer | Technology |
 |---|---|
-| App | Next.js 15, React 19, Tailwind v4, Motion, Zustand, WebGL (living orb, cloud-glass wordmark), three.js (3D devices) |
-| Server | Python 3.12, FastAPI, WebSockets, Playwright Chromium, PyMuPDF, ffmpeg |
+| App | Next.js 15, React 19, Tailwind v4, Motion, Zustand, WebGL (living orb, cloud-glass wordmark), three.js (3D devices), WebCodecs (live video), Silero VAD (turn-taking, in the browser) |
+| Server | Python 3.12, FastAPI, WebSockets, Playwright Chromium, PyAV (x264 live video), PyMuPDF, ffmpeg |
 | Models | Meta Model API (Muse Spark, Muse Wonder, Muse Image), PlotWeaver STORM speech; an optional open-weights hook, off in this demo |
 | Data | Turso (libSQL over HTTP), SQLite fallback, per-site encrypted vault |
 | Safety | Public blocklists (StevenBlack, URLhaus, Phishing.Database, HaGeZi), lookalike detection, content classifiers |
@@ -315,29 +260,7 @@ flowchart LR
 
 ## A task, step by step
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Bisi as Bisi, speaks Yoruba
-    participant App as Jagora app
-    participant Srv as Agent server
-    participant STORM as STORM ASR and TTS
-    participant Spark as Muse Spark
-    participant Guard as Guard and gate
-    participant Web as UNILAG site
-    Bisi->>App: Ṣàyẹ̀wò àwọn ìlànà UNILAG fún Computer Science
-    App->>Srv: voice note
-    Srv->>STORM: transcribe, Yoruba
-    Srv->>Spark: goal, page and tools
-    Spark->>Guard: go_to the official brochure
-    Guard->>Web: allowed, official .edu.ng
-    Spark->>Srv: find_text and show_evidence
-    Srv-->>App: evidence card with the exact highlighted line
-    Spark->>Srv: finish
-    Srv->>Spark: independent checker, is it really done
-    Srv->>STORM: speak the answer, sentence by sentence
-    STORM-->>Bisi: the answer in Yoruba
-```
+<p align="center"><img src="docs/diagrams/task-steps.svg" alt="A task step by step: Bisi asks in Yoruba, Jagora finds the proof on the official site and answers in Yoruba" width="100%"></p>
 
 ## Safety model
 
@@ -393,8 +316,8 @@ one fails even when the model itself is fooled.
 | | Engine | Notes |
 |---|---|---|
 | Speech to text | **STORM ASR** (PlotWeaver) | Yorùbá, Hausa, Igbo, Pidgin, English; silence trimmed on the server before upload |
-| Text to speech | **STORM TTS** (PlotWeaver), voice *Amina* | Streamed in 0.2 s pieces as 16-bit PCM, or compressed (16 kHz IMA ADPCM) in data saver. The next sentence is made while the current one plays. Cached by text. |
-| Interrupting | Barge-in | Talk over Jagora (echo-cancelled) or tap the orb and she stops at once. The server drops whatever was queued. |
+| Text to speech | **STORM TTS** (PlotWeaver), a voice for each language: *John* (English, Hausa), *Morenike* (Yorùbá), *Adaeze* (Igbo), *Yemi* (Pidgin) | Streamed in 0.2 s pieces as 16-bit PCM, or compressed (16 kHz IMA ADPCM) in data saver. A little quicker than spoken (1.15x, pitch kept) and evenly loud. The next sentence is made while the current one plays. Cached by text. |
+| Taking turns | **Silero VAD** in the browser | Jagora waits through your pauses and answers when you have finished. Talk over her (her own echo is ignored) or tap the orb and she stops at once; say "continue" in any of the five languages and she picks up from the sentence you were hearing. |
 | Page translation | **STORM MT** | Pages shown in her language. The agent always reads the original. |
 
 ### Light on data, for real Nigerian networks
@@ -406,12 +329,11 @@ phone reports a slow connection (2G or 3G) or its own data saver, and she can sw
 | | Normal | Data saver |
 |---|---|---|
 | Jagora's voice | 24 kHz, 16-bit: **516 kbit/s** while speaking | 16 kHz IMA ADPCM: **87 kbit/s** (6 times smaller, still clear speech) |
-| One live-view frame (phone layout, practice portal) | 41.6 KB | 24.8 KB, 360 px wide |
-| Live-view frames | at most 5 a second, only when the page changes | at most 2 a second, only when the page changes |
+| Live view | H.264 video, at most 8 frames a second and 1.2 Mbit/s, only when the page changes | at most 5 frames a second and 350 kbit/s, 412 px wide |
 | App in the background (phone locked, another app open) | no frames sent | no frames sent |
 
 Every 0.2 s piece of compressed voice carries its own starting state, so a lost piece never garbles the next one.
-The figures above were measured on the production server on 27 October 2026, with Jagora's real STORM voice. Run the
+The voice figures above were measured on the production server on 27 October 2026, with Jagora's real STORM voice; the live-view figures are the caps the video encoder is set to. Run the
 measuring tool yourself on any server:
 
 ```bash
@@ -579,7 +501,10 @@ backend/
     safety.py      the approval gate and her account's locks
     flow.py        task sites and data labels: what may cross from one site to another
     muse.py        Muse Wonder reading, Muse Image picture guides, optional open-weights hook
-    speech.py      STORM ASR and streaming TTS
+    speech.py      STORM ASR and streaming TTS, a voice for each language
+    voicefx.py     Jagora's voice a little quicker (WSOLA) and evenly loud
+    video.py       the live page as H.264 video
+    lite.py        data saver: smaller voice and live view
     translate.py   pages in her language
     vault.py       site-bound encrypted logins
     terms.py       terms and privacy review
@@ -591,8 +516,9 @@ backend/
   tests/
 frontend/
   src/app/         landing, app, start, admin, info pages
-  src/components/  chat, cards, live page view, orb, 3D devices, card stack
-docs/              research notes and media
+  src/components/  chat, cards, live page view (video), orb, chat history, avatars
+  src/lib/         the engine (WebSocket), turn-taking (Silero VAD), app control by voice, sync
+docs/              research notes, media and diagrams (docs/diagrams/make_diagrams.py draws two of them)
 ```
 
 ## Privacy

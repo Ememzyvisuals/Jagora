@@ -52,7 +52,7 @@
 <text x="792" y="284" class="s" style="font-size:13.5px">Typing read back</text>
 <text x="792" y="320" class="s" style="font-size:13.5px">Uploads, dates, keys</text>
 <text x="792" y="356" class="s" style="font-size:13.5px">Cursor shown to her</text>
-<text x="792" y="392" class="s" style="font-size:13.5px">Live frames at 5 fps</text>
+<text x="792" y="392" class="s" style="font-size:13.5px">Live video at 8 fps</text>
 <path id="a3" d="M996 162 L 1014 162" class="edge" marker-end="url(#arr)"/><path d="M996 162 L 1014 162" class="flow" style="stroke:#2f8f57"/>
 <rect x="1016" y="128" width="222" height="330" rx="20" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)"/>
 <circle cx="1046" cy="162" r="15" fill="#d9821e"/><text x="1046" y="167" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:14px">5</text>

@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 740" width="1280" height="740" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eaf3fd"/><stop offset="1" stop-color="#f8fbff"/></linearGradient>
+  <filter id="sh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0a1e46" flood-opacity=".10"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#9fb0c8"/></marker>
+  <style>
+    .t{fill:#0e0f12;font-weight:700;font-size:17px} .s{fill:#4b4a50;font-size:13.5px} .lab{fill:#5b6170;font-size:12.5px;font-weight:600}
+    .edge{fill:none;stroke:#9fb0c8;stroke-width:1.6} .flow{fill:none;stroke-width:2.2;stroke-dasharray:6 10;animation:run 1.6s linear infinite}
+    .life{stroke:#c9d4e3;stroke-width:1.4;stroke-dasharray:4 6}
+    @keyframes run{to{stroke-dashoffset:-32}}
+  </style>
+</defs>
+<rect width="1280" height="740" rx="28" fill="url(#sky)"/>
+<text x="40" y="54" style="fill:#0e0f12;font-size:26px;font-weight:800;letter-spacing:-.02em">Around the browser · what happens to every page</text>
+<text x="40" y="80" class="s" style="font-size:14px">Jagora drives a real Chromium for each person. Every request is checked, the page is read again after every action, and she watches it live.</text>
+
+<rect x="40" y="120" width="230" height="150" rx="20" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)"/>
+<circle cx="72" cy="152" r="14" fill="#1d63ed"/><text x="72" y="157" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:13px">1</text>
+<text x="94" y="158" class="t">Route interceptor</text>
+<text x="60" y="190" class="s">Every request the</text>
+<text x="60" y="212" class="s">page makes</text>
+<rect x="320" y="120" width="240" height="150" rx="20" fill="#fff" stroke="#c4361a" stroke-width="2" filter="url(#sh)"/>
+<circle cx="352" cy="152" r="14" fill="#c4361a"/><text x="352" y="157" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:13px">2</text>
+<text x="374" y="158" class="t">Site guard</text>
+<text x="340" y="190" class="s">Blocklists, lookalike</text>
+<text x="340" y="212" class="s">domains, scam schemes</text>
+<rect x="610" y="120" width="210" height="150" rx="20" fill="#fff" stroke="#1a7f45" stroke-width="2" filter="url(#sh)"/>
+<circle cx="642" cy="152" r="14" fill="#1a7f45"/><text x="642" y="157" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:13px">3</text>
+<text x="664" y="158" class="t">Live page</text>
+<text x="630" y="190" class="s">Chromium, one per</text>
+<text x="630" y="212" class="s">person (Playwright)</text>
+<rect x="870" y="120" width="370" height="150" rx="20" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)"/>
+<text x="890" y="158" class="t">Kept out</text>
+<text x="890" y="190" class="s">Blocked site: a page that says why</text>
+<text x="890" y="212" class="s">Ads and trackers: cut off</text>
+<text x="890" y="234" class="s">Pop-up tabs closed, downloads cancelled</text>
+<text x="890" y="256" class="s">Zoom locked, permission requests refused</text>
+<path d="M272 195 L318 195" class="edge" marker-end="url(#arr)"/>
+<path d="M272 195 L318 195" class="flow" style="stroke:#1d63ed"/>
+<path d="M562 195 L608 195" class="edge" marker-end="url(#arr)"/>
+<path d="M562 195 L608 195" class="flow" style="stroke:#1a7f45"/>
+<text x="585" y="185" class="lab" text-anchor="middle">allowed</text>
+<path d="M822 195 L868 195" class="edge" marker-end="url(#arr)"/>
+<path d="M822 195 L868 195" class="flow" style="stroke:#c4361a"/>
+<rect x="40" y="330" width="280" height="180" rx="20" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)"/>
+<circle cx="72" cy="362" r="14" fill="#1d63ed"/><text x="72" y="367" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:13px">4</text>
+<text x="94" y="368" class="t">Snapshot</text>
+<text x="60" y="400" class="s">1 hide invisible text</text>
+<text x="60" y="422" class="s">2 number every control</text>
+<text x="60" y="444" class="s">3 screenshot with marks</text>
+<text x="60" y="466" class="s">4 page content verdict</text>
+<text x="60" y="488" class="s">5 cut out orders to AI</text>
+<rect x="370" y="330" width="230" height="180" rx="20" fill="#fff" stroke="#1d63ed" stroke-width="2" filter="url(#sh)"/>
+<circle cx="402" cy="362" r="14" fill="#1d63ed"/><text x="402" y="367" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:13px">5</text>
+<text x="424" y="368" class="t">Muse Spark 1.3</text>
+<text x="390" y="400" class="s">Reads the snapshot and</text>
+<text x="390" y="422" class="s">her words, and picks</text>
+<text x="390" y="444" class="s">the next steps</text>
+<text x="390" y="466" class="s">(57 tools)</text>
+<rect x="650" y="330" width="250" height="180" rx="20" fill="#fff" stroke="#c4361a" stroke-width="2" filter="url(#sh)"/>
+<circle cx="682" cy="362" r="14" fill="#c4361a"/><text x="682" y="367" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:13px">6</text>
+<text x="704" y="368" class="t">Safety gate</text>
+<text x="670" y="400" class="s">Action check against</text>
+<text x="670" y="422" class="s">her request</text>
+<text x="670" y="444" class="s">Submit, pay, send:</text>
+<text x="670" y="466" class="s">her yes first</text>
+<rect x="950" y="330" width="290" height="180" rx="20" fill="#fff" stroke="#1a7f45" stroke-width="2" filter="url(#sh)"/>
+<circle cx="982" cy="362" r="14" fill="#1a7f45"/><text x="982" y="367" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:13px">7</text>
+<text x="1004" y="368" class="t">Act</text>
+<text x="970" y="400" class="s">Click, type, drag, upload</text>
+<text x="970" y="422" class="s">Typed values read back</text>
+<text x="970" y="444" class="s">Fallbacks when a click</text>
+<text x="970" y="466" class="s">does not land</text>
+<path d="M715 272 L715 300 L180 300 L180 326" class="edge" marker-end="url(#arr)"/>
+<path d="M715 272 L715 300 L180 300 L180 326" class="flow" style="stroke:#1d63ed"/>
+<path d="M322 420 L368 420" class="edge" marker-end="url(#arr)"/>
+<path d="M322 420 L368 420" class="flow" style="stroke:#1d63ed"/>
+<path d="M602 420 L648 420" class="edge" marker-end="url(#arr)"/>
+<path d="M602 420 L648 420" class="flow" style="stroke:#c4361a"/>
+<path d="M902 420 L948 420" class="edge" marker-end="url(#arr)"/>
+<path d="M902 420 L948 420" class="flow" style="stroke:#1a7f45"/>
+<rect x="40" y="570" width="290" height="140" rx="20" fill="#fff" stroke="#1d63ed" stroke-width="2" filter="url(#sh)"/>
+<circle cx="72" cy="602" r="14" fill="#1d63ed"/><text x="72" y="607" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:13px">10</text>
+<text x="94" y="608" class="t">Her screen</text>
+<text x="60" y="640" class="s">Video decoded on her phone</text>
+<text x="60" y="662" class="s">Swipe to scroll, take over</text>
+<rect x="380" y="570" width="230" height="140" rx="20" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)"/>
+<circle cx="412" cy="602" r="14" fill="#1d63ed"/><text x="412" y="607" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:13px">9</text>
+<text x="434" y="608" class="t">WebSocket</text>
+<text x="400" y="640" class="s">Binary frames and</text>
+<text x="400" y="662" class="s">Jagora's voice</text>
+<rect x="660" y="570" width="250" height="140" rx="20" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)"/>
+<circle cx="692" cy="602" r="14" fill="#1d63ed"/><text x="692" y="607" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:13px">8</text>
+<text x="714" y="608" class="t">Live view</text>
+<text x="680" y="640" class="s">H.264 video, 8 a second,</text>
+<text x="680" y="662" class="s">only when the page changes</text>
+<rect x="960" y="570" width="280" height="140" rx="20" fill="#fff" stroke="#d6deea" stroke-width="1.5" filter="url(#sh)"/>
+<text x="980" y="608" class="t">Also in the page</text>
+<text x="980" y="640" class="s">PDF viewer: find text, crops</text>
+<text x="980" y="662" class="s">Pages shown in her language,</text>
+<text x="980" y="684" class="s">the original always read</text>
+<path d="M1095 512 L1095 540 L785 540 L785 566" class="edge" marker-end="url(#arr)"/>
+<path d="M1095 512 L1095 540 L785 540 L785 566" class="flow" style="stroke:#1a7f45"/>
+<text x="945" y="532" class="lab" text-anchor="middle">the page changes</text>
+<path d="M658 640 L612 640" class="edge" marker-end="url(#arr)"/>
+<path d="M658 640 L612 640" class="flow" style="stroke:#1d63ed"/>
+<path d="M378 640 L332 640" class="edge" marker-end="url(#arr)"/>
+<path d="M378 640 L332 640" class="flow" style="stroke:#1d63ed"/>
+</svg>

@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 848" width="1280" height="848" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eaf3fd"/><stop offset="1" stop-color="#f8fbff"/></linearGradient>
+  <filter id="sh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0a1e46" flood-opacity=".10"/></filter>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#9fb0c8"/></marker>
+  <style>
+    .t{fill:#0e0f12;font-weight:700;font-size:17px} .s{fill:#4b4a50;font-size:13.5px} .lab{fill:#5b6170;font-size:12.5px;font-weight:600}
+    .edge{fill:none;stroke:#9fb0c8;stroke-width:1.6} .flow{fill:none;stroke-width:2.2;stroke-dasharray:6 10;animation:run 1.6s linear infinite}
+    .life{stroke:#c9d4e3;stroke-width:1.4;stroke-dasharray:4 6}
+    @keyframes run{to{stroke-dashoffset:-32}}
+  </style>
+</defs>
+<rect width="1280" height="848" rx="28" fill="url(#sky)"/>
+<text x="40" y="54" style="fill:#0e0f12;font-size:26px;font-weight:800;letter-spacing:-.02em">A task, step by step</text>
+<text x="40" y="80" class="s" style="font-size:14px">Bisi asks in Yorùbá for UNILAG's Computer Science requirements. Proof first, then the answer in her own language.</text>
+
+<line x1="120" y1="160" x2="120" y2="808" class="life"/>
+<rect x="40" y="108" width="160" height="46" rx="16" fill="#fff" stroke="#1a7f45" stroke-width="1.8" filter="url(#sh)"/>
+<text x="120" y="137" text-anchor="middle" class="t" style="font-size:14.5px">Bisi (Yorùbá)</text>
+<line x1="293" y1="160" x2="293" y2="808" class="life"/>
+<rect x="213" y="108" width="160" height="46" rx="16" fill="#fff" stroke="#1d63ed" stroke-width="1.8" filter="url(#sh)"/>
+<text x="293" y="137" text-anchor="middle" class="t" style="font-size:14.5px">Jagora app</text>
+<line x1="466" y1="160" x2="466" y2="808" class="life"/>
+<rect x="386" y="108" width="160" height="46" rx="16" fill="#fff" stroke="#0e0f12" stroke-width="1.8" filter="url(#sh)"/>
+<text x="466" y="137" text-anchor="middle" class="t" style="font-size:14.5px">Agent server</text>
+<line x1="639" y1="160" x2="639" y2="808" class="life"/>
+<rect x="559" y="108" width="160" height="46" rx="16" fill="#fff" stroke="#d97706" stroke-width="1.8" filter="url(#sh)"/>
+<text x="639" y="137" text-anchor="middle" class="t" style="font-size:14.5px">STORM speech</text>
+<line x1="812" y1="160" x2="812" y2="808" class="life"/>
+<rect x="732" y="108" width="160" height="46" rx="16" fill="#fff" stroke="#1d63ed" stroke-width="1.8" filter="url(#sh)"/>
+<text x="812" y="137" text-anchor="middle" class="t" style="font-size:14.5px">Muse Spark</text>
+<line x1="985" y1="160" x2="985" y2="808" class="life"/>
+<rect x="905" y="108" width="160" height="46" rx="16" fill="#fff" stroke="#c4361a" stroke-width="1.8" filter="url(#sh)"/>
+<text x="985" y="137" text-anchor="middle" class="t" style="font-size:14.5px">Guard and gate</text>
+<line x1="1158" y1="160" x2="1158" y2="808" class="life"/>
+<rect x="1078" y="108" width="160" height="46" rx="16" fill="#fff" stroke="#4b4a50" stroke-width="1.8" filter="url(#sh)"/>
+<text x="1158" y="137" text-anchor="middle" class="t" style="font-size:14.5px">UNILAG site</text>
+<path d="M136 190 L287 190" class="edge" marker-end="url(#arr)" />
+<path d="M136 190 L287 190" class="flow" style="stroke:#1d63ed"/>
+<circle cx="120" cy="190" r="12" fill="#1d63ed"/><text x="120" y="194.5" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:12px">1</text>
+<text x="140" y="181" text-anchor="start" class="lab" style="fill:#2a2c33;font-size:13px">Ṣàyẹ̀wò àwọn ìlànà UNILAG fún Computer Science</text>
+<path d="M309 236 L460 236" class="edge" marker-end="url(#arr)" />
+<path d="M309 236 L460 236" class="flow" style="stroke:#1d63ed"/>
+<circle cx="293" cy="236" r="12" fill="#1d63ed"/><text x="293" y="240.5" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:12px">2</text>
+<text x="313" y="227" text-anchor="start" class="lab" style="fill:#2a2c33;font-size:13px">her voice, once she has finished speaking</text>
+<path d="M482 282 L633 282" class="edge" marker-end="url(#arr)" />
+<path d="M482 282 L633 282" class="flow" style="stroke:#1d63ed"/>
+<circle cx="466" cy="282" r="12" fill="#1d63ed"/><text x="466" y="286.5" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:12px">3</text>
+<text x="486" y="273" text-anchor="start" class="lab" style="fill:#2a2c33;font-size:13px">transcribe (Yorùbá)</text>
+<path d="M482 328 L806 328" class="edge" marker-end="url(#arr)" />
+<path d="M482 328 L806 328" class="flow" style="stroke:#1d63ed"/>
+<circle cx="466" cy="328" r="12" fill="#1d63ed"/><text x="466" y="332.5" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:12px">4</text>
+<text x="486" y="319" text-anchor="start" class="lab" style="fill:#2a2c33;font-size:13px">her goal, the page and the tools</text>
+<path d="M828 374 L979 374" class="edge" marker-end="url(#arr)" />
+<path d="M828 374 L979 374" class="flow" style="stroke:#1d63ed"/>
+<circle cx="812" cy="374" r="12" fill="#1d63ed"/><text x="812" y="378.5" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:12px">5</text>
+<text x="832" y="365" text-anchor="start" class="lab" style="fill:#2a2c33;font-size:13px">go_to the official brochure</text>
+<path d="M1001 420 L1152 420" class="edge" marker-end="url(#arr)" />
+<path d="M1001 420 L1152 420" class="flow" style="stroke:#1d63ed"/>
+<circle cx="985" cy="420" r="12" fill="#1d63ed"/><text x="985" y="424.5" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:12px">6</text>
+<text x="1005" y="411" text-anchor="start" class="lab" style="fill:#2a2c33;font-size:13px">allowed: official .edu.ng site</text>
+<path d="M450 466 L299 466" class="edge" marker-end="url(#arr)" stroke-dasharray="5 5"/>
+<path d="M450 466 L299 466" class="flow" style="stroke:#1a7f45"/>
+<circle cx="466" cy="466" r="12" fill="#1a7f45"/><text x="466" y="470.5" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:12px">7</text>
+<text x="446" y="457" text-anchor="end" class="lab" style="fill:#2a2c33;font-size:13px">the live page, as video</text>
+<path d="M796 512 L472 512" class="edge" marker-end="url(#arr)" />
+<path d="M796 512 L472 512" class="flow" style="stroke:#1d63ed"/>
+<circle cx="812" cy="512" r="12" fill="#1d63ed"/><text x="812" y="516.5" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:12px">8</text>
+<text x="792" y="503" text-anchor="end" class="lab" style="fill:#2a2c33;font-size:13px">find_text, then show_evidence</text>
+<path d="M450 558 L299 558" class="edge" marker-end="url(#arr)" stroke-dasharray="5 5"/>
+<path d="M450 558 L299 558" class="flow" style="stroke:#1a7f45"/>
+<circle cx="466" cy="558" r="12" fill="#1a7f45"/><text x="466" y="562.5" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:12px">9</text>
+<text x="446" y="549" text-anchor="end" class="lab" style="fill:#2a2c33;font-size:13px">evidence card with the exact line highlighted</text>
+<path d="M796 604 L472 604" class="edge" marker-end="url(#arr)" />
+<path d="M796 604 L472 604" class="flow" style="stroke:#1d63ed"/>
+<circle cx="812" cy="604" r="12" fill="#1d63ed"/><text x="812" y="608.5" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:12px">10</text>
+<text x="792" y="595" text-anchor="end" class="lab" style="fill:#2a2c33;font-size:13px">finish</text>
+<path d="M482 650 L806 650" class="edge" marker-end="url(#arr)" />
+<path d="M482 650 L806 650" class="flow" style="stroke:#1d63ed"/>
+<circle cx="466" cy="650" r="12" fill="#1d63ed"/><text x="466" y="654.5" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:12px">11</text>
+<text x="486" y="641" text-anchor="start" class="lab" style="fill:#2a2c33;font-size:13px">independent checker: is it really done?</text>
+<path d="M482 696 L633 696" class="edge" marker-end="url(#arr)" />
+<path d="M482 696 L633 696" class="flow" style="stroke:#1d63ed"/>
+<circle cx="466" cy="696" r="12" fill="#1d63ed"/><text x="466" y="700.5" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:12px">12</text>
+<text x="486" y="687" text-anchor="start" class="lab" style="fill:#2a2c33;font-size:13px">speak the answer in Morenike's voice</text>
+<path d="M623 742 L126 742" class="edge" marker-end="url(#arr)" stroke-dasharray="5 5"/>
+<path d="M623 742 L126 742" class="flow" style="stroke:#1a7f45"/>
+<circle cx="639" cy="742" r="12" fill="#1a7f45"/><text x="639" y="746.5" text-anchor="middle" style="fill:#fff;font-weight:800;font-size:12px">13</text>
+<text x="619" y="733" text-anchor="end" class="lab" style="fill:#2a2c33;font-size:13px">the answer, in Yorùbá</text>
+</svg>
