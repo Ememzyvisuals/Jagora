@@ -343,6 +343,8 @@ COMMON = [
     tool("ask_point", "When you are not sure which thing on the page the user means, ask them to tap it on the live page. You get "
          "back what the user tapped.", {"question": {"type": "string", "description": "in their language, e.g. 'Tap the button you mean'"}},
          ["question"]),
+    tool("look", "See the page as a picture on your next step. Only when the text and the list of elements are not enough "
+         "(pictures, maps, colours, layout, a button you cannot find).", {}, []),
     tool("finish", "The task is done, or cannot be done. Tell them the result in their language: the answer, what you "
          "confirmed (and where), anything you could not confirm, and the next step.",
          {"summary": {"type": "string"}, "success": {"type": "boolean"}}, ["summary", "success"]),
@@ -411,6 +413,7 @@ GUIDE_TOOLS = COMMON + [
 GUIDE_READ = {"click", "hover"}
 
 SYSTEM = """You are Jagora, a voice-first web agent for Nigerians. You speak {lang} with them: warm, clear, short everyday sentences, like a smart older sibling who knows the internet well. Many people you help read little English; some are students, traders, travellers and professionals.
+- LANGUAGE: every word you say or show is in {lang} only, the language they chose in the app: replies, questions, steps, summaries and documents. Even if they speak another language, or the page is in English, answer in {lang}. Change only when they ask you to (app_control set_language).
 
 HOW YOU ADDRESS THE USER
 - You do not know the user's gender, age or title. Never call them sister, brother, madam, sir, aunty, uncle, oga, dear or any other title or pet name, in any language (no "sista", "bros", "ma", "baba", "yeye", "'yar uwa", "nwanne"). Use no form of address at all, or their name if they told you it.
@@ -543,6 +546,8 @@ class Agent:
     _vault_names: list | None = None
     _facts: list | None = None
     _checks: int = 0
+    _want_look: bool = False  # the model asked to see the page as a picture next step
+    _last_fp_same: bool = False  # the last action left the page exactly as it was
     _changed_any: bool = False
     _goal: str = ""
     _fails: int = 0
@@ -597,7 +602,7 @@ class Agent:
                 self._vault_names = await self.vault.names()
             except Exception:  # noqa: BLE001
                 self._vault_names = []
-        while turns < self.max_turns:
+        while turns < self._cap():
             turns += 1
             if self.pause_gate:
                 await self.pause_gate()  # the user has taken over the page: wait until the user hands it back
@@ -633,11 +638,11 @@ class Agent:
             if stuck_note:
                 self.history.append(stuck_note)
             # a step this task took the same way before, on this same page: done again with no model call
-            if snap and not new and not wrap_soon(turns, self.max_turns):
+            if snap and not new and not wrap_soon(turns, self._cap()):
                 replayed = await self._replay_step(snap)
                 if replayed:
                     continue
-            wrap = turns >= self.max_turns - 2
+            wrap = turns >= self._cap() - 2
             tools = self._tools(snap, wrap)
             reply = await self.model.chat(self._messages(goal, snap, heard, wrap), tools,
                                           effort=settings.effort_agent, max_tokens=7000)
@@ -715,10 +720,67 @@ class Agent:
                          "hover", "double_click", "right_click", "drag", "click_at", "upload_file", "set_date", "ask_point",
                          "review_terms"}
             base = [t for t in base if t["function"]["name"] not in page_only]
+        base = self._lean(base, snap)
         if self._goal.lower().startswith("read this news story"):
             # reading news is simple: no pointing or plans on her screen (a yellow highlight only if she asks for one)
             base = [t for t in base if t["function"]["name"] not in ("point_at", "update_plan", "ask_point", "watch_page")]
         return base
+
+    # tools sent only when this task or page can use them: every tool's description is sent with every step, so the
+    # rare ones cost tokens on every step for nothing (the full list is ~6,500 tokens; the lean one about half)
+    LEAN = [
+        (("set_reminder", "list_reminders", "cancel_reminder", "schedule_task", "list_scheduled", "cancel_scheduled",
+          "watch_page", "save_moment", "find_moments"),
+         r"remind|schedul|every (day|week|morning|month)|later|tomorrow|tonight|alert|notify|watch|tell me (when|once|if)|"
+         r"moment|saved|when .*(out|open|announc|releas)|daily|weekly"),
+        (("write_document",), r"doc|document|pdf|word|letter|cv|resume|write|summar|report|markdown|note"),
+        (("picture_guide",), r"picture|draw|diagram|image|show me how|illustrat"),
+        (("save_page", "page_theme"), r"save|pdf|print|download|dark|light|theme|night mode"),
+        (("play_media", "find_media"), r"play|song|music|video|movie|film|watch|listen|audio|sermon|podcast|clip"),
+        (("give_verdict", "check_link", "review_terms"), r"real|fake|scam|legit|genuine|official|safe|trust|link|terms|verify|check (this|if)"),
+        (("remember_about_her",), r"remember|my name is|i am a|i live|call me|i work|i study"),
+    ]
+
+    VISUAL = re.compile(r"map|picture|photo|image|chart|graph|captcha|colou?r|logo|look like|screenshot|diagram|layout|"
+                        r"video|game|seat|where (is|do i)|which (button|icon)", re.I)
+
+    QUESTION_STEPS = 14  # a question (nothing filled in for her) gets this many steps, then she hears what was found
+
+    def _cap(self) -> int:
+        """Steps allowed: a question is answered within QUESTION_STEPS; work on a form gets the full budget."""
+        return self.max_turns if self._changed_any else min(self.max_turns, self.QUESTION_STEPS)
+
+    def _needs_picture(self, snap: Snapshot) -> bool:
+        """The screenshot (about 1,500 tokens) goes to the model only when the page text is not enough: she or the task
+        is about how it looks, the page has little text (pictures, canvas, maps), something just failed or nothing
+        changed, or the model asked to look. Most steps work from the page text and the list of what can be pressed."""
+        if self._want_look or self._fails > 0 or self._last_fp_same:
+            return True
+        if len(snap.text or "") < 400 and len(snap.elements) < 12:
+            return True
+        return bool(self.VISUAL.search(self._goal))
+
+    def _lean(self, base: list[dict], snap: Snapshot | None) -> list[dict]:
+        said = " ".join([self._goal] + [m.get("text", "") for m in self.conversation[-4:] if m.get("role") == "user"]).lower()
+        drop: set[str] = set()
+        for names, rx in self.LEAN:
+            if not re.search(rx, said):
+                drop.update(names)
+        els = snap.elements if snap else []
+        boxes = [e for e in els if e.kind == "text box"]
+        if not any(e.kind == "file picker" for e in els) and not self.files:
+            drop.add("upload_file")
+        if not any(e.type in ("date", "datetime-local", "month") for e in els):
+            drop.add("set_date")
+        if len(boxes) < 3:
+            drop.add("fill_form")
+        if not any(e.type == "password" for e in els):
+            drop.add("use_saved_login")
+        if not re.search(r"code|otp|token|verif", " ".join(e.label.lower() for e in boxes) + " " + said):
+            drop.add("fetch_code")
+        if self._fails < 1 and not re.search(r"map|drag|slider|chart|canvas|draw", said):
+            drop.update(("hover", "double_click", "right_click", "drag", "click_at"))
+        return [t for t in base if t["function"]["name"] not in drop]
 
     def _drain_steering(self) -> list[str]:
         out = []
@@ -792,6 +854,7 @@ class Agent:
         fp = self._fp_now(snap)
         acted, self._acted = self._acted, False
         same = acted and fp == self._fp
+        self._last_fp_same = same
         self._fp = fp
         self._still = self._still + 1 if same else 0
         if self._still >= 5:
@@ -926,6 +989,9 @@ class Agent:
                 answer = await self.io.ask(a.get("question", ""), list(a.get("choices") or []))
                 self._flow.heard(str(answer))
                 return f'the user answered: "{answer}"', True, None
+            if name == "look":
+                self._want_look = True
+                return "you will see the page as a picture now", True, None
             if name == "finish":
                 if a.get("success") and self.searched and not self.evidence and not self._nudged_evidence:
                     self._nudged_evidence = True
@@ -1618,8 +1684,9 @@ class Agent:
                 f"\n\nThe page now:\n{page}\n\nIs the task really done, with the facts supported by what happened and what the "
                 "page shows? Reply with one line: DONE, or NOT DONE: <what is missing or wrong>.")
         content: list[dict] = [{"type": "text", "text": text}]
-        if snap and snap.screenshot:
+        if snap and snap.screenshot and self._needs_picture(snap):
             content.append(image_part(snap.screenshot_b64()))
+            self._want_look = False
         try:
             r = await self.model.chat([{"role": "system", "content": "You are a strict, fair checker of a web agent's work. "
                                         "Do not trust claims; trust only the evidence. Questions answered from official pages, "
@@ -1946,8 +2013,9 @@ class Agent:
         else:
             parts.append("Decide the next step.")
         content: list[dict] = [{"type": "text", "text": "\n\n".join(parts)}]
-        if snap and snap.screenshot:
+        if snap and snap.screenshot and self._needs_picture(snap):
             content.append(image_part(snap.screenshot_b64()))
+            self._want_look = False
         if self.attachment and self.attachment.get("kind") == "image" and self.attachment.get("data", "").startswith("data:image"):
             content.append({"type": "image_url", "image_url": {"url": self.attachment["data"]}})
         return [{"role": "system", "content": system}, {"role": "user", "content": content}]

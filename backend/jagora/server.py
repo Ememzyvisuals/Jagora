@@ -1169,6 +1169,10 @@ class Session:
             elif state == "listening":
                 await self.send({"type": "orb", "state": "listening"})
                 await self.send({"type": "speech_end", "task": task})
+        elif kind == "stall":
+            # she spoke and nothing came back for a while: say where things are, in her language
+            r = self.runs.get(task)
+            self.speak(task, (HERE if r and r.busy else HERE_IDLE).get(self.lang, HERE["en"]))
         elif kind == "user" and ev.get("state") == "speaking":
             await self.send({"type": "orb", "state": "listening"})
 

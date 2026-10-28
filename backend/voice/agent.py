@@ -21,6 +21,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from urllib.parse import urlencode
 
 import aiohttp
@@ -28,8 +29,7 @@ from dotenv import load_dotenv
 from livekit.agents import Agent, AgentServer, AgentSession, JobContext, JobProcess, StopResponse, cli
 from livekit.agents import tokenize
 from livekit.agents import tts as agents_tts
-from livekit.agents.voice import room_io
-from livekit.plugins import noise_cancellation, silero
+from livekit.plugins import silero
 
 from storm import StormSTT, StormTTS
 from storm.stt import PREROLL_S
@@ -50,9 +50,17 @@ LINK_KEY = env("VOICE_LINK_SECRET")
 ASR_URL, ASR_KEY = env("STORM_ASR_WS_URL"), env("STORM_ASR_API_KEY")
 TTS_URL, TTS_KEY = env("STORM_TTS_WS_URL"), env("STORM_TTS_API_KEY")
 TTS_MIN_CHARS = int(env("TTS_MIN_CHARS", "220"))
-# a short pause does not end her turn (she may be thinking, or a bus went past): one answer for the whole thought
-ENDPOINT_MIN_DELAY_S = float(env("VOICE_ENDPOINT_MIN_DELAY", "0.6"))
-ENDPOINT_MAX_DELAY_S = float(env("VOICE_ENDPOINT_MAX_DELAY", "2.5"))
+# turn timing, interruptions, the ASR gate and the VADs are Kivo's (kivo-demo/agent/agent.py), which work reliably
+ENDPOINT_MIN_DELAY_S = float(env("VOICE_ENDPOINT_MIN_DELAY", "0.3"))
+ENDPOINT_MAX_DELAY_S = float(env("VOICE_ENDPOINT_MAX_DELAY", "2.0"))
+STALL_S = float(env("STALL_SECONDS", "15"))
+SORRY = {
+    "en": "Sorry, I missed that. Could you say it again?",
+    "yo": "Ẹ má bínú, ẹ jọ̀ọ́ ẹ tún un sọ.",
+    "ha": "Yi haƙuri, don Allah ka sake faɗa.",
+    "ig": "Ndo, biko kwughachi ya ọzọ.",
+    "pcm": "Sorry, abeg talk am again.",
+}
 # Jagora's voice in each language: ONE fixed voice per language, chosen by the language picked in the app, never by
 # what a sentence looks like. The same table is in jagora/speech.py, so both ways of speaking sound the same.
 VOICES = {"en": "John", "ha": "John", "yo": "Morenike", "ig": "lang:ig", "pcm": "lang:pcm"}
@@ -122,9 +130,8 @@ def build_session(voice: Voice, vad, stt_vad) -> AgentSession:
         turn_handling={
             "turn_detection": "stt",
             "endpointing": {"min_delay": ENDPOINT_MIN_DELAY_S, "max_delay": ENDPOINT_MAX_DELAY_S},
-            # only real words cut Jagora off: at least two of them, over 0.6 s (a market, a generator or a TV in the
-            # room does not), and if it was only noise Jagora carries on where it was
-            "interruption": {"mode": "vad", "min_duration": 0.6, "min_words": 2, "resume_false_interruption": True,
+            # as Kivo: talking over Jagora for half a second cuts it off; if it was only noise it carries on
+            "interruption": {"mode": "vad", "min_duration": 0.5, "resume_false_interruption": True,
                              "false_interruption_timeout": 1.2},
         },
     )
@@ -133,7 +140,7 @@ def build_session(voice: Voice, vad, stt_vad) -> AgentSession:
 def load_vads():
     vad = silero.VAD.load(min_silence_duration=0.45)
     stt_vad = silero.VAD.load(min_speech_duration=0.1, min_silence_duration=0.45, prefix_padding_duration=PREROLL_S,
-                              activation_threshold=0.6)
+                              activation_threshold=0.55)
     return vad, stt_vad
 
 
@@ -220,10 +227,44 @@ async def entrypoint(ctx: JobContext) -> None:
         await link.close()
 
     ctx.add_shutdown_callback(on_shutdown)
-    # LiveKit's background voice cancellation (BVC): the voice of the person at the phone stays, other people talking,
-    # traffic and noise around her are removed before anything is heard or transcribed
-    await session.start(agent=Bridge(link), room=ctx.room,
-                        room_options=room_io.RoomOptions(audio_input=room_io.AudioInputOptions(noise_cancellation=noise_cancellation.BVC())))
+    @session.on("error")
+    def on_error(ev) -> None:
+        # as Kivo: never go quiet on her; say sorry in her language and keep listening
+        log.warning("voice error: %s", getattr(ev, "error", ev))
+        try:
+            session.say(SORRY.get(voice.lang, SORRY["en"]), add_to_chat_ctx=False)
+        except RuntimeError:
+            pass
+
+    # as Kivo: if she spoke and nothing has been said back for a while, tell Jagora's server (it says it is still
+    # working, or answers again), so the call never sits silent
+    stall = {"since": None}
+
+    @session.on("user_input_transcribed")
+    def stall_heard(ev) -> None:
+        if ev.is_final and (ev.transcript or "").strip() and stall["since"] is None:
+            stall["since"] = time.monotonic()
+
+    @session.on("agent_state_changed")
+    def stall_state(ev) -> None:
+        if ev.new_state == "speaking":
+            stall["since"] = None
+
+    async def watch_stalls() -> None:
+        while True:
+            await asyncio.sleep(1.0)
+            if stall["since"] is not None and time.monotonic() - stall["since"] >= STALL_S:
+                log.warning("STALL: nothing said %.0fs after she spoke", time.monotonic() - stall["since"])
+                stall["since"] = None
+                await link.send({"type": "stall"})
+
+    watcher = asyncio.create_task(watch_stalls())
+    async def stop_watcher() -> None:
+        watcher.cancel()
+
+    ctx.add_shutdown_callback(stop_watcher)
+    # no extra noise filter (as Kivo): the phone's own echo cancelling and noise suppression, plus the ASR gate
+    await session.start(agent=Bridge(link), room=ctx.room)
     await link.send({"type": "ready"})
 
 

@@ -240,7 +240,7 @@ class Snapshot:
     def screenshot_b64(self) -> str:
         return base64.b64encode(self.screenshot).decode()
 
-    def describe(self, max_elements: int = 80) -> str:
+    def describe(self, max_elements: int = 60) -> str:
         v = guard.check(self.url) if self.url.startswith("http") else None
         lines = [f"Page: {self.title}", f"Address: {self.url}"]
         if v and v.official:
