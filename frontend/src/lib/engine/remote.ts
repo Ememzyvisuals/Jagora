@@ -28,6 +28,7 @@
                    {type:"speech_end", task}               Jagora finished talking (live mode listens again)
                    {type:"account", credits}  {type:"notify", task, title, text, url}  {type:"error", error, message}
 */
+import { describeScreen, runApp } from "../appctl";
 import { getToken } from "../account";
 import { useApp, uid, type Msg, type Task } from "../store";
 
@@ -126,6 +127,9 @@ function handle(ev: Record<string, unknown>) {
     case "msg":
       if (!s.tasks.some((t) => t.id === task)) break;
       s.push(task, ev.msg as Msg);
+      break;
+    case "app": // Jagora changes something in the app on her screen
+      runApp(ev.action as string, (ev.value as string) || "");
       break;
     case "drop": // it was Jagora's own voice coming back through the microphone, not her words
       s.drop(task, ev.id as string);
@@ -320,10 +324,10 @@ export async function remoteStart(task: string, goal: string, attachment?: { kin
     return;
   }
   s.setOrb("thinking");
-  sock.send(JSON.stringify({ type: "start", task, goal, lang: s.lang, mode: s.mode, profile: s.profile, attachment, history: historyOf(task), device: device(), translate: wantsTranslation() }));
+  sock.send(JSON.stringify({ type: "start", screen: describeScreen(), task, goal, lang: s.lang, mode: s.mode, profile: s.profile, attachment, history: historyOf(task), device: device(), translate: wantsTranslation() }));
 }
 export async function remoteAnswer(task: string, id: string, value: string) {
-  (await connect()).send(JSON.stringify({ type: "answer", task, id, value }));
+  (await connect()).send(JSON.stringify({ type: "answer", screen: describeScreen(), task, id, value }));
 }
 export async function remoteSecret(task: string, id: string, value: string, save = false) {
   (await connect()).send(JSON.stringify({ type: "secret", task, id, value, save }));
@@ -344,7 +348,7 @@ export async function remoteAudio(task: string, blob: Blob, id?: string) {
     return;
   }
   st.setOrb("thinking");
-  sock.send(JSON.stringify({ type: "audio", task, id, data, lang: st.lang, mode: st.mode, profile: st.profile, history: historyOf(task) }));
+  sock.send(JSON.stringify({ type: "audio", screen: describeScreen(), task, id, data, lang: st.lang, mode: st.mode, profile: st.profile, history: historyOf(task) }));
 }
 const wantsTranslation = () => S().translatePages && ["yo", "ha", "ig"].includes(S().lang);
 export async function remoteTranslate(on: boolean) {

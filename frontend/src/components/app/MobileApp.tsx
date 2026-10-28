@@ -6,6 +6,7 @@ import { Plus, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useDragControls } from "motion/react";
 import { useEffect, useState } from "react";
 import { activeTask, useApp, type Task } from "@/lib/store";
+import { reportScreen } from "@/lib/appctl";
 import { AgentPanel } from "../AgentPanel";
 import { Orb } from "../Orb";
 import { PageView } from "../PageView";
@@ -38,6 +39,25 @@ export function MobileApp() {
     if (s === "tabs") setTabsFull(false);
     setScreen(s);
   };
+
+  // Jagora can change the screen by voice (lib/appctl.ts), and knows which screen is showing
+  useEffect(() => {
+    reportScreen("screen", screen === "tabs" ? "the tabs (all chats as cards)" : shown === "page" ? "the live web page, full screen" : "home (ask bar, suggestions, top sites)");
+    reportScreen("pageShown", shown === "page" ? "yes" : "no");
+  }, [screen, shown]);
+  useEffect(() => {
+    const on = (e: Event) => {
+      const { action } = (e as CustomEvent<{ action: string }>).detail;
+      const t = activeTask(useApp.getState());
+      if (action === "show_page" && t?.kind === "browse" && t.url) setScreen("page");
+      else if (action === "hide_page" || action === "go_home" || action === "new_chat") setScreen("home");
+      else if (action === "show_tabs") go("tabs");
+      else if (action === "hide_tabs" && screen === "tabs") setScreen(under);
+      else if (action === "open_chat") setScreen(t?.kind === "browse" && t.url ? "page" : "home");
+    };
+    window.addEventListener("jagora:app", on);
+    return () => window.removeEventListener("jagora:app", on);
+  });
 
   // a task with a web page opens the page; Jagora's sheet slides down while it works so she can watch
   useEffect(() => {

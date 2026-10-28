@@ -400,6 +400,7 @@ class Session:
         self.active_task = ""
         self.since = time.time()
         self.who: dict = {}  # email, name, plan, code label: for the admin page
+        self.screen = ""  # what the app shows right now, sent with every message (the agent reads it each step)
         self._said: list[tuple[float, str]] = []  # what Jagora said lately, to tell her voice from an echo of Jagora's
         self.lite = False  # data saver (lite.py): smaller voice and live view on slow or costly networks
         self.viewing = True  # False while the app is in the background: no live-view frames are sent then
@@ -523,6 +524,8 @@ class Session:
 
     async def handle(self, ev: dict) -> None:
         kind = ev.get("type")
+        if isinstance(ev.get("screen"), str):
+            self.screen = ev["screen"][:2000]
         task = str(ev.get("task") or "")
         if task:
             self.active_task = task
@@ -742,7 +745,7 @@ class Session:
             model = _model()
             agent = Agent(model, self.browser, io, **_muse_extras(model), lang=self.lang, mode=self.mode, profile=self.profile,
                           conversation=convo[-14:], attachment=attachment, browser_factory=self.get_browser,
-                          steering=r.steer, user_id=self.user_id, on_watch=io.watch,
+                          steering=r.steer, user_id=self.user_id, on_watch=io.watch, screen=lambda: self.screen,
                           memory=DbMemory(self.user_id, task, self.lang, self.mode, self.profile), pause_gate=r.free.wait,
                           vault=Vault(db, self.user_id) if not self.user_id.startswith("guest-") else None, files=self.files)
             result = await agent.run(goal)
@@ -873,7 +876,9 @@ class WsIO:
 
     async def event(self, kind: str, data: dict) -> None:
         s, t = self.s, self.task
-        if kind == "page":
+        if kind == "app":  # change something in the app on her screen (lib/appctl.ts does it)
+            await s.send({"type": "app", "task": t, "action": data.get("action", ""), "value": data.get("value", "")})
+        elif kind == "page":
             await s.send({"type": "url", "task": t, "url": data.get("url", "")})
         elif kind == "plan":
             if self.r.plan_id:

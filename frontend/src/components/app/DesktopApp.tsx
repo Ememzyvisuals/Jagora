@@ -36,6 +36,7 @@ import { Starters, openSite, useTopSites } from "./NewTabBits";
 import { TranslateButton } from "../PageView";
 import { startPageWars } from "../PageWars";
 import { aminaHidden, setAminaHidden } from "../mascot/Amina";
+import { reportScreen } from "@/lib/appctl";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -118,7 +119,26 @@ export function DesktopApp() {
     return () => document.removeEventListener("fullscreenchange", on);
   }, []);
   const theme = useTheme();
-  const showPage = task?.kind === "browse" && !!task.url;
+  // Jagora can hide the live page and open the sidebar by voice (lib/appctl.ts)
+  const [pageHidden, setPageHidden] = useState(false);
+  useEffect(() => setPageHidden(false), [task?.id]);
+  const showPage = task?.kind === "browse" && !!task.url && !pageHidden;
+  useEffect(() => {
+    reportScreen("screen", showPage ? "live web page beside the chat" : "start screen beside the chat");
+    reportScreen("extra", side ? "chats sidebar open" : "");
+    reportScreen("pageShown", task?.kind === "browse" && task.url ? (pageHidden ? "no" : "yes") : "");
+  }, [showPage, side, pageHidden, task?.kind, task?.url]);
+  useEffect(() => {
+    const on = (e: Event) => {
+      const { action } = (e as CustomEvent<{ action: string }>).detail;
+      if (action === "show_page") setPageHidden(false);
+      else if (action === "hide_page" || action === "go_home") setPageHidden(true);
+      else if (action === "show_tabs") setSide(true);
+      else if (action === "hide_tabs") setSide(false);
+    };
+    window.addEventListener("jagora:app", on);
+    return () => window.removeEventListener("jagora:app", on);
+  }, []);
   const url = showPage ? (task!.url.startsWith("/practice/") ? "skillsfair.ng/register (practice site)" : task!.url.replace(/^https?:\/\//, "")) : "";
 
   return (
@@ -300,7 +320,7 @@ export function DesktopApp() {
             <div className="-mt-8 flex flex-col items-center">
               <TalkOrb size={showPage ? 110 : 170} />
             </div>
-            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pt-2">{task ? <Conversation task={task} /> : <Hello lang={lang} />}</div>
+            <div data-chat-scroll className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pt-2">{task ? <Conversation task={task} /> : <Hello lang={lang} />}</div>
             <div className="p-3">
               <Composer />
             </div>

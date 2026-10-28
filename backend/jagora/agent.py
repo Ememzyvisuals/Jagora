@@ -180,7 +180,7 @@ PROFILE_FIELDS = ["full_name", "first_name", "last_name", "phone", "email", "dat
 EL = {"type": "integer", "description": "the element's number on the latest page"}
 WHY = {"type": "string", "description": "short reason, for the log"}
 ASK = {"type": "string", "description": "only needed if this might need their approval: the yes/no question to put to them, in their language"}
-STEP = {"type": "string", "description": "what you are doing, in a few words of their language, shown to their as a progress line (e.g. 'Opening UNILAG's admission page')"}
+STEP = {"type": "string", "description": "what you are doing, in a few words of their language, shown to them as a progress line (e.g. 'Opening UNILAG's admission page')"}
 
 COMMON = [
     tool("tell_user", "Say something to them, in their language: what you found, what you are doing, or what the page says. "
@@ -340,6 +340,23 @@ ACT_TOOLS = [
     tool("set_date", "Fill a date box with a date (YYYY-MM-DD); works for date boxes that take typing.",
          {"element": EL, "date": {"type": "string"}}, ["element", "date"]),
 ]
+APP_ACTIONS = ["show_page", "hide_page", "show_chat", "hide_chat", "show_tabs", "hide_tabs", "open_chat", "new_chat",
+               "close_chat", "scroll_chat", "set_language", "set_mode", "voice", "data_saver", "theme", "fullscreen",
+               "end_live", "amina", "my_details", "go_home"]
+APP_TOOL = tool(
+    "app_control",
+    "Control the Jagora app itself on the user's screen (not the website): show or hide the live web page, show or hide "
+    "the chat, show or hide the tabs, open, start or close a chat, scroll the chat, change language or mode, turn your "
+    "voice, data saver, dark or light theme or full screen on or off, end live voice, show or hide Amina, open their "
+    "saved details, go to the start screen. Use it whenever they ask for something on the screen ('close this', 'show me "
+    "the browser', 'go back to my last chat', 'make it dark', 'scroll up'). 'This' and 'that' mean what is on their "
+    "screen now (see 'On the user's screen'). Do it at once, no need to ask.",
+    {"action": {"type": "string", "enum": APP_ACTIONS},
+     "value": {"type": "string", "description": "for open_chat/close_chat: the chat's number or title from the screen, "
+               "or 'last'/'previous'; scroll_chat: up, down, top, bottom; set_language: yo, ha, ig, pcm, en; set_mode: "
+               "do or guide; voice, data_saver, fullscreen, amina: on or off (data_saver also auto); theme: dark or light"}},
+    ["action"])
+
 DO_TOOLS = COMMON + ACT_TOOLS
 GUIDE_TOOLS = COMMON + [
     tool("point_at", "Show them the element the user should tap or fill next, and tell them in their language what to do with it. "
@@ -402,6 +419,7 @@ HOW YOU WORK
 - Submitting, paying, sending, agreeing to terms, or leaving the website needs their yes: write the yes/no question in `ask`, in {lang}. If the user says no, do not try again; ask what they want.
 - Jagora's guard blocks adult, phishing and fake sites, closes ads and pop-ups and stops redirect tricks. If a page was blocked, tell them briefly and find a safe source.
 - If the user says something while you work, it appears under "The user just said"; act on it first.
+- You also run the Jagora app on their screen: "On the user's screen" tells you what they see (the chat, the live page, their tabs). When they ask to close, open, show, hide, switch, scroll or change something there, use app_control right away, then carry on with the task.
 - When done, call finish with a short summary in {lang}: the answer, where it was confirmed, what was not confirmed, and the best next step. Offer a document or download if it would help.
 
 Mode: {mode}"""
@@ -439,6 +457,7 @@ class Agent:
     _share_ok: set = field(default_factory=set)
     _route: list = field(default_factory=list)
     _skills: dict = field(default_factory=dict)
+    screen: Callable[[], str] | None = None  # what the Jagora app shows on their screen right now (None: no app, e.g. a scheduled run)
     wonder: Model | None = None  # Muse Wonder: reads their photos, PDFs and videos
     side_model: Model | None = None  # open weights (Muse Glimmer / Spark Open) for safety checks, when configured
     images: Any = None  # Muse Image, for picture guides
@@ -565,6 +584,8 @@ class Agent:
         if wrap:
             return [t for t in COMMON if t["function"]["name"] in ("finish", "tell_user", "write_document")]
         base = GUIDE_TOOLS + [t for t in ACT_TOOLS if t["function"]["name"] in GUIDE_READ] if self.mode == "guide" else DO_TOOLS
+        if self.screen is not None:  # the app is open on their screen: Jagora can drive it too
+            base = base + [APP_TOOL]
         if snap is None:  # no page open yet: page tools make no sense
             page_only = {"click", "type_text", "choose", "set_checkbox", "press_key", "point_at", "hand_over", "ask_private",
                          "find_text", "list_links", "pdf_page", "show_evidence", "scroll", "go_back", "switch_tab", "close_tab",
@@ -626,6 +647,12 @@ class Agent:
             if name == "tell_user":
                 await self.io.say(a.get("message", ""))
                 return "told them", False, None
+            if name == "app_control":
+                act, val = str(a.get("action", "")), str(a.get("value", "") or "")
+                if act not in APP_ACTIONS:
+                    return f"no such app action: {act}", True, None
+                await self.io.event("app", {"action": act, "value": val})
+                return f"done on their screen: {act} {val}".strip(), True, None
             if name == "ask_user":
                 answer = await self.io.ask(a.get("question", ""), list(a.get("choices") or []))
                 self._flow.heard(str(answer))
@@ -1540,6 +1567,8 @@ class Agent:
         if convo:
             parts.append(f"Earlier in this conversation:\n{convo}")
         parts.append(f"What the user wants now: {goal}")
+        if self.screen is not None and (seen := self.screen()):
+            parts.append("On the user's screen in the Jagora app now (use app_control to change it):\n" + seen[:1500])
         parts.append(f"Their saved details: {self._profile_summary()}")
         if self._facts:
             parts.append("What you know about them from before: " + "; ".join(self._facts))

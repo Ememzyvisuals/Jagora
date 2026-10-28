@@ -127,7 +127,7 @@ export function AgentPanel({ orbSize = 96 }: { orbSize?: number }) {
           {task?.status === "working" && <StopButton onStop={() => stop(task.id)} />}
         </div>
       </div>
-      <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto">
+      <div data-chat-scroll className="no-scrollbar min-h-0 flex-1 overflow-y-auto">
         {task ? (
           <Conversation task={task} />
         ) : (
