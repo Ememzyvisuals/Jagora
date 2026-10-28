@@ -852,6 +852,14 @@ class Session:
         if kind == "net":
             await self.set_lite(bool(ev.get("lite")))
             return
+        if kind == "focus":
+            # the chat she has open, and the language she chose in the app: the LiveKit voice listens in that
+            # language (its ASR is told which one, so Yorùbá is heard as Yorùbá) and speaks it
+            lang = str(ev.get("lang") or "")
+            if lang in ("en", "yo", "ha", "ig", "pcm") and lang != self.lang:
+                self.lang = lang
+            await self._to_voice({"type": "lang", "lang": self.lang})
+            return
         if kind == "view":
             self.viewing = bool(ev.get("on"))
             if self.viewing and self.video:
@@ -1033,6 +1041,9 @@ class Session:
             text = str(ev.get("text") or "").strip()
             msg_id, self._hearing = self._hearing or None, ""
             if task and text:
+                # she has said more: anything Jagora had not said yet is out of date, so it is dropped and the
+                # answer covers everything she said
+                self.hush()
                 await self.heard(task, msg_id, text, self.lang, None)
         elif kind == "state":
             state = str(ev.get("agent") or "")
@@ -1114,8 +1125,10 @@ class Session:
                 self._resolve(task, mid_, text)
                 return
         if r and r.busy:
-            # she spoke while it works: a quick spoken "okay" now, and Jagora acts on it before its next step
-            self.speak(task, OKAY.get(self.lang, "Okay."))
+            # she spoke while it works: Jagora acts on it before its next step (a quick spoken "okay" on the older
+            # voice; on LiveKit the orb already shows it heard her, and a stream of "okay"s gets in the way)
+            if self.voice_ws is None:
+                self.speak(task, OKAY.get(self.lang, "Okay."))
             await r.steer.put(text)
             return
         await db.remember(self.user_id, task, "user", text or (attachment or {}).get("name", ""), title=text[:60])

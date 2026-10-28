@@ -83,3 +83,13 @@ def test_the_room_token_sends_jagoras_voice_in(monkeypatch):
     assert body["video"]["roomJoin"] and d["voice"] is True
     for k in ("livekit_key", "livekit_secret", "livekit_url", "voice_link_secret"):
         object.__setattr__(s, k, "")
+
+
+async def test_the_voice_listens_in_the_language_she_chose(monkeypatch):
+    s = server.Session(WS(), "u1")
+    v = VoiceWS()
+    s.attach_voice(v)
+    await s.handle({"type": "focus", "task": "chat1", "lang": "yo"})
+    assert s.lang == "yo" and v.out[-1] == {"type": "lang", "lang": "yo"}
+    assert s.active_task == "chat1"
+    s._speaker.cancel()

@@ -28,7 +28,8 @@ from dotenv import load_dotenv
 from livekit.agents import Agent, AgentServer, AgentSession, JobContext, JobProcess, StopResponse, cli
 from livekit.agents import tokenize
 from livekit.agents import tts as agents_tts
-from livekit.plugins import silero
+from livekit.agents.voice import room_io
+from livekit.plugins import noise_cancellation, silero
 
 from storm import StormSTT, StormTTS
 from storm.stt import PREROLL_S
@@ -49,8 +50,9 @@ LINK_KEY = env("VOICE_LINK_SECRET")
 ASR_URL, ASR_KEY = env("STORM_ASR_WS_URL"), env("STORM_ASR_API_KEY")
 TTS_URL, TTS_KEY = env("STORM_TTS_WS_URL"), env("STORM_TTS_API_KEY")
 TTS_MIN_CHARS = int(env("TTS_MIN_CHARS", "220"))
-ENDPOINT_MIN_DELAY_S = float(env("VOICE_ENDPOINT_MIN_DELAY", "0.3"))
-ENDPOINT_MAX_DELAY_S = float(env("VOICE_ENDPOINT_MAX_DELAY", "2.0"))
+# a short pause does not end her turn (she may be thinking, or a bus went past): one answer for the whole thought
+ENDPOINT_MIN_DELAY_S = float(env("VOICE_ENDPOINT_MIN_DELAY", "0.6"))
+ENDPOINT_MAX_DELAY_S = float(env("VOICE_ENDPOINT_MAX_DELAY", "2.5"))
 # Jagora's voice in each language (the same choice as the app's language)
 VOICES = {"en": "John", "ha": "John", "yo": "Morenike", "ig": "Adaeze", "pcm": "Yemi"}
 
@@ -119,7 +121,9 @@ def build_session(voice: Voice, vad, stt_vad) -> AgentSession:
         turn_handling={
             "turn_detection": "stt",
             "endpointing": {"min_delay": ENDPOINT_MIN_DELAY_S, "max_delay": ENDPOINT_MAX_DELAY_S},
-            "interruption": {"mode": "vad", "min_duration": 0.5, "resume_false_interruption": True,
+            # only real words cut Jagora off: at least two of them, over 0.6 s (a market, a generator or a TV in the
+            # room does not), and if it was only noise Jagora carries on where it was
+            "interruption": {"mode": "vad", "min_duration": 0.6, "min_words": 2, "resume_false_interruption": True,
                              "false_interruption_timeout": 1.2},
         },
     )
@@ -128,7 +132,7 @@ def build_session(voice: Voice, vad, stt_vad) -> AgentSession:
 def load_vads():
     vad = silero.VAD.load(min_silence_duration=0.45)
     stt_vad = silero.VAD.load(min_speech_duration=0.1, min_silence_duration=0.45, prefix_padding_duration=PREROLL_S,
-                              activation_threshold=0.55)
+                              activation_threshold=0.6)
     return vad, stt_vad
 
 
@@ -216,7 +220,10 @@ async def entrypoint(ctx: JobContext) -> None:
         await link.close()
 
     ctx.add_shutdown_callback(on_shutdown)
-    await session.start(agent=Bridge(link), room=ctx.room)
+    # LiveKit's background voice cancellation (BVC): the voice of the person at the phone stays, other people talking,
+    # traffic and noise around her are removed before anything is heard or transcribed
+    await session.start(agent=Bridge(link), room=ctx.room,
+                        room_options=room_io.RoomOptions(audio_input=room_io.AudioInputOptions(noise_cancellation=noise_cancellation.BVC())))
     await link.send({"type": "ready"})
 
 

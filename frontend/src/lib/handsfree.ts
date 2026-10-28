@@ -113,7 +113,7 @@ if (typeof window !== "undefined") {
       tell();
     }
     // Jagora's voice talks into the chat she has open
-    if (liveVoiceOn() && s.activeId && s.activeId !== prev.activeId) void remoteFocus(s.activeId);
+    if (liveVoiceOn() && s.activeId && (s.activeId !== prev.activeId || s.lang !== prev.lang)) void remoteFocus(s.activeId);
   });
 }
 

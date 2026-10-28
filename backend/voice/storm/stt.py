@@ -53,8 +53,8 @@ from livekit.agents.types import NOT_GIVEN, NotGivenOr
 logger = logging.getLogger("storm.stt")
 
 SAMPLE_RATE = 16000
-MIN_SPEECH_S = 0.30  # confirmed speech before a socket is opened
-MIN_RMS = 0.006  # loudness floor (float RMS, -44 dBFS) for an utterance to count
+MIN_SPEECH_S = 0.35  # confirmed speech before a socket is opened
+MIN_RMS = 0.01  # loudness floor (float RMS, -40 dBFS): the person at the phone, not the room around her
 PREROLL_S = 0.25  # audio kept from before speech onset
 MAX_GAP_S = 0.30  # longest pause inside an utterance that is sent as-is
 MAX_UTTERANCE_S = 25.0  # cut very long turns so they still get transcribed
