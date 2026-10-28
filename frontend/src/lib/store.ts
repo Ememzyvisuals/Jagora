@@ -1,5 +1,6 @@
 "use client";
 
+import { safeMsg } from "./words";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { Lang } from "./i18n";
@@ -339,6 +340,11 @@ export const useApp = create<State>()(
         }
       }),
       partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, avatar: s.avatar, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, courses: s.courses, resume: s.resume, starters: s.starters, muted: s.muted, translatePages: s.translatePages, dataSaver: s.dataSaver }),
+      // chats saved on this phone are repaired as they load (a bad message must never stop the app from opening)
+      merge: (saved, current) => {
+        const p = (saved ?? {}) as Partial<State>;
+        return { ...current, ...p, tasks: (p.tasks ?? current.tasks).map((t) => ({ ...t, messages: t.messages.map((m) => safeMsg(m)) })) };
+      },
     },
   ),
 );

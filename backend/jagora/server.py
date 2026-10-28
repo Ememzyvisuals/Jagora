@@ -604,6 +604,48 @@ PAGE_WAIT = 1.5  # seconds Jagora's voice waits for a new page to reach her scre
 KEEP_FOR_LATER = {"task", "msg", "update", "status", "url", "notify", "account", "speech_end"}
 
 
+# What her app shows as text must be text. The model sometimes gives an object where a sentence belongs (a choice as
+# {"title": ..., "description": ...}); shown as is, that crashes her app. Turned into plain words here, at the one door.
+TEXT_FIELDS = {"text", "question", "detail", "name", "title", "label", "what", "note", "amount", "pay_to", "reference",
+               "message", "summary", "subtitle", "caption", "quote", "shown"}
+TEXT_LISTS = {"choices", "reasons"}
+
+
+def as_words(v) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, (int, float, bool)):
+        return str(v)
+    if isinstance(v, dict):
+        head = next((str(v[k]) for k in ("title", "name", "label", "text", "question") if v.get(k)), "")
+        more = next((str(v[k]) for k in ("description", "detail", "subtitle") if v.get(k)), "")
+        return (head + (f": {more}" if more and head else more)) or json.dumps(v, ensure_ascii=False)[:200]
+    if isinstance(v, list):
+        return ", ".join(as_words(x) for x in v)
+    return str(v)
+
+
+def shown_safe(msg: dict) -> dict:
+    def fix(d: dict) -> dict:
+        out = {}
+        for k, v in d.items():
+            if k in TEXT_FIELDS and not isinstance(v, str) and v is not None and not (k == "shown" and isinstance(v, list)):
+                v = as_words(v)
+            elif k in TEXT_LISTS and isinstance(v, list):
+                v = [as_words(x) for x in v]
+            elif k in ("queue", "steps", "fields", "lines") and isinstance(v, list):
+                v = [fix(x) if isinstance(x, dict) else x for x in v]
+            out[k] = v
+        return out
+    msg = dict(msg)
+    for key in ("msg", "patch"):
+        if isinstance(msg.get(key), dict):
+            msg[key] = fix(msg[key])
+    return msg
+
+
 class Session:
     def __init__(self, ws: WebSocket, user_id: str) -> None:
         self.ws, self.user_id = ws, user_id
@@ -710,6 +752,8 @@ class Session:
         a send could wait forever and hold up everything after it. So a send waits a few seconds at most; after
         that this connection counts as gone, and what she must not miss (the chat, steps, status) is kept and sent
         when her app reconnects (attach)."""
+        if msg.get("type") in ("msg", "update"):
+            msg = shown_safe(msg)
         trace.sent(self.user_id, msg)
         ws = self.ws
         if ws is not self._dead_ws:

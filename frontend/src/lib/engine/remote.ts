@@ -32,6 +32,7 @@ import { describeScreen, runApp } from "../appctl";
 import { duck, forget as forgetSound, hold, release, unduck } from "../sound";
 import { canDecodeVideo, type LiveFrame } from "../liveview";
 import { getToken } from "../account";
+import { safeMsg } from "../words";
 import { useApp, uid, type Msg, type Task } from "../store";
 
 const S = () => useApp.getState();
@@ -230,7 +231,7 @@ function handle(ev: Record<string, unknown>) {
       break;
     case "msg":
       if (!s.tasks.some((t) => t.id === task)) break;
-      s.push(task, ev.msg as Msg);
+      s.push(task, safeMsg(ev.msg as Msg));
       // a song or video plays big on her screen, not squeezed into the chat
       if ((ev.msg as Msg).kind === "media") {
         forgetSound(); // a new video replaces what was paused: nothing old plays on
@@ -252,7 +253,7 @@ function handle(ev: Record<string, unknown>) {
       s.drop(task, ev.id as string);
       break;
     case "update": {
-      const patch = ev.patch as Partial<Msg> & { text?: string };
+      const patch = safeMsg(ev.patch as Partial<Msg> & { text?: string });
       s.update(task, ev.id as string, patch);
       // a voice note's chat is named after what she said, once the words are known
       const t = s.tasks.find((x) => x.id === task);

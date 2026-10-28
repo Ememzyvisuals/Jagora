@@ -2,7 +2,7 @@
 
 import { CheckCircle, CircleNotch, Eye, EyeSlash, Hand, PencilSimpleLine, Image as ImageIcon, LinkSimple, Paperclip, ShieldCheck, WarningOctagon, XCircle } from "@phosphor-icons/react";
 import { motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import { answer, giveForm, giveSecret, live } from "@/lib/engine";
 import { celebrate } from "./Effects";
 import { DocCard } from "./DocView";
@@ -27,7 +27,9 @@ export function Conversation({ task }: { task: Task }) {
     <div className="flex flex-col gap-2.5 px-3 pb-4 pt-3 sm:gap-3 sm:px-4 sm:pt-4">
       {task.messages.map((m, i) => (
         <motion.div key={m.id} {...enter}>
-          <Item m={m} task={task} />
+          <SafeItem id={m.id}>
+            <Item m={m} task={task} />
+          </SafeItem>
           {live && m.kind === "agent" && m.text.length > 90 && task.status !== "working" && i === lastAgent(task) && (
             <PicturesButton task={task} text={m.text} />
           )}
@@ -70,6 +72,23 @@ function ContinueWatching({ task }: { task: Task }) {
       </button>
     </motion.div>
   );
+}
+
+/** One message that cannot be shown (bad data) must never take the whole app down: it shows a short line instead,
+    and the rest of the chat works. */
+class SafeItem extends Component<{ id: string; children: ReactNode }, { broken: boolean }> {
+  state = { broken: false };
+  static getDerivedStateFromError() {
+    return { broken: true };
+  }
+  componentDidCatch(e: unknown) {
+    console.warn("message could not be shown", this.props.id, e);
+  }
+  render() {
+    if (this.state.broken)
+      return <p className="rounded-[16px] bg-black/5 px-3 py-2 text-[13px] text-ink-3">This message could not be shown.</p>;
+    return this.props.children;
+  }
 }
 
 const lastAgent = (task: Task) => task.messages.map((x) => x.kind).lastIndexOf("agent");
