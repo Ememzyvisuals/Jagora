@@ -28,11 +28,12 @@ import {
   ChatCircleText,
   Play,
   SpeakerHigh,
-  LockSimple, DownloadSimple, Eraser, Globe, Trash } from "@phosphor-icons/react";
+  LockSimple, DownloadSimple, Eraser, Globe, Trash, Check } from "@phosphor-icons/react";
 import { fly } from "../Effects";
 import { Starters, openSite, useTopSites } from "./NewTabBits";
 import { startPageWars } from "../PageWars";
 import { AnimatePresence, motion } from "motion/react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Avatar, AvatarPicker } from "../Avatar";
 import { remoteInput } from "@/lib/engine/remote";
@@ -325,24 +326,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
                 <CaretDown size={13} weight="bold" className="text-ink-2" />
               </span>
             </Glass>
-            {langOpen && (
-              <Glass radius={22} bezel={14} tint="rgba(255,255,255,.55)" className="absolute left-0 top-[52px] z-50 w-56 p-1.5">
-                <p className="px-3 pb-1 pt-2 text-[12.5px] font-bold text-ink-2">{CHOOSE_LANG[lang]}</p>
-                <ul>
-                  {LANGS.map((x) => (
-                    <li key={x.id}>
-                      <button
-                        onClick={() => (setLang(x.id), setLangOpen(false))}
-                        className={`w-full rounded-[16px] px-3 py-2.5 text-left text-[15.5px] font-medium transition ${x.id === lang ? "bg-white/80 text-ink" : "text-ink-2 hover:bg-white/50"}`}
-                      >
-                        {x.native}
-                        <span className="ml-2 text-[13px] text-ink-3">{x.hello}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </Glass>
-            )}
+            <LangSheet open={langOpen} onClose={() => setLangOpen(false)} lang={lang} setLang={setLang} />
           </div>
           <div className="flex items-center gap-2">
           {canFull && (
@@ -408,7 +392,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
                 {top.slice(p * 4, p * 4 + 4).map((s) => (
                   <button key={s.goal} onClick={() => openSite(s)} className="flex flex-col items-center gap-1.5 rounded-[18px] py-1.5 transition active:scale-95" title={s.name[lang]}>
                     <AppIcon site={s} size={54} />
-                    <span className="max-w-full truncate px-1 text-[13px] font-bold text-ink [text-shadow:0_0_8px_rgba(255,255,255,.95),0_0_2px_rgba(255,255,255,.9)] dark:[text-shadow:0_1px_8px_rgba(0,0,0,.7)]">{s.name[lang]}</span>
+                    <span className="max-w-full truncate px-1 text-[13px] font-bold text-snow [text-shadow:0_1px_3px_rgba(5,30,80,.55),0_2px_10px_rgba(5,30,80,.55)]">{s.name[lang]}</span>
                   </button>
                 ))}
               </div>
@@ -425,7 +409,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
         {/* Discover: the day's news, nothing else */}
         <section className="mt-6 px-4">
           <div className="flex items-center justify-between px-1">
-            <h2 className="text-[22px] font-extrabold text-ink [text-shadow:0_0_10px_rgba(255,255,255,.95),0_0_2px_rgba(255,255,255,.9)] dark:[text-shadow:0_1px_10px_rgba(0,0,0,.75)]">{DISCOVER[lang]}</h2>
+            <h2 className="text-[22px] font-extrabold text-snow [text-shadow:0_1px_3px_rgba(5,30,80,.55),0_2px_14px_rgba(5,30,80,.6)]">{DISCOVER[lang]}</h2>
             {news.length > 4 && (
               <button onClick={() => setOpen((v) => !v)} className="rounded-full px-3 py-1.5 text-[14px] font-bold text-accent hover:bg-accent-soft">
                 {open ? CLOSE_L[lang] : SEE_ALL[lang]}
@@ -451,7 +435,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
 
         {/* things to try with Jagora, under the news */}
         <section className="mt-7 px-4">
-          <h2 className="px-1 text-[22px] font-extrabold text-ink [text-shadow:0_0_10px_rgba(255,255,255,.95),0_0_2px_rgba(255,255,255,.9)] dark:[text-shadow:0_1px_10px_rgba(0,0,0,.75)]">{TRY[lang]}</h2>
+          <h2 className="px-1 text-[22px] font-extrabold text-snow [text-shadow:0_1px_3px_rgba(5,30,80,.55),0_2px_14px_rgba(5,30,80,.6)]">{TRY[lang]}</h2>
           <div className="mt-3 flex flex-col gap-3">
             {CARDS.map((c) => (
               <FeedCard key={c.id} image={c.thumb} title={c.title[lang]} source={c.source} when={c.when[lang]} onOpen={() => run(c.id)} />
@@ -495,6 +479,48 @@ function FeedCard({ image, title, source, when, listen = false, onOpen }: { imag
 }
 
 const DEL_ALL_M: Record<Lang, string> = { en: "Delete all conversations", pcm: "Delete all chats", yo: "Pa gbogbo ìjíròrò rẹ́", ha: "Share dukkan hirarraki", ig: "Hichapụ mkparịta ụka niile" };
+
+/** The language picker on phones: a panel from the bottom of the screen, big rows, a tick on the one in use. */
+function LangSheet({ open, onClose, lang, setLang }: { open: boolean; onClose: () => void; lang: Lang; setLang: (l: Lang) => void }) {
+  if (typeof document === "undefined") return null;
+  // on the page itself, so no glass or moving parent around it can shift or clip it
+  return createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div key="lang" className="fixed inset-0 z-[90]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <div className="absolute inset-0 bg-[rgba(8,14,30,.45)]" onClick={onClose} />
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 380, damping: 36 }}
+            className="absolute inset-x-0 bottom-0 rounded-t-[28px] bg-white px-4 pb-[max(20px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-20px_50px_-20px_rgba(10,25,60,.45)] dark:bg-[#23262d]"
+            role="dialog"
+            aria-label={CHOOSE_LANG[lang]}
+          >
+            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-black/15 dark:bg-white/20" />
+            <p className="px-2 pb-2 text-[18px] font-bold text-ink">{CHOOSE_LANG[lang]}</p>
+            <ul>
+              {LANGS.map((x) => (
+                <li key={x.id}>
+                  <button
+                    onClick={() => (setLang(x.id), onClose())}
+                    className={`flex h-14 w-full items-center gap-3 rounded-[18px] px-3 text-left transition ${x.id === lang ? "bg-black/[.05] dark:bg-white/10" : "active:bg-black/[.04]"}`}
+                  >
+                    <span className="text-[17px] font-bold text-ink">{x.native}</span>
+                    <span className="text-[14px] font-semibold text-ink-3">{x.hello}</span>
+                    {x.id === lang && <Check size={20} weight="bold" className="ml-auto text-accent" />}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+}
 
 /** Her profile button; its menu holds what the old "more" button held. */
 function ProfileMenu({ canFull }: { canFull: boolean }) {
