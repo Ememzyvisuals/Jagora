@@ -37,7 +37,9 @@ export function describeScreen(): string {
     lines.push(`Open chat: "${t.title}" (${t.status}).${page}`);
   } else lines.push("No chat open (the start screen with suggestions and her top sites).");
   if (!desktop()) lines.push(`Chat panel: ${s.sheetOpen ? "open" : "closed"}.`);
-  if (s.playing) lines.push(`Playing on her screen now: "${s.playing.name}" (${s.playing.type === "youtube" ? "YouTube video" : s.playing.type}). Do not start it again; stop_media closes it.`);
+  if (s.playing?.queue && s.playing.queue.length > 1)
+    lines.push(`Video list on her screen (${s.playing.preview ? "previews" : "playing"}): ` + s.playing.queue.map((q, i) => `${i + 1}. "${q.name}"${i === s.mediaAt ? " (now)" : ""}`).join("; ") + ". media_next and media_previous move through it.");
+  if (s.playing) lines.push(`Playing on her screen now: "${s.playing.queue?.[s.mediaAt]?.name ?? s.playing.name}" (${s.playing.type === "youtube" ? "YouTube video" : s.playing.type}). Do not start it again; stop_media closes it.`);
   if (s.live) lines.push(`Live voice: ${s.liveSmall || s.playing ? "folded to the small bar at the top" : "full screen"}.`);
   const chats = listed();
   if (chats.length)
@@ -139,6 +141,13 @@ export function runApp(action: string, value = "") {
       return s.setLiveSmall(false);
     case "stop_media":
       return s.setPlaying(null);
+    case "media_next":
+      return s.setMediaAt(s.mediaAt + 1);
+    case "media_previous":
+      return s.setMediaAt(s.mediaAt - 1);
+    case "media_pause":
+    case "media_play":
+      return void window.dispatchEvent(new CustomEvent("jagora:media", { detail: action === "media_pause" ? "pause" : "play" }));
     case "amina":
       return setAminaHidden(!on);
     case "my_details":

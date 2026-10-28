@@ -208,6 +208,13 @@ def wrap_soon(turns: int, max_turns: int) -> bool:
 CHANGE_TOOLS = {"click", "type_text", "choose", "set_checkbox", "press_key", "hover", "double_click", "right_click", "drag",
                 "click_at", "upload_file", "set_date", "go_back", "fill_form"}
 
+def yt_embed(video_id: str) -> str:
+    """YouTube's privacy-enhanced player, controllable from her app (pause while she talks, next, previous)."""
+    return f"https://www.youtube-nocookie.com/embed/{video_id}?autoplay=1&rel=0&modestbranding=1&enablejsapi=1&playsinline=1"
+
+
+YT_ID = re.compile(r"(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/)|youtu\.be/)([\w-]{11})")
+
 FILL_TOOLS = {"type_text", "choose", "set_checkbox", "upload_file", "set_date", "fill_form", "drag", "use_saved_login",
               "ask_private", "hand_over"}
 
@@ -347,6 +354,11 @@ COMMON = [
     tool("find_video", "Find a video, song, film or trailer to play for them (YouTube first). Then play the best one with "
          "play_media and its link. Never open youtube.com in the browser for this: it keeps asking the browser to prove it "
          "is not a robot. The video plays on their own device.", {"query": {"type": "string"}}, ["query"]),
+    tool("preview_videos", "Play short previews of several videos one after another (a few seconds each) so they can choose; "
+         "after the last one their app asks which to watch. Use when they ask to see the options or previews.",
+         {"videos": {"type": "array", "items": {"type": "object", "properties": {"url": {"type": "string"}, "name": {"type": "string"}},
+                                               "required": ["url"]}},
+          "seconds": {"type": "integer", "description": "seconds of each preview, 5 to 12 (default 8)"}}, ["videos"]),
     tool("look", "See the page as a picture on your next step. Only when the text and the list of elements are not enough "
          "(pictures, maps, colours, layout, a button you cannot find).", {}, []),
     tool("finish", "The task is done, or cannot be done. Tell them the result in their language: the answer, what you "
@@ -390,7 +402,7 @@ ACT_TOOLS = [
 ]
 APP_ACTIONS = ["show_page", "hide_page", "show_chat", "hide_chat", "show_tabs", "hide_tabs", "open_chat", "new_chat",
                "close_chat", "scroll_chat", "set_language", "set_mode", "voice", "data_saver", "theme", "fullscreen",
-               "end_live", "hide_live", "show_live", "stop_media", "amina", "my_details", "go_home", "show_history", "hide_history"]
+               "end_live", "hide_live", "show_live", "stop_media", "media_next", "media_previous", "media_pause", "media_play", "amina", "my_details", "go_home", "show_history", "hide_history"]
 APP_TOOL = tool(
     "app_control",
     "Control the Jagora app itself on the user's screen (not the website): show or hide the live web page, show or hide "
@@ -398,7 +410,8 @@ APP_TOOL = tool(
     "chats), open, start or close a chat, scroll the chat, change language or mode, turn your "
     "voice, data saver, dark or light theme or full screen on or off, end live voice (end_live), fold the Live voice screen "
     "down while the call goes on (hide_live: 'close this live screen', 'remove this screen'), bring it back (show_live), "
-    "close the song or video playing on their screen (stop_media), show or hide Amina, open their "
+    "close the song or video playing on their screen (stop_media), next or previous in the list playing (media_next, "
+    "media_previous), pause or play it (media_pause, media_play), show or hide Amina, open their "
     "saved details, go to the start screen. Use it whenever they ask for something on the screen ('close this', 'show me "
     "the browser', 'go back to my last chat', 'make it dark', 'scroll up'). 'This' and 'that' mean what is on their "
     "screen now (see 'On the user's screen'). Do it at once, no need to ask.",
@@ -478,6 +491,8 @@ HOW YOU WORK
 - Do not ask "what do you want me to do?" when the request is already clear from the conversation; only ask when two real choices remain.
 - Be quick on simple questions (dates, news, prices, results): search once, open the best official or news result, read the answer, then say it. Do not visit page after page when one already answers it.
 - You also run the Jagora app on their screen: "On the user's screen" tells you what they see (the chat, the live page, their tabs). When they ask to close, open, show, hide, switch, scroll or change something there, use app_control right away, then carry on with the task.
+- While a video plays on their screen ("Playing on her screen now"), the microphone may catch the film. Act only on words clearly meant for you (next, another one, I don't like it, pause, stop, louder); ignore anything that sounds like the film's dialogue and say nothing.
+- Say the answer once. Either tell_user it and then finish with a one-line wrap-up, or put it only in finish. Never tell_user the answer and then repeat it in finish.
 - When done, call finish with a short summary in {lang}: the answer, where it was confirmed, what was not confirmed, and the best next step. Offer a document or download if it would help.
 
 Mode: {mode}"""
@@ -553,6 +568,7 @@ class Agent:
     _want_look: bool = False  # the model asked to see the page as a picture next step
     _last_fp_same: bool = False  # the last action left the page exactly as it was
     _changed_any: bool = False
+    _told_at: int = -99  # where in the history Jagora last told her something
     _heard_all: list = field(default_factory=list)  # everything she said during the task
     _goal: str = ""
     _fails: int = 0
@@ -742,7 +758,7 @@ class Agent:
         (("write_document",), r"doc|document|pdf|word|letter|cv|resume|write|summar|report|markdown|note"),
         (("picture_guide",), r"picture|draw|diagram|image|show me how|illustrat"),
         (("save_page", "page_theme"), r"save|pdf|print|download|dark|light|theme|night mode"),
-        (("play_media", "find_media", "find_video"), r"play|song|music|video|movie|film|watch|listen|audio|sermon|podcast|clip"),
+        (("play_media", "find_media", "find_video", "preview_videos"), r"play|song|music|video|movie|film|watch|listen|audio|sermon|podcast|clip"),
         (("give_verdict", "check_link", "review_terms"), r"real|fake|scam|legit|genuine|official|safe|trust|link|terms|verify|check (this|if)"),
         (("remember_about_her",), r"remember|my name is|i am a|i live|call me|i work|i study"),
     ]
@@ -984,6 +1000,7 @@ class Agent:
                 if key and key == self._said_key:
                     return "already told them that; do not repeat it", False, None
                 self._said_key, self._said_last = key, msg
+                self._told_at = len(self.history)
                 await self.io.say(msg)
                 return "told them", False, None
             if name == "fill_form":
@@ -1004,9 +1021,26 @@ class Agent:
                 vids = await research.videos(str(a.get("query", "")))
                 if not vids:
                     return "no videos found; try other words", False, None
-                return ("videos (pick the one that best matches what they asked, then play_media with its url):\n" + "\n".join(
+                return ("videos. If they named one, or said just play, play the best match with play_media. Otherwise ask "
+                        "them which one with ask_user (the top 3 titles as choices) and WAIT for the answer before playing; "
+                        "if they want to see them first, use preview_videos. After it starts, stay with them: they may say "
+                        "next, another one, or that they do not like it:\n" + "\n".join(
                     f"{i + 1}. {v['title']} | {v['url']} | {v['channel']} {v['duration']} {v['date']}".rstrip()
                     for i, v in enumerate(vids))), False, None
+            if name == "preview_videos":
+                items = []
+                for v in list(a.get("videos") or [])[:6]:
+                    m = YT_ID.search(str(v.get("url", "")))
+                    if m:
+                        items.append({"name": str(v.get("name") or "Video")[:90], "url": yt_embed(m.group(1)),
+                                      "type": "youtube", "source": str(v.get("url"))})
+                if not items:
+                    return "give YouTube links from find_video", False, None
+                secs = max(5, min(12, int(a.get("seconds") or 8)))
+                first = items[0]
+                await self.io.event("media", {**first, "size": 0, "queue": items, "preview": secs})
+                return (f"previewing {len(items)} videos, {secs} seconds each, on their screen; their app then asks which "
+                        "one to watch. Do not play another until they choose."), False, None
             if name == "look":
                 self._want_look = True
                 return "you will see the page as a picture now", True, None
@@ -1024,7 +1058,10 @@ class Agent:
                         await self.io.event("step", {"text": {"yo": "Mo ń ṣàyẹ̀wò iṣẹ́ náà lẹ́ẹ̀kan sí i", "ha": "Ina sake dubawa",
                                                                "ig": "Ana m elele ọzọ", "pcm": "I dey check am again"}.get(self.lang, "Double-checking the result")})
                         return f"the checker does not agree it is done: {verdict}. Fix this, then finish.", True, None
-                await self.io.say(a.get("summary", ""))
+                # she was just told the answer (tell_user in the step before): the summary is not said again, so
+                # she hears it once
+                if len(self.history) - self._told_at > 2 or not self._said_last:
+                    await self.io.say(a.get("summary", ""))
                 return "finished", False, (bool(a.get("success")), a.get("summary", ""))
             if name == "give_verdict":
                 await self.io.event("verdict", {"verdict": a.get("verdict", "unsure"), "title": a.get("title", ""),
@@ -1593,8 +1630,7 @@ class Agent:
         if play and yt:
             # played in their app from YouTube's privacy-enhanced player, without YouTube's tracking cookies
             title = str(a.get("name") or (snap.title if snap else "") or "Video").replace(" - YouTube", "")[:90]
-            await self.io.event("media", {"name": title, "url": f"https://www.youtube-nocookie.com/embed/{yt.group(1)}?autoplay=1&rel=0&modestbranding=1",
-                                          "type": "youtube", "size": 0, "source": url})
+            await self.io.event("media", {"name": title, "url": yt_embed(yt.group(1)), "type": "youtube", "size": 0, "source": url})
             return f'playing "{title}" for them in the app', False, None
         if INSTALLER.search(url):
             return "refused: app installers are never downloaded", False, None

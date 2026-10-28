@@ -53,7 +53,9 @@ export type Msg =
   | { id: string; kind: "reminder"; at: number; text: string; repeat: string }
   | { id: string; kind: "moment"; title: string; tags: string[]; note: string; url: string }
   /** a song, voice note or video from a website, played here (Jagora's live view has no sound) */
-  | { id: string; kind: "media"; name: string; url: string; type: string; size: number; source?: string }
+  | { id: string; kind: "media"; name: string; url: string; type: string; size: number; source?: string;
+      /** several videos: previews one after another, or a list to move through with next and previous */
+      queue?: { name: string; url: string; type: string; source?: string }[]; preview?: number }
   /** a task Jagora will do on its own later */
   /** a site's terms and privacy policy, read for her */
   | { id: string; kind: "reading"; read_by: string; name?: string; from?: string; summary: string; risk: "low" | "medium" | "high";
@@ -128,6 +130,12 @@ type State = {
   liveSmall: boolean;
   /** a song or video Jagora found, playing big on her screen */
   playing: Extract<Msg, { kind: "media" }> | null;
+  /** which video of the list is playing */
+  mediaAt: number;
+  /** she tapped Talk on the player: the film pauses and the microphone is on */
+  talkOver: boolean;
+  /** the first 30 s of a video: Jagora still listens (next, another one, I don't like it), with the film quieter */
+  mediaListen: boolean;
   orb: OrbMode;
   pointer: Pointer;
   highlight: Highlight;
@@ -157,6 +165,9 @@ type State = {
   setShowPage: (v: boolean) => void;
   setLiveSmall: (v: boolean) => void;
   setPlaying: (m: Extract<Msg, { kind: "media" }> | null) => void;
+  setMediaAt: (i: number) => void;
+  setTalkOver: (v: boolean) => void;
+  setMediaListen: (v: boolean) => void;
   setOrb: (o: OrbMode) => void;
   setPointer: (p: Partial<Pointer>) => void;
   setHighlight: (h: Highlight) => void;
@@ -204,6 +215,9 @@ export const useApp = create<State>()(
       showPage: false,
       liveSmall: false,
       playing: null,
+      mediaAt: 0,
+      talkOver: false,
+      mediaListen: false,
       orb: "idle",
       pointer: { x: 0, y: 0, visible: false, clicking: false },
       highlight: null,
@@ -242,7 +256,10 @@ export const useApp = create<State>()(
       setSheet: (sheetOpen) => set({ sheetOpen }),
       setLive: (live) => set({ live, showPage: false, liveSmall: false }),
       setLiveSmall: (liveSmall) => set({ liveSmall }),
-      setPlaying: (playing) => set({ playing }),
+      setPlaying: (playing) => set({ playing, mediaAt: 0, talkOver: false }),
+      setMediaAt: (mediaAt) => set((s) => ({ mediaAt: Math.max(0, Math.min(mediaAt, (s.playing?.queue?.length ?? 1) - 1)), talkOver: false })),
+      setTalkOver: (talkOver) => set({ talkOver }),
+      setMediaListen: (mediaListen) => set({ mediaListen }),
       setShowPage: (showPage) => set({ showPage }),
       setOrb: (orb) => set({ orb }),
       setPointer: (p) => set((s) => ({ pointer: { ...s.pointer, ...p } })),

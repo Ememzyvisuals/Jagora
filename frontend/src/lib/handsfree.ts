@@ -138,8 +138,10 @@ if (typeof window !== "undefined") {
       void l.destroy();
       tell();
     }
-    // Jagora's voice talks into the chat she has open
-    if (liveVoiceOn() && s.activeId && (s.activeId !== prev.activeId || s.lang !== prev.lang)) void remoteFocus(s.activeId);
+    // Jagora's voice talks into the chat she has open, and knows what is on her screen (the video playing, which
+    // one of the list), so "next" or "I don't like this one" is understood
+    if (liveVoiceOn() && s.activeId && (s.activeId !== prev.activeId || s.lang !== prev.lang || s.playing?.id !== prev.playing?.id ||
+        s.mediaAt !== prev.mediaAt || s.live !== prev.live || s.liveSmall !== prev.liveSmall)) void remoteFocus(s.activeId);
   });
 }
 
