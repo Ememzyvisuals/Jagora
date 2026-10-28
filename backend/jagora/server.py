@@ -1190,6 +1190,9 @@ class Session:
         elif kind == "user" and ev.get("state") == "speaking":
             self._wait_more()  # she started again: her next words join this message
             await self.send({"type": "orb", "state": "listening"})
+            await self.send({"type": "sound", "do": "duck"})  # anything playing on her screen goes quiet at once
+        elif kind == "user" and ev.get("state") in ("listening", "away") and not (self._partial or self._turn):
+            await self.send({"type": "sound", "do": "unduck"})  # it was not words: back to normal
         elif kind == "user" and ev.get("state") in ("listening", "away") and task and (self._partial or self._turn):
             # she stopped. If the voice never ends her turn (sometimes it waits for more words), what is showing is
             # answered after a longer moment
@@ -1250,12 +1253,20 @@ class Session:
             log.info("voice: ignored a scrap: %r", text[:40])
             if msg_id:
                 await self.send({"type": "drop", "task": task, "id": msg_id})
+            await self.send({"type": "sound", "do": "unduck"})
             await self.settle(task)
             return
         # she has said more: anything Jagora had not said yet is out of date, so it is dropped and the answer covers
-        # everything she said
+        # everything she said. Whatever plays on her screen pauses while Jagora deals with it, and plays on after,
+        # unless what she said was about it (Jagora then pauses, closes or changes it itself)
         self.hush()
+        await self.send({"type": "sound", "do": "hold"})
         await self.heard(task, msg_id, text, self.lang, None)
+        r = self.runs.get(task)
+        if r and r.job and not r.job.done():
+            r.job.add_done_callback(lambda _: asyncio.ensure_future(self.send({"type": "sound", "do": "release"})))
+        else:
+            await self.send({"type": "sound", "do": "release"})
 
     async def on_binary(self, data: bytes) -> None:
         """Binary messages from her app: none are used now (her live voice goes through LiveKit)."""

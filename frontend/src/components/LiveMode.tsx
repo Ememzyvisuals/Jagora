@@ -108,14 +108,7 @@ export function LiveMode() {
   const setSmall = useApp((s) => s.setLiveSmall);
   const playing = useApp((s) => !!s.playing);
   const island = small || playing || (!!task && task.kind === "browse" && !!task.url && (showPage || mustType));
-  // a film or song playing: the microphone goes off, so its sound is never taken for her voice; back on after
-  // ...unless she tapped Talk on the player (the film pauses while she speaks)
-  const talkOver = useApp((s) => s.talkOver);
-  const mediaListen = useApp((s) => s.mediaListen);
-  useEffect(() => {
-    if (!on) return;
-    setMuted(playing && !talkOver && !mediaListen);
-  }, [playing, talkOver, mediaListen, on]);
+  // a film or song playing: the microphone stays on; when she talks, it goes quiet and pauses (lib/sound.ts)
 
   const listen = useCallback(async () => {
     if (busy.current || listener.current) return;

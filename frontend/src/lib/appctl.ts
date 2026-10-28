@@ -10,6 +10,7 @@
    desktop layouts change their own screens through the "jagora:app" event. */
 import { aminaHidden, setAminaHidden } from "@/components/mascot/Amina";
 import { toggleFullscreen } from "@/components/Pwa";
+import { forget } from "@/lib/sound";
 import { LANGS, type Lang } from "./i18n";
 import { activeTask, useApp } from "./store";
 import { getTheme, setTheme } from "./theme";
@@ -140,13 +141,17 @@ export function runApp(action: string, value = "") {
       if (!s.live) return s.setLive(true);
       return s.setLiveSmall(false);
     case "stop_media":
+      forget();
       return s.setPlaying(null);
     case "media_next":
+      forget();
       return s.setMediaAt(s.mediaAt + 1);
     case "media_previous":
+      forget();
       return s.setMediaAt(s.mediaAt - 1);
     case "media_pause":
     case "media_play":
+      forget();
       return void window.dispatchEvent(new CustomEvent("jagora:media", { detail: action === "media_pause" ? "pause" : "play" }));
     case "amina":
       return setAminaHidden(!on);

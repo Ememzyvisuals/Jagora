@@ -29,6 +29,7 @@
                    {type:"account", credits}  {type:"notify", task, title, text, url}  {type:"error", error, message}
 */
 import { describeScreen, runApp } from "../appctl";
+import { duck, forget as forgetSound, hold, release, unduck } from "../sound";
 import { canDecodeVideo, type LiveFrame } from "../liveview";
 import { getToken } from "../account";
 import { useApp, uid, type Msg, type Task } from "../store";
@@ -222,7 +223,10 @@ function handle(ev: Record<string, unknown>) {
       if (!s.tasks.some((t) => t.id === task)) break;
       s.push(task, ev.msg as Msg);
       // a song or video plays big on her screen, not squeezed into the chat
-      if ((ev.msg as Msg).kind === "media") s.setPlaying(ev.msg as Extract<Msg, { kind: "media" }>);
+      if ((ev.msg as Msg).kind === "media") {
+        forgetSound(); // a new video replaces what was paused: nothing old plays on
+        s.setPlaying(ev.msg as Extract<Msg, { kind: "media" }>);
+      }
       break;
     case "runs": {
       // what the server is really working on: any chat this phone still shows as working has stopped
@@ -304,6 +308,12 @@ function handle(ev: Record<string, unknown>) {
         }
         if (s.orb !== "idle") s.setOrb("idle");
       }
+      break;
+    case "sound": // she is talking to Jagora: whatever plays on her screen goes quiet, pauses, then plays on
+      if (ev.do === "duck") duck();
+      else if (ev.do === "unduck") unduck();
+      else if (ev.do === "hold") hold();
+      else if (ev.do === "release") release();
       break;
     case "voice": // Jagora's voice on LiveKit joined or left
       if (!ev.on) clientLog("voice_worker_left");

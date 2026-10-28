@@ -1,20 +1,19 @@
 "use client";
 
 /* A song or video Jagora found, playing big in the middle of her screen (not squeezed into the chat).
-   - Live mode folds down to its small bar and its microphone is off while this plays, so the film's sound is never
-     taken for her voice. Talk pauses the film and turns the microphone on; Resume (or 15 s of quiet) plays it again.
+   - Live mode folds down to its small bar and keeps listening. When she talks, the film goes quiet at once, pauses
+     while Jagora deals with what she said, and plays on after (lib/sound.ts), unless she asked about the film.
    - Several videos: previews play one after another (a few seconds each), then she picks one to watch; Next and
      Previous move through the list (Jagora can do the same when she asks by voice).
    X closes it. */
-import { CornersOut, Microphone, Play, SkipBack, SkipForward, X } from "@phosphor-icons/react";
+import { CornersOut, Pause, Play, SkipBack, SkipForward, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Lang } from "@/lib/i18n";
+import { forget, watchYouTube } from "@/lib/sound";
 import { useApp } from "@/lib/store";
 
-const L: Record<"talk" | "resume" | "which" | "watch" | "preview", Record<Lang, string>> = {
-  talk: { en: "Talk", pcm: "Talk", yo: "Sọ̀rọ̀", ha: "Yi magana", ig: "Kwuo" },
-  resume: { en: "Resume", pcm: "Continue", yo: "Tẹ̀síwájú", ha: "Ci gaba", ig: "Gaa n'ihu" },
+const L: Record<"which" | "watch" | "preview", Record<Lang, string>> = {
   which: { en: "Which one do you want to watch?", pcm: "Which one you wan watch?", yo: "Èwo ni ẹ fẹ́ wò?", ha: "Wanne kake so ka kalla?", ig: "Kedu nke ị chọrọ ikiri?" },
   watch: { en: "Watch", pcm: "Watch", yo: "Wò ó", ha: "Kalla", ig: "Kiri" },
   preview: { en: "Preview", pcm: "Preview", yo: "Àyẹ̀wò", ha: "Samfoti", ig: "Nlele" },
@@ -31,7 +30,7 @@ const host = (src?: string) => {
 export function NowPlaying() {
   const m = useApp((s) => s.playing);
   const at = useApp((s) => s.mediaAt);
-  const talkOver = useApp((s) => s.talkOver);
+  const [paused, setPaused] = useState(false);
   const lang = useApp((s) => s.lang);
   const st = useApp.getState;
   const frame = useRef<HTMLIFrameElement>(null);
@@ -46,13 +45,13 @@ export function NowPlaying() {
     setChoosing(false);
   }, [m?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!previewing || !m?.preview || talkOver) return;
+    if (!previewing || !m?.preview || paused) return;
     const t = window.setTimeout(() => {
       if (at + 1 < items.length) st().setMediaAt(at + 1);
       else (setPreviewing(false), setChoosing(true), control("pause"));
     }, m.preview * 1000);
     return () => clearTimeout(t);
-  }, [previewing, at, m?.preview, items.length, talkOver]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [previewing, at, m?.preview, items.length, paused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const control = useCallback((what: "pause" | "play") => {
     if (vid.current) void (what === "pause" ? vid.current.pause() : vid.current.play().catch(() => undefined));
@@ -64,34 +63,13 @@ export function NowPlaying() {
     window.addEventListener("jagora:media", on);
     return () => window.removeEventListener("jagora:media", on);
   }, [control]);
-  // Talk: the film pauses, the microphone opens; it plays again on Resume, or after 15 s once Jagora is not busy
-  const talk = () => (control("pause"), st().setTalkOver(true));
-  const resume = useCallback(() => (control("play"), st().setTalkOver(false)), [control, st]);
-  useEffect(() => {
-    if (!talkOver) return;
-    const t = window.setInterval(() => {
-      const o = st().orb;
-      if (o === "idle" || o === "listening") resume();
-    }, 15000);
-    return () => clearInterval(t);
-  }, [talkOver, resume, st]);
-
-  // the first 30 s of each video: Jagora keeps listening, with the film at lower volume, so she can say "next" or
-  // "I don't like this one"; after that the microphone rests until she taps Talk
-  useEffect(() => {
-    if (!cur) return;
-    st().setMediaListen(true);
-    const quiet = window.setTimeout(() => {
-      frame.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func: "setVolume", args: [35] }), "*");
-      if (vid.current) vid.current.volume = 0.35;
-    }, 1500);
-    const t = window.setTimeout(() => {
-      st().setMediaListen(false);
-      frame.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func: "setVolume", args: [100] }), "*");
-      if (vid.current) vid.current.volume = 1;
-    }, 30000);
-    return () => (clearTimeout(t), clearTimeout(quiet), st().setMediaListen(false));
-  }, [cur?.url]); // eslint-disable-line react-hooks/exhaustive-deps
+  // her own pause and play: Jagora then leaves it as she set it
+  const toggle = () => {
+    forget();
+    control(paused ? "play" : "pause");
+    setPaused(!paused);
+  };
+  useEffect(() => setPaused(false), [cur?.url]);
 
   // full screen (phones turn sideways for it where they can)
   const box = useRef<HTMLDivElement>(null);
@@ -138,15 +116,9 @@ export function NowPlaying() {
                   </button>
                 </>
               )}
-              {talkOver ? (
-                <button onClick={resume} className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-white px-4 text-[14px] font-semibold text-ink transition active:scale-95">
-                  <Play size={16} weight="fill" /> {L.resume[lang]}
-                </button>
-              ) : (
-                <button onClick={talk} className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-white px-4 text-[14px] font-semibold text-ink transition active:scale-95">
-                  <Microphone size={16} weight="fill" /> {L.talk[lang]}
-                </button>
-              )}
+              <button onClick={toggle} className={btn} aria-label={paused ? "Play" : "Pause"}>
+                {paused ? <Play size={18} weight="fill" /> : <Pause size={18} weight="fill" />}
+              </button>
               <button onClick={full} className={btn} aria-label="Full screen">
                 <CornersOut size={18} weight="bold" />
               </button>
@@ -158,7 +130,10 @@ export function NowPlaying() {
               {cur.type === "youtube" ? (
                 <iframe
                   key={cur.url}
-                  ref={frame}
+                  ref={(f) => {
+                    frame.current = f;
+                    watchYouTube(f);
+                  }}
                   src={cur.url}
                   title={cur.name}
                   allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
