@@ -23,8 +23,9 @@ export function useSkySrc() {
     m.addEventListener("change", on);
     return () => m.removeEventListener("change", on);
   }, []);
-  // phones: the deep blue sky (clouds low); computers keep their wide sky until the desktop redesign
-  if (theme === "dark") return `/sky/dusk-${wide ? "desktop" : "phone"}.webp`;
+  // phones: big white clouds by day, the deep blue sky at night; computers keep their wide sky until the desktop
+  // redesign
+  if (theme === "dark") return wide ? "/sky/dusk-desktop.webp" : "/sky/night-phone.webp";
   return wide ? "/sky/beach-desktop.webp" : "/sky/sky-phone.webp";
 }
 

@@ -355,7 +355,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
             <Orb size={168} state={orb} levelRef={pulse} />
           </button>
           <CloudWordmark width={270} levelRef={pulse} className="-mt-7" />
-          <p className="-mt-1 px-8 text-center text-[16px] font-bold text-snow [text-shadow:0_1px_10px_rgba(5,30,80,.55)]">{TAGLINE[lang]}</p>
+          <p className="-mt-1 px-8 text-center text-[16px] font-bold text-snow [text-shadow:0_1px_3px_rgba(5,30,80,.55),0_2px_14px_rgba(5,30,80,.6)]">{TAGLINE[lang]}</p>
         </div>
 
         {/* ask bar */}
@@ -401,7 +401,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
                 {top.slice(p * 4, p * 4 + 4).map((s) => (
                   <button key={s.goal} onClick={() => openSite(s)} className="flex flex-col items-center gap-1.5 rounded-[18px] py-1.5 transition active:scale-95" title={s.name[lang]}>
                     <AppIcon site={s} size={54} />
-                    <span className="max-w-full truncate px-1 text-[13px] font-bold text-snow [text-shadow:0_1px_8px_rgba(5,30,80,.6)]">{s.name[lang]}</span>
+                    <span className="max-w-full truncate px-1 text-[13px] font-bold text-ink [text-shadow:0_0_8px_rgba(255,255,255,.95),0_0_2px_rgba(255,255,255,.9)] dark:[text-shadow:0_1px_8px_rgba(0,0,0,.7)]">{s.name[lang]}</span>
                   </button>
                 ))}
               </div>
@@ -418,7 +418,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
         {/* Discover: the day's news, nothing else */}
         <section className="mt-6 px-4">
           <div className="flex items-center justify-between px-1">
-            <h2 className="text-[22px] font-extrabold text-ink [text-shadow:0_1px_12px_rgba(255,255,255,.85)] dark:[text-shadow:none]">{DISCOVER[lang]}</h2>
+            <h2 className="text-[22px] font-extrabold text-ink [text-shadow:0_0_10px_rgba(255,255,255,.95),0_0_2px_rgba(255,255,255,.9)] dark:[text-shadow:0_1px_10px_rgba(0,0,0,.75)]">{DISCOVER[lang]}</h2>
             {news.length > 4 && (
               <button onClick={() => setOpen((v) => !v)} className="rounded-full px-3 py-1.5 text-[14px] font-bold text-accent hover:bg-accent-soft">
                 {open ? CLOSE_L[lang] : SEE_ALL[lang]}
@@ -444,7 +444,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
 
         {/* things to try with Jagora, under the news */}
         <section className="mt-7 px-4">
-          <h2 className="px-1 text-[22px] font-extrabold text-ink [text-shadow:0_1px_12px_rgba(255,255,255,.85)] dark:[text-shadow:none]">{TRY[lang]}</h2>
+          <h2 className="px-1 text-[22px] font-extrabold text-ink [text-shadow:0_0_10px_rgba(255,255,255,.95),0_0_2px_rgba(255,255,255,.9)] dark:[text-shadow:0_1px_10px_rgba(0,0,0,.75)]">{TRY[lang]}</h2>
           <div className="mt-3 flex flex-col gap-3">
             {CARDS.map((c) => (
               <FeedCard key={c.id} image={c.thumb} title={c.title[lang]} source={c.source} when={c.when[lang]} onOpen={() => run(c.id)} />

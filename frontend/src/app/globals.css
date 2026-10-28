@@ -133,7 +133,7 @@ body {
   }
 }
 [data-theme="dark"] {
-  --sky: url(/sky/dusk-phone.webp);
+  --sky: url(/sky/night-phone.webp);
   --sky-fill: #1d5f99;
 }
 @media (orientation: landscape) and (min-width: 700px) {
