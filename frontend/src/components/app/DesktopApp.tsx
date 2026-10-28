@@ -447,7 +447,7 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
   const shade = "[text-shadow:0_0_10px_rgba(255,255,255,.95),0_0_2px_rgba(255,255,255,.9)] dark:[text-shadow:none]";
   return (
     <div className="no-scrollbar relative h-full overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-[1280px] flex-col px-10 pb-16 pt-10">
+      <div className="flex w-full flex-col px-10 pb-16 pt-10 xl:px-14">
         {/* the sky card */}
         <section className="relative px-8 pb-8 pt-4">
           <div className="flex flex-col items-center">
@@ -457,15 +457,15 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
             </div>
             <p className="-mt-1 text-[18px] font-bold text-snow [text-shadow:0_1px_3px_rgba(5,30,80,.55),0_2px_14px_rgba(5,30,80,.6)]">{TAGLINE[lang]}</p>
           </div>
-          <form onSubmit={(e) => (e.preventDefault(), send())} className="mx-auto mt-9 w-full max-w-[960px]">
+          <form onSubmit={(e) => (e.preventDefault(), send())} className="mx-auto mt-10 w-full max-w-[1180px]">
             <Glass radius={30} bezel={20} refraction={50} blur={6} tint="rgba(255,255,255,.72)" lens={PILL} lensTint={0.14}>
-              <span className="flex h-[66px] items-center gap-3 pl-7 pr-2.5">
+              <span className="flex h-[78px] items-center gap-4 pl-8 pr-3">
                 <VoiceBars />
                 <input
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder={PLACEHOLDER[lang]}
-                  className="h-full min-w-0 flex-1 bg-transparent text-[17px] font-semibold text-ink outline-none placeholder:font-medium placeholder:text-ink-2"
+                  className="h-full min-w-0 flex-1 bg-transparent text-[20px] font-semibold text-ink outline-none placeholder:font-medium placeholder:text-ink-2"
                 />
                 {text.trim() ? (
                   <button type="submit" data-send="start" aria-label="Go" className="grid h-[46px] w-[46px] place-items-center rounded-full bg-ink text-paper transition active:scale-90">
@@ -477,11 +477,11 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
               </span>
             </Glass>
           </form>
-          <div className="mx-auto mt-5 w-full max-w-[960px]">
+          <div className="mx-auto mt-6 w-full max-w-[1180px]">
             <Starters lang={lang} />
           </div>
           {/* shortcuts in white tiles, as in the reference */}
-          <div className="mx-auto mt-10 flex max-w-[960px] flex-wrap justify-center gap-6">
+          <div className="mx-auto mt-16 flex w-full max-w-[1180px] flex-wrap justify-between gap-6 px-6">
             {top.slice(0, 8).map((s) => (
               <button key={s.goal} onClick={() => (openSite(s), onAsk())} className="group flex w-[78px] flex-col items-center gap-1.5 transition active:scale-95" title={s.name[lang]}>
                 <span className="grid h-[58px] w-[58px] place-items-center rounded-[18px] bg-white shadow-[0_10px_22px_-12px_rgba(10,30,80,.55)] transition group-hover:-translate-y-0.5 dark:bg-[#23262d]">
