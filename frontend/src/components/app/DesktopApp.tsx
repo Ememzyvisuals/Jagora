@@ -158,17 +158,12 @@ export function DesktopApp() {
   const tool = "grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-2 transition hover:bg-black/5 active:scale-90 disabled:opacity-30 dark:hover:bg-white/10";
 
   return (
-    <div className="relative h-dvh overflow-hidden p-5 xl:p-7">
+    <div className="relative h-dvh overflow-hidden">
       <Backdrop />
-      {/* one browser window, boxed and centred on the sky (like Wave and UC on the desktop) */}
-      <Glass radius={22} bezel={18} refraction={40} blur={14} tint="rgba(255,255,255,.84)" interactive={false} className="mx-auto flex h-full max-w-[1500px] flex-col overflow-hidden shadow-[0_40px_90px_-40px_rgba(10,30,80,.6)]">
-        {/* tab strip: the window dots, then one tab per website Jagora opened, and a new tab */}
-        <div className="no-scrollbar flex h-11 shrink-0 items-end gap-1 overflow-x-auto bg-black/[.04] px-3 pt-2 dark:bg-white/[.04]">
-          <div className="mb-3 mr-3 flex shrink-0 items-center gap-2 self-center" aria-hidden="true">
-            <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-            <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
-            <span className="h-3 w-3 rounded-full bg-[#28c840]" />
-          </div>
+      {/* the whole screen is Jagora, on the sky (like the phone): every bar and panel is glass over it */}
+      <div className="relative flex h-full flex-col">
+        {/* tab strip: one tab per website Jagora opened, and a new tab */}
+        <div className="desk-glass no-scrollbar flex h-11 shrink-0 items-end gap-1 overflow-x-auto px-3 pt-2">
           {tabs.map((x) => {
             const on = showPage && x.id === task?.id;
             return (
@@ -177,7 +172,7 @@ export function DesktopApp() {
                 role="button"
                 tabIndex={0}
                 onClick={() => (setActive(x.id), setPageHidden(false))}
-                className={`group flex h-9 w-[210px] min-w-[120px] shrink items-center gap-2 rounded-t-[12px] pl-3 pr-1.5 text-[13.5px] font-semibold transition ${on ? "bg-white text-ink shadow-[0_-1px_4px_rgba(0,0,0,.06)] dark:bg-[#23262d]" : "text-ink-2 hover:bg-white/50 dark:hover:bg-white/5"}`}
+                className={`group flex h-9 w-[210px] min-w-[120px] shrink items-center gap-2 rounded-t-[12px] pl-3 pr-1.5 text-[13.5px] font-semibold transition ${on ? "bg-white/70 text-ink shadow-[0_-1px_4px_rgba(0,0,0,.06)] backdrop-blur-xl dark:bg-white/15" : "text-ink-2 hover:bg-white/40 dark:hover:bg-white/5"}`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(siteOf(x.url))}&sz=32`} alt="" className="h-4 w-4 shrink-0 rounded-[4px]" />
@@ -193,7 +188,7 @@ export function DesktopApp() {
             role="button"
             tabIndex={0}
             onClick={() => setPageHidden(true)}
-            className={`flex h-9 w-[170px] shrink-0 items-center gap-2 rounded-t-[12px] px-3 text-[13.5px] font-semibold transition ${onNewTab ? "bg-white text-ink shadow-[0_-1px_4px_rgba(0,0,0,.06)] dark:bg-[#23262d]" : "text-ink-2 hover:bg-white/50 dark:hover:bg-white/5"}`}
+            className={`flex h-9 w-[170px] shrink-0 items-center gap-2 rounded-t-[12px] px-3 text-[13.5px] font-semibold transition ${onNewTab ? "bg-white/70 text-ink shadow-[0_-1px_4px_rgba(0,0,0,.06)] backdrop-blur-xl dark:bg-white/15" : "text-ink-2 hover:bg-white/40 dark:hover:bg-white/5"}`}
           >
             <Mark size={16} /> {NEW_TAB[lang]}
           </div>
@@ -219,7 +214,7 @@ export function DesktopApp() {
         </div>
 
         {/* toolbar: back, forward, reload, home, the address bar, then her chats, Jagora and her profile */}
-        <div className="flex h-[52px] shrink-0 items-center gap-1 border-b border-black/5 bg-white px-3 dark:border-white/5 dark:bg-[#23262d]">
+        <div className="desk-glass-strong flex h-[52px] shrink-0 items-center gap-1 border-b border-white/30 px-3 dark:border-white/5">
           <button className={tool} disabled={!showPage} onClick={() => task && void remoteInput(task.id, { action: "back" })} aria-label="Back">
             <CaretLeft size={18} weight="bold" />
           </button>
@@ -255,13 +250,13 @@ export function DesktopApp() {
           <DeskProfile lang={lang} setLang={setLang} langOpen={langOpen} setLangOpen={setLangOpen} theme={theme} initial={(profile.full_name || "Me").slice(0, 1)} />
         </div>
 
-        <div className="flex min-h-0 flex-1 bg-white/40 dark:bg-black/10">
+        <div className="flex min-h-0 flex-1">
           {/* her chats, from the menu button */}
           <motion.aside
             initial={false}
             animate={{ width: side ? 268 : 0, opacity: side ? 1 : 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 34 }}
-            className="flex shrink-0 flex-col overflow-hidden border-r border-black/5 bg-white/70 dark:border-white/5 dark:bg-[#1d2027]"
+            className="desk-glass-strong flex shrink-0 flex-col overflow-hidden border-r border-white/30 dark:border-white/5"
             aria-hidden={!side}
           >
             <div className="flex h-full w-[268px] flex-col p-3">
@@ -307,7 +302,7 @@ export function DesktopApp() {
             initial={false}
             animate={{ width: panel ? 384 : 0, opacity: panel ? 1 : 0 }}
             transition={{ type: "spring", stiffness: 300, damping: 34 }}
-            className="flex shrink-0 flex-col overflow-hidden border-l border-black/5 bg-white/75 dark:border-white/5 dark:bg-[#1d2027]/90"
+            className="desk-glass-strong flex shrink-0 flex-col overflow-hidden border-l border-white/30 dark:border-white/5"
             aria-hidden={!panel}
           >
             <div className="flex h-full w-[384px] flex-col">
@@ -329,7 +324,7 @@ export function DesktopApp() {
             </div>
           </motion.section>
         </div>
-      </Glass>
+      </div>
       <LiveMode />
     </div>
   );
@@ -427,7 +422,6 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
   const top = useTopSites();
   const lang = useApp((s) => s.lang);
   const orb = useApp((s) => s.orb);
-  const theme = useTheme();
   const pulse = useSpeakingPulse(orb === "speaking");
   const [text, setText] = useState("");
   const news = useNews(lang);
@@ -449,10 +443,7 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
     <div className="no-scrollbar relative h-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-[1080px] flex-col px-7 pb-14 pt-6">
         {/* the sky card */}
-        <section
-          className="relative overflow-hidden rounded-[28px] px-8 pb-8 pt-4 shadow-[0_30px_60px_-34px_rgba(10,40,110,.65)]"
-          style={{ background: `url(${theme === "dark" ? "/sky/night-desktop.webp" : "/sky/sky-desktop.webp"}) center center / cover, linear-gradient(180deg,#2f8fe6,#7cc0f2)` }}
-        >
+        <section className="relative px-8 pb-8 pt-4">
           <div className="flex flex-col items-center">
             <div className="flex items-center gap-1">
               <Orb size={132} state={orb} levelRef={pulse} />
