@@ -1,10 +1,6 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
-/* Montserrat (headings) and Noto Sans (everything else): both carry every Yorùbá, Hausa and Igbo letter (ẹ ọ ṣ with
-   tone marks, ɓ ɗ ƙ ƴ, ị ụ ṅ) and the naira sign, so no word ever breaks into two fonts. Each loads only the letter
-   ranges a page uses. */
-@import "@fontsource-variable/montserrat";
-@import "@fontsource-variable/noto-sans";
+
 
 /* dark: utilities for the few spots tokens cannot cover */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
@@ -17,7 +13,15 @@
   font-weight: 200 800;
   font-display: swap;
 }
-/* body: Vollkorn (SIL OFL); headings and subheadings: Boiling (Alit Design). Both carry the Yorùbá and Igbo letters
+/* text: "Jagora Text" is Outfit with the Yorùbá and Igbo letters it lacks (scripts/patch-text-font.py); Inter fills
+   the Hausa hooked letters and the naira sign. */
+@font-face {
+  font-family: "Jagora Text";
+  src: url("/fonts/jagora-text.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+/* body (before): Vollkorn (SIL OFL); headings and subheadings: Boiling (Alit Design). Both carry the Yorùbá and Igbo letters
    (scripts/patch-display-font.py, scripts/build-boiling.py). Jagora Sans (Bricolage) stays for interface labels. */
 @font-face {
   font-family: "Jagora Body";
@@ -48,9 +52,9 @@
   --font-weight-semibold: 700;
   --font-weight-bold: 800;
 
-  --font-sans: "Noto Sans Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-head: "Montserrat Variable", "Noto Sans Variable", ui-sans-serif, sans-serif;
-  --font-display: "Montserrat Variable", "Noto Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Jagora Text", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-head: "Jagora Sans", "Inter Variable", ui-sans-serif, sans-serif;
+  --font-display: "Jagora Sans", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 
   --color-ink: #0e0f12;
   --color-ink-2: #4b4a50;
@@ -120,7 +124,7 @@ body {
 }
 /* the sky behind everything: a sunny Lagos-blue beach by day, a golden sea of clouds in dark mode */
 :root {
-  --sky: url(/sky/beach-phone.webp);
+  --sky: url(/sky/sky-phone.webp);
   --sky-fill: #2fa3ea;
 }
 @media (orientation: landscape) and (min-width: 700px) {
@@ -401,7 +405,7 @@ h3,
   }
 }
 
-/* headings and subheadings: Montserrat, heavy; body text is Noto Sans. In the base layer, so a heading's own
+/* headings and subheadings: Bricolage (Jagora Sans), heavy; body text is Outfit (Jagora Text). In the base layer, so a heading's own
    weight class still applies. */
 @layer base {
   h1,

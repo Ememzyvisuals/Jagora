@@ -23,7 +23,9 @@ export function useSkySrc() {
     m.addEventListener("change", on);
     return () => m.removeEventListener("change", on);
   }, []);
-  return `/sky/${theme === "dark" ? "dusk" : "beach"}-${wide ? "desktop" : "phone"}.webp`;
+  // phones: the deep blue sky (clouds low); computers keep their wide sky until the desktop redesign
+  if (theme === "dark") return `/sky/dusk-${wide ? "desktop" : "phone"}.webp`;
+  return wide ? "/sky/beach-desktop.webp" : "/sky/sky-phone.webp";
 }
 
 export function Backdrop(_: { level?: MutableRefObject<number> }) {

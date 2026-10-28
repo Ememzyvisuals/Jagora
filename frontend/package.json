@@ -12,8 +12,6 @@
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
-    "@fontsource-variable/montserrat": "^5.3.0",
-    "@fontsource-variable/noto-sans": "^5.3.0",
     "@phosphor-icons/react": "^2.1.10",
     "@pixiv/three-vrm": "^3.4.2",
     "@ricky0123/vad-web": "0.0.31",
