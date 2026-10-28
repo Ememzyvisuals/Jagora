@@ -126,3 +126,27 @@ async def test_she_points_and_jagora_uploads_her_photo(tmp_path):
         assert "Files the user gave you in the chat (for upload_file): passport.jpg" in model.seen[0]
         assert await b.page.locator("#fn2").inner_text() == "passport.jpg"
         assert io.confirms and "passport.jpg" in io.confirms[0]  # she agreed before her file left the chat
+
+
+async def test_nothing_is_drawn_on_her_page_while_jagora_reads_it():
+    """Set-of-marks numbers go on the model's copy of the screenshot only; the page she watches is never marked, and
+    evidence taken for the chat leaves her page unmarked and where it was unless she asked for a highlight."""
+    from jagora.browser import Browser
+
+    b = await Browser({"mobile": True, "w": 390, "h": 844}).start()
+    try:
+        html = "<meta name=viewport content='width=device-width'><body style='margin:0'>" + "<p>filler</p>" * 80 + \
+               "<p>The fee is N25,000 for every applicant.</p><button>Apply</button></body>"
+        await b.page.route("**/*", lambda r: r.fulfill(body=html, content_type="text/html"))
+        await b.page.goto("http://site.test/")
+        snap = await b.snapshot()
+        assert snap.screenshot[:2] == b"\xff\xd8" and b.viewport["width"] == 390
+        assert await b.page.evaluate("document.querySelectorAll('div[id^=__jg], mark.__jg').length") == 0
+        got = await b.highlight("The fee is N25,000", show=False)
+        assert got and got["image"]
+        assert await b.page.evaluate("[scrollY, document.querySelectorAll('mark.__jg').length]") == [0, 0]
+        got = await b.highlight("The fee is N25,000", show=True)
+        marks = await b.page.evaluate("[...document.querySelectorAll('mark.__jg')].map(m => getComputedStyle(m).outlineStyle + '|' + getComputedStyle(m).boxShadow)")
+        assert marks and all(m == "none|none" for m in marks)  # yellow only, no box
+    finally:
+        await b.close()

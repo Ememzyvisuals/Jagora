@@ -300,7 +300,7 @@ export function DesktopApp() {
           </motion.aside>
 
           {/* the page: the new tab or the live website */}
-          <main className="relative min-w-0 flex-1 overflow-hidden">{showPage ? <PageView bar={false} /> : <StartPage onAsk={() => setPanel(true)} />}</main>
+          <main data-page-area className="relative min-w-0 flex-1 overflow-hidden">{showPage ? <PageView bar={false} /> : <StartPage onAsk={() => setPanel(true)} />}</main>
 
           {/* Jagora, beside the page */}
           <motion.section

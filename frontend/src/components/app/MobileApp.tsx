@@ -10,7 +10,6 @@ import { reportScreen } from "@/lib/appctl";
 import { AgentPanel } from "../AgentPanel";
 import { Orb } from "../Orb";
 import { PageView } from "../PageView";
-import { WorkOrb } from "../WorkCaption";
 import { TaskIcon, lastLine } from "./Shared";
 import { shortUrl } from "../Rich";
 import { BottomBar, EdgeBlur, Home } from "./MobileHome";
@@ -94,12 +93,18 @@ export function MobileApp() {
       setScreen("page");
     }
   }, [pointing, setSheet]);
+  // Jagora needs her answer: the chat comes up
   useEffect(() => {
-    if (!task || task.kind !== "browse" || !task.url) return;
-    if (pointing) return;
+    if (!task || task.kind !== "browse" || !task.url || pointing) return;
     if (needsHer) setSheet(true);
-    else if (task.status === "working") setSheet(false);
-  }, [task?.id, task?.kind, task?.url, task?.status, last?.id, needsHer, setSheet]);
+  }, [task?.id, task?.kind, task?.url, last?.id, needsHer, pointing, setSheet]);
+  // the chat steps aside only when Jagora starts working or opens a new page, never on each message, so a chat
+  // she opened herself stays open until she closes it
+  useEffect(() => {
+    if (!task || task.kind !== "browse" || !task.url || pointing || needsHer) return;
+    if (task.status === "working") setSheet(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task?.id, task?.url, task?.status]);
 
   return (
     <div className="relative h-dvh overflow-hidden">
@@ -131,7 +136,6 @@ export function MobileApp() {
       </AnimatePresence>
 
       {screen !== "tabs" && shown !== "page" && <EdgeBlur />}
-      {shown === "page" && !sheet && screen !== "tabs" && <WorkOrb onOpen={() => setSheet(true)} />}
       {!(screen === "tabs" && tabsFull) && <BottomBar screen={screen} setScreen={go} />}
       <Sheet open={sheet} onClose={() => setSheet(false)} />
       <History open={history} onClose={() => setHistory(false)} onOpen={openChat} onNew={() => (setHistory(false), setActive(null), setScreen("home"), setSheet(true))} />

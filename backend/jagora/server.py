@@ -423,6 +423,20 @@ class Run:
 # "carry on" in her languages: Jagora picks up what an interruption cut off
 CONTINUE = re.compile(r"\b(continue|go on|carry on|keep (going|reading)|resume|finish (it|reading)|continue am|dey go|oya|"
                       r"tẹ̀?síwájú|tesiwaju|máa bá a lọ|maa ba a lo|ci gaba|ci-gaba|ka ci gaba|gaa n'ihu|gaa n.ihu|nọgide)\b", re.I)
+# she tells Jagora to stop talking or stop the task (short sayings only, so "stop the payment" in a longer request is not one)
+STOP_RE = re.compile(r"^\W*(please |abeg |oya |jagora,? )?(stop( it| now| talking| reading| am| that)?|shut up|keep quiet|be quiet|quiet|"
+                     r"enough|that'?s enough|silence|no talk again|dake( je)?|pa enu mo|duro|yi shiru|ka yi shiru|tsaya|ya isa|"
+                     r"mechie onu|kwusi)\b", re.I)
+
+
+def is_stop(text: str) -> bool:
+    """A short "stop" in any of her languages (tone marks and dots ignored, so dákẹ́ and dake both count)."""
+    import unicodedata
+
+    plain = "".join(c for c in unicodedata.normalize("NFD", text or "") if not unicodedata.combining(c))
+    return len(plain.split()) <= 6 and bool(STOP_RE.search(plain))
+
+
 OKAY = {"en": "Okay.", "pcm": "Okay.", "yo": "Ó dáa.", "ha": "To.", "ig": "Ọ dị mma."}
 
 SEND_WAIT = 6.0  # seconds a message may wait on her connection before the connection counts as gone
@@ -721,6 +735,17 @@ class Session:
             if self._speech_q.empty() and gen == self._gen:
                 await self.send({"type": "speech_end", "task": task})
 
+    async def silence(self, task: str) -> None:
+        """She said stop: Jagora goes quiet on her phone at once and the task stops."""
+        self.hush()
+        self._unsaid = None
+        r = self.runs.get(task)
+        if r and r.busy and r.job:
+            r.job.cancel()
+        await self.send({"type": "silence", "task": task})
+        await self.send({"type": "status", "task": task, "status": "stopped"})
+        await self.send({"type": "orb", "state": "idle"})
+
     def hush(self, heard: int | None = None) -> None:
         """Stop talking. What was not said yet is kept for a minute (from the sentence she was hearing when she cut
         in), so "continue" picks up there, the way LiveKit resumes after an interruption."""
@@ -832,11 +857,7 @@ class Session:
         elif kind == "takeover":
             await self.on_takeover(task, bool(ev.get("on")))
         elif kind == "stop":
-            r = self.runs.get(task)
-            if r and r.busy:
-                r.job.cancel()
-            await self.send({"type": "status", "task": task, "status": "stopped"})
-            await self.send({"type": "orb", "state": "idle"})
+            await self.silence(task)
 
     async def set_lite(self, on: bool) -> None:
         self.lite = on
@@ -965,6 +986,11 @@ class Session:
         if text and CONTINUE.search(text) and len(text.split()) <= 5 and self.resume(task):
             return  # "continue": she wants the rest of what Jagora was saying
         r = self.runs.get(task)
+        open_q = list(r.waiting.values())[-1][0] if r and r.waiting else ""
+        if text and is_stop(text) and open_q != "confirm":
+            # "stop" / "shut up" / "dákẹ́": silence at once and stop the task, no "Okay" on top
+            await self.silence(task)
+            return
         if r and r.waiting and text:
             # answer the most recent open question with her words
             mid_, (kind, fut) = list(r.waiting.items())[-1]
@@ -1140,7 +1166,6 @@ class WsIO:
         v = await self._wait("point", m)
         await self.s.send({"type": "update", "task": self.task, "id": m["id"], "patch": {"status": "done"}})
         if isinstance(v, dict) and "x" in v:
-            await self._ring({"x": v["x"] - 18, "y": v["y"] - 18, "w": 36, "h": 36}, "point")
             return {"x": float(v["x"]), "y": float(v["y"])}
         return {"text": str(v)}
 
@@ -1241,10 +1266,8 @@ class WsIO:
             await db.remember(s.user_id, t, "agent", f"[picture guide] {data.get('title', '')}: " + " | ".join(p["caption"] for p in panels))
             for p in panels:
                 s.speak(t, p["caption"])
-        elif kind == "pointer":
-            await s.send({"type": "pointer", "task": t, "x": data["x"], "y": data["y"], "visible": True, "clicking": data.get("clicking", False)})
-        elif kind == "highlight":
-            await self._ring(data.get("box"), "point")
+        elif kind in ("pointer", "highlight"):
+            pass  # nothing is drawn over her page: no cursor, no boxes (the only mark is the yellow one, in the page)
 
     async def watch(self, url: str, what: str, every_hours: int) -> None:
         wid = uuid.uuid4().hex[:12]

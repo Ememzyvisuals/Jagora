@@ -259,6 +259,9 @@ function handle(ev: Record<string, unknown>) {
     case "pcm":
       playPcm(ev.data as string, (ev.rate as number) || 24000, ev.utt as string, ev.codec as string | undefined, (ev.n as number) || 0);
       break;
+    case "silence": // she said stop: what is still playing or on its way stops now
+      hush(false);
+      break;
     case "speech_end":
       speechDone = true;
       if (!voices.size) s.setOrb("idle");
@@ -372,7 +375,7 @@ function restOrb(): "working" | "idle" {
 }
 /** Is Jagora talking (or about to)? */
 export const isSpeaking = () => voices.size > 0 || !speechDone;
-export function hush() {
+export function hush(tellServer = true) {
   const was = isSpeaking();
   // the sentence she was hearing when she cut in: Jagora can carry on from there ("continue")
   let heard = 0;
@@ -391,7 +394,7 @@ export function hush() {
   voiceAt.clear();
   nextAt = 0;
   speechDone = true;
-  if (was) ws?.send(JSON.stringify({ type: "hush", heard }));
+  if (was && tellServer) ws?.send(JSON.stringify({ type: "hush", heard }));
 }
 
 function notify(ev: Record<string, unknown>) {
@@ -463,10 +466,12 @@ export async function remoteTranslate(on: boolean) {
   ws?.send(JSON.stringify({ type: "translate", on: on && ["yo", "ha", "ig"].includes(S().lang) }));
 }
 
-/** her screen, so Jagora's browser shows pages the way her device would (phone layout on a phone) */
+/** her screen, so Jagora's browser lays pages out exactly as her own device would: a phone or tablet at its own
+    screen size, a computer at the size of the page area in the Jagora window */
 function device() {
   const mobile = matchMedia("(max-width: 767px)").matches || matchMedia("(pointer: coarse) and (max-width: 1024px)").matches;
-  return { mobile, w: innerWidth, h: innerHeight };
+  const area = mobile ? null : document.querySelector<HTMLElement>("[data-page-area]");
+  return { mobile, w: area?.clientWidth || innerWidth, h: area?.clientHeight || innerHeight };
 }
 
 /** her hands on the live page: taps, typing, keys, scrolling (only while she has taken over or Jagora waits for her) */

@@ -1,7 +1,7 @@
 "use client";
 
 /* What the screens call. Uses the real backend when NEXT_PUBLIC_BACKEND_WS is set, otherwise the demo engine. */
-import { useApp, uid, type Attachment, type Task } from "../store";
+import { PLAIN_FIELDS, useApp, uid, type Attachment, type Task } from "../store";
 import * as demo from "./demo";
 import { BACKEND, remoteAnswer, remoteAudio, remoteSecret, remoteStart, remoteStop } from "./remote";
 
@@ -145,7 +145,9 @@ export function giveSecret(taskId: string, msgId: string, value: string | null, 
     return;
   }
   const v = value.trim();
-  const shown = v.length > 6 ? `••••${v.slice(-4)}` : "••••";
+  const m = s.tasks.find((t) => t.id === taskId)?.messages.find((x) => x.id === msgId);
+  const plain = m?.kind === "secret" && PLAIN_FIELDS.has(m.field);
+  const shown = plain ? v.slice(0, 40) : v.length > 6 ? `••••${v.slice(-4)}` : "••••";
   s.update(taskId, msgId, { status: "done", shown } as never);
   s.setStatus(taskId, "working");
   if (live) void remoteSecret(taskId, msgId, v, save);

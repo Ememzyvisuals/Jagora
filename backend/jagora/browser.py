@@ -40,11 +40,20 @@ MAX_DOWNLOAD = 40 * 1024 * 1024
 # would zoom it and push the text off the side) is switched off, the way phone apps do. Scrolling still works.
 NO_ZOOM_JS = r"""
 (() => {
+  // she cannot zoom in (no pinch, no double tap), but a page wider than the phone may still shrink to fit,
+  // so nothing is cut off at the side: keep the site's own width, never force initial-scale=1
   const fix = () => {
     try {
-      let m = document.querySelector('meta[name="viewport"]');
-      if (!m) { m = document.createElement('meta'); m.name = 'viewport'; (document.head || document.documentElement).appendChild(m); }
-      m.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+      const metas = [...document.querySelectorAll('meta[name="viewport"]')];
+      const site = metas.filter((m) => !m.dataset.jagora);
+      let m = site[site.length - 1];
+      metas.filter((x) => x.dataset.jagora && x !== m).forEach((x) => { if (site.length) x.remove(); });
+      if (!m) m = metas[0];
+      if (!m) { m = document.createElement('meta'); m.name = 'viewport'; m.dataset.jagora = '1'; (document.head || document.documentElement).appendChild(m); }
+      const base = (m.dataset.base ??= (m.dataset.jagora ? 'width=device-width' : (m.content || 'width=device-width')))
+        .split(',').map((p) => p.trim()).filter((p) => p && !/^(maximum-scale|user-scalable|initial-scale)\b/i.test(p));
+      const want = [...base, 'maximum-scale=1', 'user-scalable=no'].join(', ');
+      if (m.content !== want) m.content = want;
       if (!document.getElementById('__jagora_nozoom')) {
         const st = document.createElement('style'); st.id = '__jagora_nozoom';
         st.textContent = 'html, body { touch-action: pan-x pan-y !important; }';
@@ -56,6 +65,36 @@ NO_ZOOM_JS = r"""
   document.addEventListener('DOMContentLoaded', fix);
 })();
 """
+
+
+def draw_marks(jpeg: bytes, elements: list[dict], scale: float = 1.0) -> bytes:
+    """The model's copy of the screenshot with every control boxed and numbered (set-of-marks). Drawn here, on the
+    image, never on the page, so nothing flashes on her screen."""
+    import io as _io
+
+    from PIL import Image, ImageDraw, ImageFont
+
+    img = Image.open(_io.BytesIO(jpeg)).convert("RGB")
+    d = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.load_default(size=int(12 * scale))
+    except TypeError:
+        font = ImageFont.load_default()
+    pink = (229, 25, 94)
+    for e in elements:
+        r = e.get("rect") or {}
+        x, y, w, h = (float(r.get(k, 0)) * scale for k in ("x", "y", "w", "h"))
+        if w <= 0 or h <= 0 or x > img.width or y > img.height or x + w < 0 or y + h < 0:
+            continue
+        d.rectangle((x, y, x + w, y + h), outline=pink, width=max(1, int(2 * scale)))
+        label = str(e.get("id"))
+        tw = d.textlength(label, font=font)
+        tx, ty = max(0, x - 2 * scale), max(0, y - 16 * scale)
+        d.rectangle((tx, ty, tx + tw + 8 * scale, ty + 15 * scale), fill=pink)
+        d.text((tx + 4 * scale, ty + 1 * scale), label, fill=(255, 255, 255), font=font)
+    out = _io.BytesIO()
+    img.save(out, "JPEG", quality=62)
+    return out.getvalue()
 
 
 @dataclass
@@ -186,12 +225,14 @@ class Browser:
     def __init__(self, device: dict | None = None) -> None:
         d = device or {}
         self.mobile = bool(d.get("mobile"))
+        # exactly her screen (a phone or tablet), or the page area of her Jagora window (a computer), so every site
+        # lays itself out as it would on her own device
         if self.mobile:
-            w = 412
-            h = int(max(640, min(960, (d.get("h") or 860) * w / max(320, d.get("w") or 390))))
+            w = int(max(320, min(1024, d.get("w") or 390)))
+            h = int(max(480, min(1400, d.get("h") or 844)))
         else:
-            w = int(max(1024, min(1440, d.get("w") or settings.viewport_width)))
-            h = int(max(640, min(1000, d.get("h") or settings.viewport_height)))
+            w = int(max(800, min(1920, d.get("w") or settings.viewport_width)))
+            h = int(max(500, min(1200, d.get("h") or settings.viewport_height)))
         self.viewport = {"width": w, "height": h}
         self.dsf = 2 if self.mobile else 1  # screenshot pixels per page pixel
         self._pw = None
@@ -207,6 +248,7 @@ class Browser:
         self.on_frame: Callable[[str], None] | None = None
         self._cdp = None
         self._ring_shown = False
+        self.hold = False  # True while Jagora looks at something for itself: her live picture stays as it was
         self._shot_cdp = None  # CDP session for full_frame(), per tab
         self._shot_page = None  # is a ring drawn on the page now (see ring())
         self.cast = "full"  # how the live view is captured (lite.SCREENCAST): photos, data saver, or video
@@ -324,6 +366,8 @@ class Browser:
     async def full_frame(self, scale: float = 1.5) -> bytes | None:
         """The page as she sees it, sharper than Chrome's screencast (which is always at page-pixel size): one quick
         CDP capture at `scale` page pixels per pixel (1.5 on phones: sharp, and light on the server)."""
+        if self.hold:
+            return None
         try:
             page = self._need_page()
             if self._shot_cdp is None or self._shot_page is not page:
@@ -331,6 +375,7 @@ class Browser:
                 self._shot_page = page
             sx, sy = await page.evaluate("[scrollX, scrollY]")
             vw, vh = self.viewport["width"], self.viewport["height"]
+            scale = min(scale, 1100 / vw)  # a tablet's wide page stays as light as a phone's
             r = await asyncio.wait_for(self._shot_cdp.send("Page.captureScreenshot", {
                 "format": "jpeg", "quality": 85, "optimizeForSpeed": True,
                 "clip": {"x": sx, "y": sy, "width": vw, "height": vh, "scale": scale}}), 4)
@@ -352,7 +397,7 @@ class Browser:
             cdp = await self._ctx.new_cdp_session(self.page)
 
             def frame(ev):
-                if self.on_frame:
+                if self.on_frame and not self.hold:
                     self.on_frame(ev["data"])
                 asyncio.ensure_future(cdp.send("Page.screencastFrameAck", {"sessionId": ev["sessionId"]}))
 
@@ -373,11 +418,11 @@ class Browser:
         await self._settle()
         await self.show_original()  # the agent always reads the page as published
         await self._hide_traps(page)
-        data: dict[str, Any] = await page.evaluate(SNAPSHOT_JS, {"marks": marks})
+        data: dict[str, Any] = await page.evaluate(SNAPSHOT_JS, {})
         shot = b""
         if marks:
-            shot = await page.screenshot(type="jpeg", quality=62)
-            await page.evaluate("document.getElementById('__jg_overlay')?.remove()")
+            raw = await page.screenshot(type="jpeg", quality=70)
+            shot = await asyncio.to_thread(draw_marks, raw, data["elements"], self.dsf)
         els = [Element(**{k: v for k, v in e.items() if k in Element.__dataclass_fields__}) for e in data["elements"]]
         pdf = self.pdf
         url, title, text = data["url"], data["title"], data["text"]
@@ -745,8 +790,34 @@ class Browser:
             return pdf_find(pv.doc, q, limit)
         return await self._need_page().evaluate(FIND_JS, {"q": q, "limit": limit})
 
-    async def highlight(self, quote: str, near: int | None = None) -> dict | None:
-        """Mark the words on the page (or PDF page), bring them into view and return {rect, image(jpeg bytes), page}."""
+    async def highlight(self, quote: str, near: int | None = None, show: bool = True) -> dict | None:
+        """Mark the words on the page (or PDF page), bring them into view and return {rect, image(jpeg bytes), page}.
+        With show=False it all happens out of her sight: her live picture holds still, the picture of the words is
+        taken, and the page goes back to exactly where it was, unmarked."""
+        if show:
+            return await self._highlight(quote, near)
+        pv = self.pdf
+        if pv:
+            hits = pdf_find(pv.doc, quote, 20)
+            if near:
+                hits.sort(key=lambda h: abs(h["page"] - near))
+            if not hits:
+                return None
+            h = hits[0]
+            return {"rect": None, "image": crop_pdf_evidence(pv.doc, h["page"], h["rects"]), "page": h["page"], "text": h["snippet"]}
+        page = self._need_page()
+        self.hold = True
+        try:
+            at = await page.evaluate("[scrollX, scrollY]")
+            got = await self._highlight(quote, near)
+            await self.clear_highlight()
+            await page.evaluate("([x, y]) => scrollTo({left: x, top: y, behavior: 'instant'})", at)
+            await asyncio.sleep(0.05)
+            return got
+        finally:
+            self.hold = False
+
+    async def _highlight(self, quote: str, near: int | None = None) -> dict | None:
         await self.show_original()
         pv = self.pdf
         if pv:
@@ -1105,10 +1176,7 @@ def render_pdf_page(doc, n: int, mark: list | None = None, zoom: float = 1.6) ->
     if mark:
         for r in mark:
             rect = fitz.Rect(r[0] - 2, r[1] - 1, r[2] + 2, r[3] + 1)
-            annot = pg.add_highlight_annot(rect) if (r[3] - r[1]) < 40 else pg.add_rect_annot(rect)
-            if annot.type[0] != 8:  # a box around a block of text
-                annot.set_colors(stroke=(0.11, 0.39, 0.93))
-                annot.set_border(width=2)
+            annot = pg.add_highlight_annot(rect)  # yellow, like a highlighter pen: never a box
             annot.update()
             shapes.append(annot)
     pix = pg.get_pixmap(matrix=fitz.Matrix(zoom, zoom), annots=True)
@@ -1126,7 +1194,7 @@ def crop_pdf_evidence(doc, n: int, rects: list) -> bytes:
     clip = fitz.Rect(max(0, u[0] - 120), max(0, u[1] - 90), min(pg.rect.width, u[2] + 120), min(pg.rect.height, u[3] + 110))
     annots = []
     for r in rects:
-        a = pg.add_highlight_annot(fitz.Rect(r[0] - 1, r[1], r[2] + 1, r[3])) if (r[3] - r[1]) < 40 else pg.add_rect_annot(fitz.Rect(*r))
+        a = pg.add_highlight_annot(fitz.Rect(r[0] - 1, r[1], r[2] + 1, r[3]))
         a.update()
         annots.append(a)
     pix = pg.get_pixmap(matrix=fitz.Matrix(2.2, 2.2), clip=clip, annots=True)
@@ -1204,7 +1272,7 @@ MARK_JS = r"""
     for (const [n, a, b] of parts.reverse()) {
       const r = document.createRange(); r.setStart(n, a); r.setEnd(n, b);
       const m = document.createElement('mark'); m.className = '__jg';
-      m.style.cssText = 'background:rgba(255,214,0,.6);box-shadow:0 0 0 3px #1d63ed;border-radius:2px;color:inherit';
+      m.style.cssText = 'background:rgba(255,214,0,.6);border-radius:2px;color:inherit';
       r.surroundContents(m);
     }
     document.querySelector('mark.__jg')?.scrollIntoView({block: 'center'});
@@ -1231,34 +1299,25 @@ MARK_JS = r"""
   if (!best || bestScore < 0.7) return false;
   best.scrollIntoView({block: 'center'});
   const m = document.createElement('mark'); m.className = '__jg';
-  m.style.cssText = 'background:rgba(255,214,0,.55);outline:3px solid #1d63ed;outline-offset:2px;border-radius:3px';
+  m.style.cssText = 'background:rgba(255,214,0,.55);border-radius:3px';
   while (best.firstChild) m.appendChild(best.firstChild);
   best.appendChild(m);
   return true;
 }
 """
 
-# A ring drawn inside the page itself (so it is part of the live picture and cannot drift): it locks onto the
-# element under the box and follows it as the page scrolls or moves. tone: point (blue) or stop (red).
+# What she has to act on (a box to type in, a captcha), marked the one way Jagora marks anything: a soft yellow
+# highlight, like a highlighter pen, drawn inside the page so it moves with it. No border, glow or animation.
 RING_JS = r"""
-({x, y, w, h, tone}) => {
+({x, y, w, h}) => {
   document.getElementById('__jg_ring')?.remove();
   const el = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, x + w / 2)), Math.min(innerHeight - 1, Math.max(0, y + h / 2)));
   const r0 = el && el !== document.body && el !== document.documentElement ? el.getBoundingClientRect() : null;
   const sx = scrollX, sy = scrollY;
-  const c = tone === 'stop' ? '194,53,47' : '29,99,237';
-  if (!document.getElementById('__jg_ring_css')) {
-    const st = document.createElement('style'); st.id = '__jg_ring_css';
-    st.textContent = '@keyframes __jgpulse{0%,100%{opacity:1}50%{opacity:.55}}';
-    document.documentElement.appendChild(st);
-  }
   const ring = document.createElement('div');
   ring.id = '__jg_ring'; ring.setAttribute('aria-hidden', 'true');
-  // three pulses, then still (a page that keeps changing would keep the live view busy); like Stagehand's cursor,
-  // contained so the page's own layout is never touched
   ring.style.cssText = `position:fixed;z-index:2147483647;pointer-events:none;box-sizing:border-box;contain:layout style paint;`
-    + `border:3px solid rgb(${c});border-radius:12px;box-shadow:0 0 0 5px rgba(${c},.18),0 0 22px rgba(${c},.55);`
-    + `animation:__jgpulse 1s ease-in-out 3;width:${w + 12}px;height:${h + 12}px`;
+    + `background:rgba(255,214,0,.38);mix-blend-mode:multiply;border-radius:4px;width:${w + 8}px;height:${h + 8}px`;
   document.documentElement.appendChild(ring);
   let lx = NaN, ly = NaN, tick = 0;
   const stop = () => { clearInterval(tick); removeEventListener('scroll', place, true); removeEventListener('resize', place); };
@@ -1267,11 +1326,9 @@ RING_JS = r"""
     let dx, dy;
     if (r0 && el.isConnected) { const r = el.getBoundingClientRect(); dx = r.left - r0.left; dy = r.top - r0.top; }
     else { dx = sx - scrollX; dy = sy - scrollY; }
-    const nx = Math.round(x + dx - 6), ny = Math.round(y + dy - 6);
-    if (nx !== lx || ny !== ly) { ring.style.left = nx + 'px'; ring.style.top = ny + 'px'; lx = nx; ly = ny; }  // only when it moved
+    const nx = Math.round(x + dx - 4), ny = Math.round(y + dy - 4);
+    if (nx !== lx || ny !== ly) { ring.style.left = nx + 'px'; ring.style.top = ny + 'px'; lx = nx; ly = ny; }
   };
-  // follow the element when something can have moved it (any scroll box, a resize), plus a slow check for pages
-  // that move things on their own; no frame-by-frame loop
   tick = setInterval(place, 400);
   addEventListener('scroll', place, {capture: true, passive: true});
   addEventListener('resize', place, {passive: true});

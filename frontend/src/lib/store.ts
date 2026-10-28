@@ -24,7 +24,9 @@ export type DocBlock =
   | { t: "table"; head: string[]; rows: string[][]; caption?: string }
   | { t: "note"; text: string };
 export type JDoc = { title: string; subtitle?: string; kind: string; summary: string[]; blocks: DocBlock[]; sources: { title: string; url: string }[]; created: number; lang: string };
-export type SecretField = "account" | "nin" | "bvn" | "otp" | "pin" | "password" | "phone" | "card" | "other";
+export type SecretField = "account" | "nin" | "bvn" | "otp" | "pin" | "password" | "phone" | "card" | "other" | "name" | "email" | "address" | "text";
+/** what she types herself because it must be spelled exactly (not private: shown as she types) */
+export const PLAIN_FIELDS = new Set<SecretField>(["name", "email", "address", "text"]);
 export type Attachment = { kind: "image" | "doc" | "link"; name: string; url?: string };
 
 export type Msg =

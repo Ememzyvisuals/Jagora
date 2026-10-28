@@ -1,9 +1,8 @@
 // Runs inside the page. Finds every element a person could click, type into or choose, gives each a number,
-// works out the words a person would use for it, and (optionally) draws the numbers on screen for the screenshot.
+// works out the words a person would use for it. Nothing is drawn on the page: the numbers go on a copy of the
+// screenshot, made on the server (browser.draw_marks), so the page she watches stays exactly as the site made it.
 (opts) => {
   const MARK = "data-jg";
-  const OVERLAY = "__jg_overlay";
-  document.getElementById(OVERLAY)?.remove();
   document.querySelectorAll(`[${MARK}]`).forEach((el) => el.removeAttribute(MARK));
 
   const SELECTOR = [
@@ -96,7 +95,6 @@
   const out = [];
   let n = 0;
   for (const el of document.querySelectorAll(SELECTOR)) {
-    if (el.closest(`#${OVERLAY}`)) continue;
     // skip a wrapper when its own clickable child will be listed
     if (el.matches("[onclick]") && el.querySelector(SELECTOR.replace(",[onclick]", ""))) continue;
     const r = visible(el);
@@ -127,24 +125,6 @@
   const errors = [...document.querySelectorAll("[role=alert], .error, .err, .invalid-feedback, [aria-invalid=true]")]
     .filter((e) => e.offsetParent !== null).map((e) => clean(e.innerText || e.getAttribute("aria-label"), 100)).filter(Boolean).slice(0, 10);
   const text = clean(document.body.innerText, 2500);
-
-  if (opts && opts.marks) {
-    const layer = document.createElement("div");
-    layer.id = OVERLAY;
-    Object.assign(layer.style, { position: "fixed", inset: "0", pointerEvents: "none", zIndex: "2147483647" });
-    for (const it of out) {
-      const { x, y, w, h } = it.rect;
-      const box = document.createElement("div");
-      Object.assign(box.style, { position: "absolute", left: x + "px", top: y + "px", width: w + "px", height: h + "px",
-        border: "2px solid #E5195E", borderRadius: "3px", boxSizing: "border-box" });
-      const tag = document.createElement("div");
-      tag.textContent = String(it.id);
-      Object.assign(tag.style, { position: "absolute", left: Math.max(x - 2, 0) + "px", top: Math.max(y - 16, 0) + "px",
-        background: "#E5195E", color: "#fff", font: "bold 12px/14px Arial, sans-serif", padding: "1px 4px", borderRadius: "3px" });
-      layer.append(box, tag);
-    }
-    document.body.appendChild(layer);
-  }
 
   return {
     url: location.href, title: document.title, headings, errors, text,

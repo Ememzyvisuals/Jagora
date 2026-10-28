@@ -35,7 +35,7 @@ async def test_ring_follows_its_element_when_the_page_scrolls(tmp_path):
         await b.page.mouse.wheel(0, 300)
         await b.page.wait_for_timeout(300)
         box = await b.page.evaluate("""() => { const a = document.getElementById('agree').getBoundingClientRect(),
-            g = document.getElementById('__jg_ring').getBoundingClientRect(); return {dy: (g.top + 6) - a.top, dx: (g.left + 6) - a.left}; }""")
+            g = document.getElementById('__jg_ring').getBoundingClientRect(); return {dy: (g.top + 4) - a.top, dx: (g.left + 4) - a.left}; }""")
         assert abs(box["dy"]) < 2 and abs(box["dx"]) < 2  # still exactly around the checkbox after scrolling
         await b.ring(None)
         assert await b.page.evaluate("() => !document.getElementById('__jg_ring')")

@@ -112,3 +112,27 @@ def test_voice_waits_for_a_new_page_to_reach_her_screen():
         s._speaker.cancel()
 
     asyncio.run(go())
+
+
+async def test_talk_loop_ends_and_never_repeats():
+    """Jagora only talking, turn after turn (her log: turns 32 to 39 all tell_user) ends the task, and the same words
+    are never said twice in a row."""
+    from jagora.agent import Agent
+    from tests.test_muse import IO, Agentish
+
+    io = IO()
+    model = Agentish(lambda t: [("tell_user", {"message": "The story is about a hearing in Nairobi." if t < 2 else f"More news {t}."})])
+    agent = Agent(model, None, io, lang="en", max_turns=30)
+    res = await agent.run("Read this news story to me: something")
+    assert res.success and model.turn <= 3
+    assert io.said.count("The story is about a hearing in Nairobi.") == 1
+
+
+def test_stop_words_in_every_language():
+    from jagora.server import is_stop
+
+    for said in ("stop", "Stop talking", "please stop", "shut up", "keep quiet", "Abeg stop", "dákẹ́", "Ka yi shiru",
+                 "mechie ọnụ", "kwụsị", "tsaya", "Jagora, stop"):
+        assert is_stop(said), said
+    for said in ("stopwatch prices", "read the news", "how do I stop my DSTV subscription renewing"):
+        assert not is_stop(said), said

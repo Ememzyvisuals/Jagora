@@ -153,7 +153,7 @@ def test_phone_view_plan_reminders_moments_and_take_over(client, site):  # noqa:
             if ev["type"] == "status" and ev["status"] in ("done", "stopped"):
                 break
         vp = next(e for e in got if e["type"] == "viewport")
-        assert vp["mobile"] and vp["w"] == 412
+        assert vp["mobile"] and vp["w"] == 390  # exactly her phone's width
         msgs = [e["msg"] for e in got if e["type"] == "msg"]
         assert any(m["kind"] == "plan" for m in msgs) and any(e["type"] == "update" and "steps" in e["patch"] for e in got)
         assert any(m["kind"] == "reminder" for m in msgs) and any(m["kind"] == "moment" for m in msgs)

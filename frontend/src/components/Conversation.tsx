@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle, CircleNotch, Eye, EyeSlash, Hand, Image as ImageIcon, LinkSimple, Paperclip, ShieldCheck, WarningOctagon, XCircle } from "@phosphor-icons/react";
+import { CheckCircle, CircleNotch, Eye, EyeSlash, Hand, PencilSimpleLine, Image as ImageIcon, LinkSimple, Paperclip, ShieldCheck, WarningOctagon, XCircle } from "@phosphor-icons/react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { answer, giveSecret, live } from "@/lib/engine";
@@ -8,7 +8,7 @@ import { celebrate } from "./Effects";
 import { DocCard } from "./DocView";
 import type { Lang } from "@/lib/i18n";
 import { t } from "@/lib/i18n";
-import { useApp, type Msg, type Task } from "@/lib/store";
+import { PLAIN_FIELDS, useApp, type Msg, type Task } from "@/lib/store";
 import { IconLock, IconScam, IconShield } from "./icons";
 import { Evidence, FileCard, MediaCard, MomentCard, PicturesCard, PlanCard, PointAskCard, ReadingCard, RecordCard, ReminderCard, ScheduledCard, TermsCard, VoiceBubble } from "./ChatCards";
 import { remotePictures } from "@/lib/engine/remote";
@@ -215,6 +215,14 @@ function Handoff({ m, task }: { m: Extract<Msg, { kind: "handoff" }>; task: Task
   );
 }
 
+const TYPE_WHY: Record<Lang, string> = {
+  en: "Type it exactly as it should appear. Jagora puts it in the form for you.",
+  pcm: "Type am exactly as e suppose show. Jagora go put am for the form for you.",
+  yo: "Ẹ tẹ̀ ẹ́ gẹ́gẹ́ bí ó ṣe yẹ kí ó hàn. Jagora yóò fi sínú fọ́ọ̀mù fún yín.",
+  ha: "Ka rubuta shi daidai yadda ya kamata ya bayyana. Jagora zai saka shi a fom ɗin maka.",
+  ig: "Dee ya kpọmkwem otu o kwesịrị ịpụta. Jagora ga-etinye ya na fọm ahụ maka gị.",
+};
+
 const SECRET: Record<"why" | "fill" | "skip" | "filled" | "skipped" | "keep" | "keepWhy", Record<Lang, string>> = {
   keep: {
     en: "Save it for {site}, so Jagora can sign in for me next time",
@@ -254,7 +262,9 @@ function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Tas
   const waiting = m.status === "waiting";
   const site = task.url ? task.url.replace(/^https?:\/\/(www\.)?/, "").split("/")[0] : "";
   // one-time codes change every time: nothing to save
-  const canKeep = live && !!site && m.field !== "otp";
+  // names, emails and addresses: she types them herself so they are spelled exactly; not private, so shown as typed
+  const plain = PLAIN_FIELDS.has(m.field);
+  const canKeep = live && !!site && m.field !== "otp" && !plain;
   const isLast = task.messages.at(-1)?.id === m.id;
   useEffect(() => {
     if (waiting && isLast) {
@@ -274,7 +284,7 @@ function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Tas
   if (!waiting)
     return (
       <div className="glass-3 flex items-center gap-3 rounded-[20px] px-4 py-3">
-        <IconLock size={28} className="shrink-0" />
+        {plain ? <PencilSimpleLine size={24} className="shrink-0 text-accent" /> : <IconLock size={28} className="shrink-0" />}
         <span className="min-w-0 flex-1 truncate text-[14.5px] text-ink-2">{m.label}</span>
         <span className={`inline-flex items-center gap-1.5 text-[13.5px] font-medium ${m.status === "done" ? "text-ok" : "text-ink-3"}`}>
           {m.status === "done" && <CheckCircle size={14} weight="fill" />}
@@ -286,10 +296,10 @@ function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Tas
   return (
     <form onSubmit={(e) => (e.preventDefault(), send())} className="glass-3 rounded-[22px] p-4 ring-2 ring-accent/35">
       <div className="flex gap-3">
-        <IconLock size={40} className="shrink-0" />
+        {plain ? <PencilSimpleLine size={30} className="mt-1 shrink-0 text-accent" /> : <IconLock size={40} className="shrink-0" />}
         <div className="min-w-0">
           <p className="text-[15.5px] font-semibold leading-snug text-ink">{m.label}</p>
-          <p className="mt-0.5 text-[13px] leading-snug text-ink-2">{SECRET.why[lang]}</p>
+          <p className="mt-0.5 text-[13px] leading-snug text-ink-2">{plain ? TYPE_WHY[lang] : SECRET.why[lang]}</p>
         </div>
       </div>
       <div className="mt-3 flex h-12 items-center gap-2 rounded-[16px] bg-white px-4 shadow-[inset_0_0_0_1.5px_rgba(29,99,237,.35)]">
@@ -297,19 +307,20 @@ function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Tas
           ref={box}
           value={v}
           onChange={(e) => setV(m.digits ? e.target.value.replace(/\D/g, "").slice(0, m.digits) : e.target.value)}
-          type={see ? "text" : "password"}
-          inputMode={numeric ? "numeric" : "text"}
-          autoComplete={m.field === "otp" ? "one-time-code" : "off"}
+          type={plain ? (m.field === "email" ? "email" : "text") : see ? "text" : "password"}
+          inputMode={numeric ? "numeric" : m.field === "email" ? "email" : "text"}
+          autoComplete={m.field === "otp" ? "one-time-code" : m.field === "name" ? "name" : m.field === "email" ? "email" : m.field === "address" ? "street-address" : "off"}
+          autoCapitalize={m.field === "name" || m.field === "address" ? "words" : "off"}
           autoCorrect="off"
           spellCheck={false}
           aria-label={m.label}
-          className="h-full min-w-0 flex-1 bg-transparent text-[18px] font-semibold tracking-[0.18em] focus-visible:outline-none text-ink outline-none placeholder:tracking-normal placeholder:font-normal placeholder:text-ink-3"
+          className={`h-full min-w-0 flex-1 bg-transparent text-[18px] font-semibold ${plain ? "" : "tracking-[0.18em]"} focus-visible:outline-none text-ink outline-none placeholder:tracking-normal placeholder:font-normal placeholder:text-ink-3`}
           placeholder={m.digits ? "•".repeat(Math.min(m.digits, 11)) : ""}
         />
         {m.digits && <span className="shrink-0 text-[12.5px] font-medium tabular-nums text-ink-3">{clean.length}/{m.digits}</span>}
-        <button type="button" onClick={() => setSee((x) => !x)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-black/5" aria-label={see ? "Hide" : "Show"}>
+        {!plain && <button type="button" onClick={() => setSee((x) => !x)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-black/5" aria-label={see ? "Hide" : "Show"}>
           {see ? <EyeSlash size={17} /> : <Eye size={17} />}
-        </button>
+        </button>}
       </div>
       {canKeep && (
         <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-[13.5px] leading-snug text-ink-2">

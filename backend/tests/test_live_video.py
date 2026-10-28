@@ -30,7 +30,7 @@ async def _session(tmp_path, mobile=True):
     f.write_text(PAGE)
     ws = WS()
     s = server.Session(ws, "u1")
-    s.device = {"mobile": mobile, "w": 390, "h": 844}
+    s.device = {"mobile": True, "w": 390, "h": 844} if mobile else {"mobile": False, "w": 1280, "h": 800}
     s.active_task = "t"
     b = await s.get_browser()
     await b.goto(f.as_uri())
@@ -52,7 +52,7 @@ async def test_video_keyframe_then_frames_at_full_sharpness(tmp_path):
         assert vids and vids[0][0] == 2 and any(m[0] == 3 for m in vids)  # a keyframe first, then frames
         dec = av.CodecContext.create("h264", "r")
         frames = [fr for m in vids for pkt in dec.parse(m[1:]) for fr in dec.decode(pkt)]
-        assert frames and frames[-1].width >= 600  # 1.5 picture pixels per page pixel (the old screencast gave 412)
+        assert frames and frames[-1].width >= 580  # 1.5 picture pixels per page pixel of her 390-wide phone
         assert sum(len(m) for m in vids) < 400_000  # a few seconds of scrolling stays small
         assert not any(m[0] == 1 for m in after)  # no photos while video is on
     finally:
