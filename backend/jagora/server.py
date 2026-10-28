@@ -1314,6 +1314,27 @@ class DbMemory:
         await db.exec("insert into skills (site, goal_key, goal, steps, t, uses) values (?,?,?,?,?,1) on conflict(site, goal_key) "
                       "do update set steps=excluded.steps, t=excluded.t, uses=skills.uses+1", (site, key, goal, json.dumps(steps, ensure_ascii=False), time.time()))
 
+    async def replay_get(self, goal_key: str) -> list[dict]:
+        """Navigation steps that worked for this task before, for this person only (only clicks on links and buttons
+        that need no one's yes, by their words). Served only once the same route has worked twice."""
+        if not goal_key:
+            return []
+        goal_key = f"{self.u}|{goal_key}"
+        rows = await db.exec("select steps, uses from replays where goal_key=?", (goal_key,))
+        return json.loads(rows[0]["steps"]) if rows and rows[0]["uses"] >= 2 else []
+
+    async def replay_put(self, goal_key: str, steps: list[dict]) -> None:
+        if not goal_key or not steps:
+            return
+        goal_key = f"{self.u}|{goal_key}"
+        data = json.dumps(steps, ensure_ascii=False)
+        rows = await db.exec("select steps from replays where goal_key=?", (goal_key,))
+        if rows and rows[0]["steps"] != data:  # a different route this time: start counting again
+            await db.exec("update replays set steps=?, t=?, uses=1 where goal_key=?", (data, time.time(), goal_key))
+        else:
+            await db.exec("insert into replays (goal_key, steps, t, uses) values (?,?,?,1) on conflict(goal_key) "
+                          "do update set t=excluded.t, uses=replays.uses+1", (goal_key, data, time.time()))
+
     async def remember_fact(self, fact: str) -> None:
         await db.exec("insert into facts (id, user_id, t, fact) values (?,?,?,?)", (uuid.uuid4().hex[:10], self.u, time.time(), fact))
 

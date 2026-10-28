@@ -51,6 +51,8 @@ SCHEMA = [
     """create table if not exists kv (k text primary key, v text not null)""",
     """create table if not exists skills (site text not null, goal_key text not null, goal text not null, steps text not null,
          t real not null, uses integer not null default 1, primary key (site, goal_key))""",
+    """create table if not exists replays (goal_key text primary key, steps text not null, t real not null,
+         uses integer not null default 1)""",
     """create table if not exists push_subs (endpoint text primary key, user_id text not null, keys text not null, t real not null)""",
     """create table if not exists events (
          id integer primary key autoincrement, t real not null, user_id text not null, kind text not null,

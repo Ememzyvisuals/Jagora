@@ -11,6 +11,8 @@
     "[role=option]", "[role=switch]", "[role=combobox]", "[contenteditable='']", "[contenteditable=true]", "[onclick]",
   ].join(",");
 
+  // keep in step with SIG_JS in browser.py
+  const SIG = (e) => e.tagName + "|" + (e.getAttribute("aria-label") || (["INPUT", "TEXTAREA", "SELECT"].includes(e.tagName) ? (e.name || e.id || e.placeholder || e.type) : (e.innerText || e.textContent || "")) || "").replace(/\s+/g, " ").trim().slice(0, 60);
   const clean = (s, n = 90) => (s || "").replace(/\s+/g, " ").trim().slice(0, n);
   const vw = window.innerWidth, vh = window.innerHeight;
 
@@ -101,6 +103,7 @@
     if (!r) continue;
     n += 1;
     el.setAttribute(MARK, String(n));
+    el.__jgsig = SIG(el); // what it was when numbered: checked again just before acting on it (browser._locate)
     const k = kind(el);
     const item = {
       id: n, kind: k, tag: el.tagName.toLowerCase(), type: (el.getAttribute("type") || "").toLowerCase(),

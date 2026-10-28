@@ -24,7 +24,7 @@
   <img alt="Muse Image" src="https://img.shields.io/badge/Meta-Muse%20Image-0467DF?style=flat-square">
   <img alt="SAM 3.1" src="https://img.shields.io/badge/Meta-SAM%203.1-0467DF?style=flat-square">
   <img alt="Languages" src="https://img.shields.io/badge/languages-yo%20%C2%B7%20ha%20%C2%B7%20ig%20%C2%B7%20pcm%20%C2%B7%20en-111318?style=flat-square">
-  <img alt="Tests" src="https://img.shields.io/badge/backend%20tests-77%20passing-3f8f5c?style=flat-square">
+  <img alt="Tests" src="https://img.shields.io/badge/backend%20tests-110%20passing-3f8f5c?style=flat-square">
   <a href="#live-result-against-the-real-model"><img alt="Attacks resisted" src="https://img.shields.io/badge/live%20attack%20range-20%2F20%20resisted-3f8f5c?style=flat-square"></a>
 </p>
 
@@ -397,6 +397,7 @@ cd backend && pytest -q
 | `test_fields_safety.py` | Number and date reading in five languages, the approval gate, her account's locks |
 | `test_hands.py` | Hover menus, drag and drop, key combinations, canvas clicks, uploads, date pickers, pointing |
 | `test_muse.py` | Muse Wonder reading (photos, PDFs), fallback to Muse Spark, picture guides, the optional open-weights hook |
+| `test_learned.py` | Ideas taken from other browser agents' code: the model hears what each action changed, waiting ends when the page reacts, a page that does not respond is noticed, whole forms in one step with the page's errors read back, elements re-checked before acting, site pop-ups and file pickers reported, a smaller page picture, remembered routes replayed without a model call |
 | `test_sam.py` | SAM 3.1: its wire format parsed, facts outlined in one box-prompt call, QR code turned into a warning, the reading still arriving when SAM is down |
 | `test_power.py` | Vault, scheduled sign-in, translation, page tools, retries, parallel reading, checker, memory, terms review, learned skills |
 | `test_research.py` | Search, official-site checks, evidence |
