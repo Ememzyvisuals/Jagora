@@ -54,6 +54,7 @@ import { Conversation } from "../Conversation";
 import { CloudWordmark } from "../glass/CloudWordmark";
 import { Backdrop } from "../glass/Backdrop";
 import { LiveButton, LiveMode } from "../LiveMode";
+import { NowPlaying } from "../NowPlaying";
 import { Glass } from "../glass/Glass";
 import { PILL } from "@/lib/glassRegistry";
 import { Orb } from "../Orb";
@@ -340,6 +341,7 @@ export function DesktopApp() {
         </div>
       </div>
       <LiveMode />
+      <NowPlaying />
     </div>
   );
 }

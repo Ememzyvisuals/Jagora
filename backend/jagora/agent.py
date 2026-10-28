@@ -384,13 +384,15 @@ ACT_TOOLS = [
 ]
 APP_ACTIONS = ["show_page", "hide_page", "show_chat", "hide_chat", "show_tabs", "hide_tabs", "open_chat", "new_chat",
                "close_chat", "scroll_chat", "set_language", "set_mode", "voice", "data_saver", "theme", "fullscreen",
-               "end_live", "amina", "my_details", "go_home", "show_history", "hide_history"]
+               "end_live", "hide_live", "show_live", "stop_media", "amina", "my_details", "go_home", "show_history", "hide_history"]
 APP_TOOL = tool(
     "app_control",
     "Control the Jagora app itself on the user's screen (not the website): show or hide the live web page, show or hide "
     "the chat, show or hide the tabs (the websites you opened), show or hide their chat history (the menu with all their "
     "chats), open, start or close a chat, scroll the chat, change language or mode, turn your "
-    "voice, data saver, dark or light theme or full screen on or off, end live voice, show or hide Amina, open their "
+    "voice, data saver, dark or light theme or full screen on or off, end live voice (end_live), fold the Live voice screen "
+    "down while the call goes on (hide_live: 'close this live screen', 'remove this screen'), bring it back (show_live), "
+    "close the song or video playing on their screen (stop_media), show or hide Amina, open their "
     "saved details, go to the start screen. Use it whenever they ask for something on the screen ('close this', 'show me "
     "the browser', 'go back to my last chat', 'make it dark', 'scroll up'). 'This' and 'that' mean what is on their "
     "screen now (see 'On the user's screen'). Do it at once, no need to ask.",

@@ -291,27 +291,22 @@ export function MomentCard({ m }: { m: Extract<Msg, { kind: "moment" }> }) {
   );
 }
 
-/** a song, voice note or video from a website, playing here */
+/** a song, voice note or video from a website: it plays big on her screen (NowPlaying); this card plays it again */
+const PLAY: L = { en: "Play on screen", pcm: "Play am for screen", yo: "Ṣe é lórí ojú-iboju", ha: "Kunna a kan allo", ig: "Kpọọ ya na ihuenyo" };
 export function MediaCard({ m }: { m: Extract<Msg, { kind: "media" }> }) {
-  const video = m.type.startsWith("video") || /\.(mp4|webm|mov)$/i.test(m.name);
+  const lang = useApp((s) => s.lang);
+  const playing = useApp((s) => s.playing?.id === m.id);
   return (
-    <div className="overflow-hidden rounded-[20px] bg-white p-3 shadow-[0_10px_30px_-18px_rgba(10,30,70,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
-      <p className="mb-2 truncate px-1 text-[14.5px] font-semibold text-ink">{m.name}</p>
-      {m.type === "youtube" ? (
-        <iframe
-          src={m.url}
-          title={m.name}
-          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-          allowFullScreen
-          referrerPolicy="strict-origin-when-cross-origin"
-          className="aspect-video w-full rounded-[14px] bg-black"
-        />
-      ) : video ? (
-        <video src={m.url} controls autoPlay playsInline className="w-full rounded-[14px] bg-black" />
-      ) : (
-        <audio src={m.url} controls autoPlay className="w-full" />
+    <div className="flex items-center gap-3 rounded-[20px] bg-white p-3 shadow-[0_10px_30px_-18px_rgba(10,30,70,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
+      <div className="min-w-0 flex-1 px-1">
+        <p className="truncate text-[14.5px] font-semibold text-ink">{m.name}</p>
+        {m.source && <p className="truncate text-[12px] text-ink-3">{new URL(m.source).hostname.replace(/^www\./, "")}</p>}
+      </div>
+      {!playing && (
+        <button onClick={() => useApp.getState().setPlaying(m)} className="btn-ink shrink-0 rounded-full px-4 py-2 text-[13.5px] font-semibold">
+          {PLAY[lang]}
+        </button>
       )}
-      {m.source && <p className="mt-1.5 truncate px-1 text-[12px] text-ink-3">{new URL(m.source).hostname.replace(/^www\./, "")}</p>}
     </div>
   );
 }

@@ -124,6 +124,10 @@ type State = {
   sheetOpen: boolean;
   live: boolean;
   showPage: boolean;
+  /** Live mode folded down to the small bar at the top (the call goes on) */
+  liveSmall: boolean;
+  /** a song or video Jagora found, playing big on her screen */
+  playing: Extract<Msg, { kind: "media" }> | null;
   orb: OrbMode;
   pointer: Pointer;
   highlight: Highlight;
@@ -151,6 +155,8 @@ type State = {
   setSheet: (v: boolean) => void;
   setLive: (v: boolean) => void;
   setShowPage: (v: boolean) => void;
+  setLiveSmall: (v: boolean) => void;
+  setPlaying: (m: Extract<Msg, { kind: "media" }> | null) => void;
   setOrb: (o: OrbMode) => void;
   setPointer: (p: Partial<Pointer>) => void;
   setHighlight: (h: Highlight) => void;
@@ -196,6 +202,8 @@ export const useApp = create<State>()(
       sheetOpen: false,
       live: false,
       showPage: false,
+      liveSmall: false,
+      playing: null,
       orb: "idle",
       pointer: { x: 0, y: 0, visible: false, clicking: false },
       highlight: null,
@@ -232,7 +240,9 @@ export const useApp = create<State>()(
       setUrl: (taskId, url) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, url, tabClosed: false } : t)) })),
       setMeta: (taskId, meta) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, ...meta } : t)) })),
       setSheet: (sheetOpen) => set({ sheetOpen }),
-      setLive: (live) => set({ live, showPage: false }),
+      setLive: (live) => set({ live, showPage: false, liveSmall: false }),
+      setLiveSmall: (liveSmall) => set({ liveSmall }),
+      setPlaying: (playing) => set({ playing }),
       setShowPage: (showPage) => set({ showPage }),
       setOrb: (orb) => set({ orb }),
       setPointer: (p) => set((s) => ({ pointer: { ...s.pointer, ...p } })),

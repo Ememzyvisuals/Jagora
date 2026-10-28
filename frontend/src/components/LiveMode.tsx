@@ -6,7 +6,7 @@
 
    Speech-to-text: with the backend, her audio goes to STORM ASR (Yorùbá, Hausa, Igbo, Pidgin, English). Without it
    (demo), the browser's own recognizer handles English and Pidgin. */
-import { Microphone, MicrophoneSlash, X } from "@phosphor-icons/react";
+import { Microphone, MicrophoneSlash, Minus, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ask, live as backendLive, voiceNote } from "@/lib/engine";
@@ -20,7 +20,7 @@ import { browserRecognizer } from "./Composer";
 import { Glass } from "./glass/Glass";
 import { Orb } from "./Orb";
 
-const SAY: Record<"listen" | "think" | "work" | "speak" | "paused" | "hint" | "end" | "live", Record<Lang, string>> = {
+const SAY: Record<"listen" | "think" | "work" | "speak" | "paused" | "hint" | "end" | "live" | "hide", Record<Lang, string>> = {
   listen: { en: "Listening…", pcm: "I dey hear you…", yo: "Mo ń gbọ́ yín…", ha: "Ina sauraro…", ig: "Ana m ege ntị…" },
   work: { en: "Working on the page…", pcm: "I dey work for the page…", yo: "Mo ń ṣiṣẹ́ lórí ojú-ìwé náà…", ha: "Ina aiki a shafin…", ig: "Ana m arụ ọrụ na peeji ahụ…" },
   think: { en: "Thinking…", pcm: "I dey think…", yo: "Mo ń ronú…", ha: "Ina tunani…", ig: "Ana m eche echiche…" },
@@ -34,6 +34,7 @@ const SAY: Record<"listen" | "think" | "work" | "speak" | "paused" | "hint" | "e
     ig: "Kwuo ihe ị chọrọ. Jagora ga-aza, wee gee ntị ọzọ.",
   },
   end: { en: "End", pcm: "Stop", yo: "Parí", ha: "Gama", ig: "Kwụsị" },
+  hide: { en: "Hide this screen", pcm: "Comot this screen", yo: "Pa ojú-iboju yìí mọ́", ha: "Ɓoye wannan allo", ig: "Zoo ihuenyo a" },
   live: { en: "Live", pcm: "Live", yo: "Láàyè", ha: "Kai tsaye", ig: "Ndụ" },
 };
 
@@ -87,7 +88,16 @@ export function LiveMode() {
   const setShowPage = useApp((s) => s.setShowPage);
   const last = task?.messages.at(-1);
   const mustType = (last?.kind === "handoff" || last?.kind === "secret") && last.status === "waiting";
-  const island = !!task && task.kind === "browse" && !!task.url && (showPage || mustType);
+  // folded down (her tap, "close this screen", or a video playing): the small bar at the top, the call goes on
+  const small = useApp((s) => s.liveSmall);
+  const setSmall = useApp((s) => s.setLiveSmall);
+  const playing = useApp((s) => !!s.playing);
+  const island = small || playing || (!!task && task.kind === "browse" && !!task.url && (showPage || mustType));
+  // a film or song playing: the microphone goes off, so its sound is never taken for her voice; back on after
+  useEffect(() => {
+    if (!on) return;
+    setMuted(playing);
+  }, [playing, on]);
 
   const listen = useCallback(async () => {
     if (busy.current || listener.current) return;
@@ -271,7 +281,7 @@ export function LiveMode() {
             <Glass flat radius={28} bezel={14} refraction={30} blur={14} tint="rgba(14,15,18,.82)">
               <div className="flex h-14 items-center gap-2.5 pl-2 pr-2 text-snow">
                 <Orb size={44} state={orbState} levelRef={level} />
-                <button onClick={() => setShowPage(false)} className="min-w-0 max-w-[48vw] truncate text-left text-[14px] font-medium" aria-label="Back to live view">
+                <button onClick={() => (setShowPage(false), setSmall(false))} className="min-w-0 max-w-[48vw] truncate text-left text-[14px] font-medium" aria-label="Back to live view">
                   {label}
                 </button>
                 <button onClick={toggleMute} className="grid h-10 w-10 place-items-center rounded-full bg-white/12" aria-label={muted ? "Turn microphone on" : "Turn microphone off"}>
@@ -295,7 +305,13 @@ export function LiveMode() {
           >
             <div className="flex w-full items-center justify-between">
               <span className="font-display font-bold tracking-[-0.035em] text-[26px] text-ink">Jagora</span>
-              <span className="rounded-full bg-white/70 px-3 py-1 text-[12.5px] font-semibold text-ink-2">{SAY.live[lang]}</span>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-white/70 px-3 py-1 text-[12.5px] font-semibold text-ink-2">{SAY.live[lang]}</span>
+                {/* fold the Live screen down to the small bar; the call goes on */}
+                <button onClick={() => setSmall(true)} className="grid h-10 w-10 place-items-center rounded-full bg-white/70 text-ink transition active:scale-95" aria-label={SAY.hide[lang]}>
+                  <Minus size={18} weight="bold" />
+                </button>
+              </div>
             </div>
             <div className="flex flex-1 flex-col items-center justify-center">
               <motion.div

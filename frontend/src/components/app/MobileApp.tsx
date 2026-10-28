@@ -17,6 +17,7 @@ import { Backdrop } from "../glass/Backdrop";
 import { Glass } from "../glass/Glass";
 import { Tour } from "../Tour";
 import { LiveMode } from "../LiveMode";
+import { NowPlaying } from "../NowPlaying";
 import { InstallPrompt } from "../InstallPrompt";
 import { History } from "./History";
 
@@ -141,6 +142,7 @@ export function MobileApp() {
       <History open={history} onClose={() => setHistory(false)} onOpen={openChat} onNew={() => (setHistory(false), setActive(null), setScreen("home"), setSheet(true))} />
       {screen === "home" && !sheet && <Tour />}
       <LiveMode />
+      <NowPlaying />
       {screen === "home" && !sheet && <InstallPrompt />}
     </div>
   );

@@ -130,6 +130,13 @@ export function runApp(action: string, value = "") {
       return;
     case "end_live":
       return s.setLive(false);
+    case "hide_live": // fold the Live screen down; the call goes on
+      return s.setLiveSmall(true);
+    case "show_live":
+      if (!s.live) return s.setLive(true);
+      return s.setLiveSmall(false);
+    case "stop_media":
+      return s.setPlaying(null);
     case "amina":
       return setAminaHidden(!on);
     case "my_details":

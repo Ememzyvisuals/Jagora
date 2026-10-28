@@ -200,6 +200,8 @@ function handle(ev: Record<string, unknown>) {
     case "msg":
       if (!s.tasks.some((t) => t.id === task)) break;
       s.push(task, ev.msg as Msg);
+      // a song or video plays big on her screen, not squeezed into the chat
+      if ((ev.msg as Msg).kind === "media") s.setPlaying(ev.msg as Extract<Msg, { kind: "media" }>);
       break;
     case "runs": {
       // what the server is really working on: any chat this phone still shows as working has stopped
