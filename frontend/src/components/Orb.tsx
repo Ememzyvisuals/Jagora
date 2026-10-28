@@ -41,6 +41,15 @@ export function Orb({
   stateRef.current = state;
   const dark = useTheme() === "dark";
 
+  // when the orb leaves the screen for good, give its graphics memory back at once (a phone holds only a few of these;
+  // keeping old ones is what crashed the tab)
+  useEffect(() => {
+    const cv = canvas.current;
+    return () => {
+      cv?.getContext("webgl")?.getExtension("WEBGL_lose_context")?.loseContext();
+    };
+  }, []);
+
   useEffect(() => {
     const cv = canvas.current;
     if (!cv) return;

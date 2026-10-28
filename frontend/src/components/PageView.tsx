@@ -201,7 +201,8 @@ function LiveStage({ taskId, interactive, pointer, full, pointAsk }: { taskId: s
 
   /* her finger scrolls the real page, any time (like a browser): moves are gathered and sent ~20 times a second,
      and a quick flick at the end carries on a little */
-  const drag = useRef<{ y: number; t: number; v: number; pending: number; timer: number } | null>(null);
+  const drag = useRef<{ y: number; t: number; v: number; pending: number; timer: number; moved: number } | null>(null);
+  const swiped = useRef(0); // when her last swipe ended: the tap the browser fires right after it is not a tap
   const flush = () => {
     const d = drag.current;
     if (!d || !d.pending) return;
@@ -211,7 +212,7 @@ function LiveStage({ taskId, interactive, pointer, full, pointAsk }: { taskId: s
   const swipe = {
     onTouchStart: (e: React.TouchEvent) => {
       if (e.touches.length !== 1) return;
-      drag.current = { y: e.touches[0].clientY, t: performance.now(), v: 0, pending: 0, timer: window.setInterval(flush, 50) };
+      drag.current = { y: e.touches[0].clientY, t: performance.now(), v: 0, pending: 0, timer: window.setInterval(flush, 50), moved: 0 };
     },
     onTouchMove: (e: React.TouchEvent) => {
       const d = drag.current;
@@ -220,6 +221,7 @@ function LiveStage({ taskId, interactive, pointer, full, pointAsk }: { taskId: s
       const dy = (d.y - y) / (fit.s || 1); // screen pixels -> page pixels
       d.v = dy / Math.max(1, now - d.t);
       d.pending += dy;
+      d.moved += Math.abs(d.y - y);
       d.y = y;
       d.t = now;
     },
@@ -229,6 +231,7 @@ function LiveStage({ taskId, interactive, pointer, full, pointAsk }: { taskId: s
       clearInterval(d.timer);
       if (performance.now() - d.t < 80 && Math.abs(d.v) > 0.3) d.pending += Math.max(-1600, Math.min(1600, d.v * 320)); // a flick
       flush();
+      if (d.moved > 8) swiped.current = performance.now();
       drag.current = null;
     },
   };
@@ -246,6 +249,7 @@ function LiveStage({ taskId, interactive, pointer, full, pointAsk }: { taskId: s
         role="img"
         aria-label="The page Jagora is working on"
         onClick={(e) => {
+          if (performance.now() - swiped.current < 450) return; // the end of a swipe, not a tap
           if (pointAsk) {
             // she shows Jagora what she means
             const p = toPage(e);

@@ -87,3 +87,28 @@ def test_a_silent_connection_never_freezes_jagora():
         s._speaker.cancel()
 
     asyncio.run(go())
+
+
+def test_voice_waits_for_a_new_page_to_reach_her_screen():
+    from jagora.server import Session
+
+    class Phone:
+        async def send_text(self, t):
+            pass
+
+        async def send_bytes(self, b):
+            pass
+
+    async def go():
+        s = Session(Phone(), "u2")
+        assert s._page_ready.is_set()
+        # a new address: speech waits ...
+        s._last_url = "https://a.example/"
+        s._page_ready.clear()
+        assert not s._page_ready.is_set()
+        # ... until the first picture of the page has gone out
+        await s.send_bytes(b"\x01jpeg")
+        assert s._page_ready.is_set()
+        s._speaker.cancel()
+
+    asyncio.run(go())

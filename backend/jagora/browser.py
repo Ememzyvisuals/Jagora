@@ -36,6 +36,28 @@ SNAPSHOT_JS = (Path(__file__).parent / "snapshot.js").read_text()
 MAX_DOWNLOAD = 40 * 1024 * 1024
 
 
+# The live page never zooms: she sees it on her own phone, so a double tap or a pinch in the remote browser (which
+# would zoom it and push the text off the side) is switched off, the way phone apps do. Scrolling still works.
+NO_ZOOM_JS = r"""
+(() => {
+  const fix = () => {
+    try {
+      let m = document.querySelector('meta[name="viewport"]');
+      if (!m) { m = document.createElement('meta'); m.name = 'viewport'; (document.head || document.documentElement).appendChild(m); }
+      m.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+      if (!document.getElementById('__jagora_nozoom')) {
+        const st = document.createElement('style'); st.id = '__jagora_nozoom';
+        st.textContent = 'html, body { touch-action: pan-x pan-y !important; }';
+        (document.head || document.documentElement).appendChild(st);
+      }
+    } catch (e) {}
+  };
+  fix();
+  document.addEventListener('DOMContentLoaded', fix);
+})();
+"""
+
+
 @dataclass
 class Element:
     id: int
@@ -205,6 +227,8 @@ class Browser:
             is_mobile=self.mobile, has_touch=self.mobile, device_scale_factor=2 if self.mobile else 1,
             user_agent=MOBILE_UA if self.mobile else DESKTOP_UA)
         await guardmod.install(self._ctx, self)
+        if self.mobile:
+            await self._ctx.add_init_script(NO_ZOOM_JS)
         self.page = await self._own_page()
         self._wire(self.page)
         self.pages = [self.page]

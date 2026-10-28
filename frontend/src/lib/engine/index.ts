@@ -106,7 +106,12 @@ const NO_EARS: Record<string, string> = {
 };
 
 function titleFrom(text: string, a?: Attachment) {
-  const t = text.trim().replace(/\s+/g, " ");
+  // a news story from Discover: the chat is named after its headline, not "Read this news story to me"
+  const t = text
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/^Read this news story to me:\s*/i, "")
+    .replace(/\s*https?:\/\/\S+$/, "");
   if (!t) return a ? a.name : "New task";
   return t.length > 42 ? `${t.slice(0, 40).trimEnd()}…` : t.charAt(0).toUpperCase() + t.slice(1);
 }

@@ -13,6 +13,7 @@ import { toggleFullscreen } from "@/components/Pwa";
 import { LANGS, type Lang } from "./i18n";
 import { activeTask, useApp } from "./store";
 import { getTheme, setTheme } from "./theme";
+import { deleteChats } from "./sync";
 
 /** what each layout reports about itself (phone: which screen; desktop: sidebar, page hidden) */
 const facts: Record<string, string> = {};
@@ -99,7 +100,10 @@ export function runApp(action: string, value = "") {
       return tell("new_chat");
     case "close_chat": {
       const id = pickChat(value);
-      if (id) s.closeTask(id);
+      if (id) {
+        s.closeTask(id);
+        deleteChats([id]);
+      }
       return tell("go_home");
     }
     case "scroll_chat": {

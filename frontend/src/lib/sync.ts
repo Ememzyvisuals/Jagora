@@ -58,6 +58,25 @@ async function pullChats() {
   if (got.length) useApp.setState((s) => ({ tasks: [...s.tasks, ...got].sort((a, b) => b.createdAt - a.createdAt) }));
 }
 
+/* A chat she deletes (swipe, bin, "clear all", or by voice) is deleted on the server too, so it does not come back on
+   her next visit or her other devices, once the few seconds she has to undo it have passed. */
+const deleting = new Map<string, ReturnType<typeof setTimeout>>();
+export function deleteChats(ids: string[]) {
+  if (!API || !getToken()) return;
+  ids.forEach(forget);
+}
+function forget(id: string) {
+  if (deleting.has(id)) return;
+  deleting.set(
+    id,
+    setTimeout(() => {
+      deleting.delete(id);
+      if (useApp.getState().tasks.some((t) => t.id === id)) return; // she undid it
+      void fetch(`${API}/chats/${encodeURIComponent(id)}`, { method: "DELETE", headers: auth() }).catch(() => {});
+    }, 7000),
+  );
+}
+
 /** Bring her account to this device, then keep it in step. Safe to call more than once. */
 export async function syncAccount() {
   if (!API || !getToken()) return;

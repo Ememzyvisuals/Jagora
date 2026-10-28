@@ -8,6 +8,7 @@ import { AnimatePresence, motion, useDragControls, useMotionValue, useTransform 
 import { useEffect, useMemo, useState } from "react";
 import type { Lang } from "@/lib/i18n";
 import { useApp, type Task } from "@/lib/store";
+import { deleteChats } from "@/lib/sync";
 import { TaskIcon, lastLine } from "./Shared";
 import { CHATS } from "./MobileHome";
 
@@ -21,6 +22,8 @@ const W = {
   nothing: { en: "No chat matches that.", pcm: "No chat match am.", yo: "Kò sí ìjíròrò tó bá a mu.", ha: "Babu hirar da ta dace.", ig: "Ọ dịghị mkparịta ụka dabara." },
   deleted: { en: "Chat deleted", pcm: "Chat don delete", yo: "A ti pa ìjíròrò rẹ́", ha: "An goge hira", ig: "Ehichapụla mkparịta ụka" },
   undo: { en: "Undo", pcm: "Bring am back", yo: "Dá a padà", ha: "Mayar", ig: "Weghachi" },
+  clear: { en: "Clear all chats", pcm: "Clear all chats", yo: "Pa gbogbo ìjíròrò rẹ́", ha: "Goge duk hirarraki", ig: "Hichapụ mkparịta ụka niile" },
+  clearAsk: { en: "Delete all your chats?", pcm: "Delete all your chats?", yo: "Ṣé kí n pa gbogbo ìjíròrò yín rẹ́?", ha: "A goge duk hirarrakinku?", ig: "Hichapụ mkparịta ụka gị niile?" },
   swipe: { en: "Swipe a chat left to delete it", pcm: "Drag chat go left to delete am", yo: "Ẹ fa ìjíròrò sí òsì láti pa á rẹ́", ha: "Ja hira hagu don goge ta", ig: "Dọrọ mkparịta ụka n'aka ekpe ka ihichapụ ya" },
   working: { en: "Working", pcm: "Dey work", yo: "Ń ṣiṣẹ́", ha: "Tana aiki", ig: "Na-arụ ọrụ" },
   waiting: { en: "Needs you", pcm: "Need you", yo: "Ó nílò yín", ha: "Tana bukatarka", ig: "Chọrọ gị" },
@@ -64,6 +67,7 @@ export function History({ open, onClose, onOpen, onNew }: { open: boolean; onClo
   const del = (t: Task) => {
     setGone({ task: t, at: tasks.findIndex((x) => x.id === t.id) });
     remove(t.id);
+    deleteChats([t.id]);
   };
   const undo = () => {
     if (!gone) return;
@@ -144,6 +148,18 @@ export function History({ open, onClose, onOpen, onNew }: { open: boolean; onClo
                 ))
               )}
               {tasks.length > 0 && !q && <p className="px-3 pt-4 text-center text-[12.5px] text-ink-3">{W.swipe[lang]}</p>}
+              {tasks.length > 1 && !q && (
+                <button
+                  onClick={() => {
+                    if (!confirm(W.clearAsk[lang])) return;
+                    deleteChats(useApp.getState().tasks.map((t) => t.id));
+                    useApp.setState({ tasks: [], activeId: null });
+                  }}
+                  className="mx-auto mt-3 block rounded-full px-4 py-2 text-[14px] font-bold text-[#c4361a] hover:bg-[#c4361a]/10"
+                >
+                  {W.clear[lang]}
+                </button>
+              )}
             </div>
 
             <AnimatePresence>
@@ -199,7 +215,7 @@ function Row({ task, lang, active, onOpen, onDelete }: { task: Task; lang: Lang;
             <TaskIcon task={task} size={34} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-semibold text-ink">{task.title}</span>
+            <span className="block truncate text-[15px] font-semibold text-ink">{task.title.replace(/^Read this news story to me:\s*/i, "") || task.title}</span>
             {line && <span className="block truncate text-[13px] text-ink-2">{line}</span>}
           </span>
           {busy && <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[10.5px] font-bold text-snow">{busy}</span>}

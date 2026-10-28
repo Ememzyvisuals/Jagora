@@ -124,6 +124,11 @@ function comeBack() {
     );
   }, wait);
 }
+// when the app opens with chats it thinks are still working, ask the server (it answers with "runs")
+if (typeof window !== "undefined" && BACKEND)
+  setTimeout(() => {
+    if (S().tasks.some((t) => t.status === "working" || t.status === "waiting")) void connect().catch(() => undefined);
+  }, 1500);
 if (typeof window !== "undefined")
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && (!ws || ws.readyState === WebSocket.CLOSED)) comeBack();
@@ -196,6 +201,12 @@ function handle(ev: Record<string, unknown>) {
       if (!s.tasks.some((t) => t.id === task)) break;
       s.push(task, ev.msg as Msg);
       break;
+    case "runs": {
+      // what the server is really working on: any chat this phone still shows as working has stopped
+      const busy = new Set((ev.busy as string[]) || []);
+      for (const t of s.tasks) if ((t.status === "working" || t.status === "waiting") && !busy.has(t.id)) s.setStatus(t.id, "stopped");
+      break;
+    }
     case "app": // Jagora changes something in the app on her screen
       runApp(ev.action as string, (ev.value as string) || "");
       break;

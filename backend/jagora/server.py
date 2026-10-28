@@ -352,6 +352,17 @@ async def chat(chat_id: str, request: Request):
     return await db.history(uid, chat_id, 200)
 
 
+@app.delete("/chats/{chat_id}")
+async def delete_chat(chat_id: str, request: Request):
+    """She deleted a chat: it goes from every device, with its messages."""
+    uid = _user_from(request)
+    if not uid:
+        raise HTTPException(401)
+    await db.exec("delete from messages where user_id=? and chat_id=?", (uid, chat_id))
+    await db.exec("delete from chats where user_id=? and chat_id=?", (uid, chat_id))
+    return {"ok": True}
+
+
 @app.get("/files/{token}/{name}")
 async def files(token: str, name: str):
     if not re.fullmatch(r"[\w-]{10,40}", token) or "/" in name or ".." in name:
@@ -413,7 +424,8 @@ CONTINUE = re.compile(r"\b(continue|go on|carry on|keep (going|reading)|resume|f
 OKAY = {"en": "Okay.", "pcm": "Okay.", "yo": "Ó dáa.", "ha": "To.", "ig": "Ọ dị mma."}
 
 SEND_WAIT = 6.0  # seconds a message may wait on her connection before the connection counts as gone
-RECONNECT_GRACE = 60.0  # seconds a dropped session (and its task) waits for her app to come back
+RECONNECT_GRACE = 60.0
+PAGE_WAIT = 6.0  # seconds Jagora's voice waits for a new page to reach her screen  # seconds a dropped session (and its task) waits for her app to come back
 KEEP_FOR_LATER = {"task", "msg", "update", "status", "url", "notify", "account", "speech_end"}
 
 
@@ -451,6 +463,10 @@ class Session:
         self._latest_jpeg = b""
         self._frame_busy = False
         self._dead_ws: WebSocket | None = None  # a connection that stopped taking messages
+        # a new page has reached her screen: Jagora does not talk about a page she cannot see yet
+        self._page_ready = asyncio.Event()
+        self._page_ready.set()
+        self._last_url = ""
         self._missed: list[dict] = []  # chat messages that could not be sent, delivered when she reconnects
 
     def _cast_mode(self) -> str:
@@ -472,6 +488,7 @@ class Session:
             try:
                 await asyncio.wait_for(ws.send_bytes(data), SEND_WAIT)
                 self.sent[kind] += len(data)
+                self._page_ready.set()
             except Exception:  # noqa: BLE001
                 self._dead_ws = ws
 
@@ -655,6 +672,14 @@ class Session:
             task, text, lang, gen = await self._speech_q.get()
             if gen != self._gen:
                 continue
+            # a page is opening: wait (a few seconds at most) until she can see it before talking about it
+            if not self._page_ready.is_set() and self.viewing:
+                try:
+                    await asyncio.wait_for(self._page_ready.wait(), PAGE_WAIT)
+                except asyncio.TimeoutError:
+                    pass
+                if gen != self._gen:
+                    continue
             self._speaking = (task, text, lang)
             try:
                 await self.send({"type": "orb", "state": "speaking"})
@@ -673,9 +698,13 @@ class Session:
                     else:
                         await self.send({"type": "pcm", "task": task, "utt": utt, "n": i, "rate": rate, "data": base64.b64encode(pcm).decode()})
 
+                t_voice, first = time.monotonic(), True
                 async for i, rate, pcm in speech.speak_stream(text, lang):
                     if gen != self._gen:
                         break
+                    if first:
+                        first = False
+                        log.info("timing voice: first sound after %.1fs (%d characters)", time.monotonic() - t_voice, len(text))
                     if i != at:  # a new sentence: finish the last one, start fresh
                         if fx:
                             await out(at, last_rate, fx.flush())
@@ -1132,7 +1161,11 @@ class WsIO:
         if kind == "app":  # change something in the app on her screen (lib/appctl.ts does it)
             await s.send({"type": "app", "task": t, "action": data.get("action", ""), "value": data.get("value", "")})
         elif kind == "page":
-            await s.send({"type": "url", "task": t, "url": data.get("url", "")})
+            url = data.get("url", "")
+            if url != s._last_url:  # a new page: speech waits until its first picture has gone out
+                s._last_url = url
+                s._page_ready.clear()
+            await s.send({"type": "url", "task": t, "url": url})
         elif kind == "plan":
             if self.r.plan_id:
                 await s.send({"type": "update", "task": t, "id": self.r.plan_id, "patch": {"steps": data["steps"]}})
@@ -1425,6 +1458,8 @@ async def ws_route(ws: WebSocket):
     else:
         s = Session(ws, uid)
         SESSIONS[uid] = s
+    # which of her chats are really running: anything else her app still shows as working has stopped
+    await s.send({"type": "runs", "busy": [t for t, r in s.runs.items() if r.busy]})
     acc = await auth.account(db, uid) if not uid.startswith("guest-") else None
     if acc:
         row = await db.one("select plan, code from users where id=?", (uid,)) or {}

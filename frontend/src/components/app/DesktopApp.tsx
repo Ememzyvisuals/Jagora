@@ -39,6 +39,7 @@ import { TranslateButton } from "../PageView";
 import { startPageWars } from "../PageWars";
 import { aminaHidden, setAminaHidden } from "../mascot/Amina";
 import { reportScreen } from "@/lib/appctl";
+import { deleteChats } from "@/lib/sync";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -289,7 +290,7 @@ export function DesktopApp() {
                       </span>
                     </span>
                     <StatusMark s={x.status} />
-                    <button onClick={(e) => (e.stopPropagation(), closeTask(x.id))} className="hidden text-ink-3 hover:text-ink group-hover:block" aria-label={`Delete ${x.title}`} title="Delete chat">
+                    <button onClick={(e) => (e.stopPropagation(), closeTask(x.id), deleteChats([x.id]))} className="hidden text-ink-3 hover:text-ink group-hover:block" aria-label={`Delete ${x.title}`} title="Delete chat">
                       <Trash size={14} />
                     </button>
                   </div>
