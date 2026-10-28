@@ -96,11 +96,38 @@ function connect(): Promise<WebSocket> {
       resolve(sock);
     };
     sock.onerror = () => reject(new Error("backend unreachable"));
-    sock.onclose = () => (ws = null);
+    sock.onclose = () => {
+      if (ws === sock) ws = null;
+      comeBack();
+    };
     sock.onmessage = (e) => (typeof e.data === "string" ? handle(JSON.parse(e.data)) : gotFrame(e.data as ArrayBuffer));
     ws = sock;
   });
 }
+
+/* A phone connection drops (lift, weak signal, screen off). While a task is running, the app reconnects by itself,
+   and the server carries on with the same session and sends what she missed (server.py Session.attach). */
+let retry = 0;
+let retryTimer = 0;
+const running = () => S().tasks.some((t) => t.status === "working") || S().live;
+function comeBack() {
+  if (typeof window === "undefined" || !BACKEND || retryTimer || document.hidden || !running()) return;
+  const wait = Math.min(10_000, 800 * 2 ** retry);
+  retryTimer = window.setTimeout(() => {
+    retryTimer = 0;
+    connect().then(
+      () => (retry = 0),
+      () => {
+        retry = Math.min(retry + 1, 4);
+        comeBack();
+      },
+    );
+  }, wait);
+}
+if (typeof window !== "undefined")
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && (!ws || ws.readyState === WebSocket.CLOSED)) comeBack();
+  });
 
 /* ---- data saver (backend lite.py): on slow or costly networks the voice comes compressed and the live view smaller ---- */
 type NetInfo = { saveData?: boolean; effectiveType?: string; addEventListener?: (t: string, f: () => void) => void };

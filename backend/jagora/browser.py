@@ -235,9 +235,23 @@ class Browser:
         for closer in (self._ctx and self._ctx.close, self._browser and self._browser.close, self._pw and self._pw.stop):
             if closer:
                 try:
-                    await closer()
+                    await asyncio.wait_for(closer(), 4)
                 except Exception:  # noqa: BLE001
                     pass
+
+    def kill(self) -> None:
+        """Last resort for a browser that will not close: stop its Playwright driver in the background (that ends
+        the Chromium it started), without waiting for it."""
+        if self._pw:
+            pw, self._pw = self._pw, None
+
+            async def stop():
+                try:
+                    await asyncio.wait_for(pw.stop(), 10)
+                except Exception:  # noqa: BLE001
+                    pass
+
+            asyncio.ensure_future(stop())
 
     async def __aenter__(self) -> "Browser":
         return await self.start()

@@ -113,7 +113,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Jagora", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=list(settings.allowed_origins), allow_credentials=False,
-                   allow_methods=["GET", "POST"], allow_headers=["Authorization", "Content-Type"])
+                   allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Authorization", "Content-Type"])
 if PORTALS_DIR.exists():
     app.mount("/practice", StaticFiles(directory=str(PORTALS_DIR), html=True), name="practice")
 
@@ -412,6 +412,11 @@ CONTINUE = re.compile(r"\b(continue|go on|carry on|keep (going|reading)|resume|f
                       r"tẹ̀?síwájú|tesiwaju|máa bá a lọ|maa ba a lo|ci gaba|ci-gaba|ka ci gaba|gaa n'ihu|gaa n.ihu|nọgide)\b", re.I)
 OKAY = {"en": "Okay.", "pcm": "Okay.", "yo": "Ó dáa.", "ha": "To.", "ig": "Ọ dị mma."}
 
+SEND_WAIT = 6.0  # seconds a message may wait on her connection before the connection counts as gone
+RECONNECT_GRACE = 60.0  # seconds a dropped session (and its task) waits for her app to come back
+KEEP_FOR_LATER = {"task", "msg", "update", "status", "url", "notify", "account", "speech_end"}
+
+
 class Session:
     def __init__(self, ws: WebSocket, user_id: str) -> None:
         self.ws, self.user_id = ws, user_id
@@ -445,6 +450,8 @@ class Session:
         self._video_task: asyncio.Task | None = None
         self._latest_jpeg = b""
         self._frame_busy = False
+        self._dead_ws: WebSocket | None = None  # a connection that stopped taking messages
+        self._missed: list[dict] = []  # chat messages that could not be sent, delivered when she reconnects
 
     def _cast_mode(self) -> str:
         if self.video:
@@ -456,23 +463,61 @@ class Session:
         return "lite" if self.lite else "full"
 
     async def send_bytes(self, data: bytes, kind: str = "frame") -> None:
-        """Binary messages: the live view (1 = JPEG photo, 2 = video keyframe, 3 = video frame), no base64."""
+        """Binary messages: the live view (1 = JPEG photo, 2 = video keyframe, 3 = video frame), no base64. A picture
+        is never worth waiting for: if the line is busy or gone, this one is skipped (the next one replaces it)."""
+        ws = self.ws
+        if ws is self._dead_ws or self._send_lock.locked():
+            return
         async with self._send_lock:
             try:
-                await self.ws.send_bytes(data)
+                await asyncio.wait_for(ws.send_bytes(data), SEND_WAIT)
                 self.sent[kind] += len(data)
             except Exception:  # noqa: BLE001
-                pass
+                self._dead_ws = ws
 
     async def send(self, msg: dict) -> None:
-        async with self._send_lock:
-            try:
-                text = json.dumps(msg, ensure_ascii=False)
-                await self.ws.send_text(text)
-                k = msg.get("type")
-                self.sent[k if k in ("frame", "pcm") else "other"] += len(text)
-            except Exception:  # noqa: BLE001
-                pass
+        """One message to her app. A phone connection can die without saying so (lift, weak signal, screen off): then
+        a send could wait forever and hold up everything after it. So a send waits a few seconds at most; after
+        that this connection counts as gone, and what she must not miss (the chat, steps, status) is kept and sent
+        when her app reconnects (attach)."""
+        ws = self.ws
+        if ws is not self._dead_ws:
+            async with self._send_lock:
+                if ws is self.ws and ws is not self._dead_ws:
+                    try:
+                        text = json.dumps(msg, ensure_ascii=False)
+                        await asyncio.wait_for(ws.send_text(text), SEND_WAIT)
+                        k = msg.get("type")
+                        self.sent[k if k in ("frame", "pcm") else "other"] += len(text)
+                        return
+                    except Exception:  # noqa: BLE001
+                        self._dead_ws = ws
+        if msg.get("type") in KEEP_FOR_LATER and len(self._missed) < 300:
+            self._missed.append(msg)
+
+    async def attach(self, ws: WebSocket) -> None:
+        """Her app came back (new connection, same person): the same session carries on, with its tasks, browser
+        and voice, and she gets what she missed."""
+        self.ws = ws
+        self._dead_ws = None
+        missed, self._missed = self._missed, []
+        for m in missed:
+            await self.send(m)
+        if self.browser:
+            await self.send({"type": "viewport", "w": self.browser.viewport["width"], "h": self.browser.viewport["height"],
+                             "mobile": self.browser.mobile})
+            self._video_key = True
+            self._video_kick.set()
+        for task, r in self.runs.items():
+            if r.busy:
+                await self.send({"type": "status", "task": task, "status": "working"})
+
+    async def close_later(self, ws: WebSocket, grace: float = RECONNECT_GRACE) -> None:
+        """The connection dropped: wait a little for her app to come back before stopping her task."""
+        await asyncio.sleep(grace)
+        if self.ws is ws and SESSIONS.get(self.user_id) is self:
+            SESSIONS.pop(self.user_id, None)
+            await self.close()
 
     async def close(self) -> None:
         for r in self.runs.values():
@@ -483,8 +528,11 @@ class Session:
         if self._video_task:
             self._video_task.cancel()
         if self.browser:
-            await self.browser.close()
-            self.browser = None
+            b, self.browser = self.browser, None
+            try:
+                await asyncio.wait_for(b.close(), 8)  # a stuck browser must never hold anything up
+            except Exception:  # noqa: BLE001
+                b.kill()
 
     async def get_browser(self) -> Browser:
         if self.browser is None:
@@ -1369,11 +1417,12 @@ async def ws_route(ws: WebSocket):
         await ws.close(code=4429)
         return
     await ws.accept()
-    old = SESSIONS.pop(uid, None)
-    if old:
-        await old.close()
-    s = Session(ws, uid)
-    SESSIONS[uid] = s
+    s = SESSIONS.get(uid)
+    if s:
+        await s.attach(ws)  # her app reconnected: the same session (and any task) carries on
+    else:
+        s = Session(ws, uid)
+        SESSIONS[uid] = s
     acc = await auth.account(db, uid) if not uid.startswith("guest-") else None
     if acc:
         row = await db.one("select plan, code from users where id=?", (uid,)) or {}
@@ -1398,12 +1447,12 @@ async def ws_route(ws: WebSocket):
     except WebSocketDisconnect:
         pass
     finally:
-        if SESSIONS.get(uid) is s:
-            SESSIONS.pop(uid, None)
-        if not uid.startswith("guest-"):
-            await db.exec("update users set last_seen=? where id=?", (time.time(), uid))
-            await db.log(uid, "leave", f"{round(time.time() - s.since)}s, {s.data_used()}")
-        await s.close()
+        if s.ws is ws:  # not taken over by a newer connection
+            if not uid.startswith("guest-"):
+                await db.exec("update users set last_seen=? where id=?", (time.time(), uid))
+                await db.log(uid, "leave", f"{round(time.time() - s.since)}s, {s.data_used()}")
+            # guests have no way back to the same session; people with an account get a minute to reconnect
+            asyncio.create_task(s.close_later(ws, 0 if uid.startswith("guest-") else RECONNECT_GRACE))
 
 
 # ---- watching pages for her ------------------------------------------------------------------------------------------
