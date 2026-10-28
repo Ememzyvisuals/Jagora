@@ -370,7 +370,9 @@ COMMON = [
          "find_video (e.g. 'X episode 1', 'X part 2'), put them in the right order, then play_list from where they want.",
          {"videos": {"type": "array", "items": {"type": "object", "properties": {"url": {"type": "string"}, "name": {"type": "string"}},
                                                "required": ["url"]}},
-          "start": {"type": "integer", "description": "which one to start with, 1 = the first (default 1)"}}, ["videos"]),
+          "start": {"type": "integer", "description": "which one to start with, 1 = the first (default 1)"},
+          "course": {"type": "string", "description": "when they are learning from it: a short name for the course (e.g. "
+                     "'Python for beginners'); their minutes and finished lessons are then tracked"}}, ["videos"]),
     tool("look", "See the page as a picture on your next step. Only when the text and the list of elements are not enough "
          "(pictures, maps, colours, layout, a button you cannot find).", {}, []),
     tool("finish", "The task is done, or cannot be done. Tell them the result in their language: the answer, what you "
@@ -506,6 +508,7 @@ HOW YOU WORK
 - While a video plays on their screen ("Playing on her screen now"), the microphone may catch the film. Act only on words clearly meant for you (next, another one, I don't like it, pause, stop, louder); ignore anything that sounds like the film's dialogue and say nothing. When she talks, whatever plays is paused for you and plays on by itself when you are done; touch it (media_pause, stop_media, media_next) only if what she said is about it.
 - Choosing with them (videos, music, films, courses, tutorials, fonts, products, schools, jobs, anything with several good options): find the options fast (find_video for anything to watch or listen to, search for the rest), give them the best 3 as ask_user choices with short titles, and WAIT for their pick. Then play it (play_media) or open its page (go_to) so they see it. If they said "just play" or named one, skip the question. Stay with them after: "next", "another one", "not this one" means the next option, or search again for better ones.
 - Show what you read: when the answer comes from a website, open that page with go_to so it is on their screen while you tell them (read_sources is for comparing several in the background). When no website is needed (a quick fact, a chat), stay on their home screen.
+- Learning (a course, a skill, an exam subject): ask their level if unknown, find good beginner playlists (find_video "<subject> full course for beginners playlist"), offer the best 3 channels as choices, then play the lessons in order with play_list and a course name, so their watching is tracked ("Her course ..." lines show minutes watched and lessons finished). Offer a short study guide (write_document: the plan, lesson by lesson, how long each day, what to practise). "Continue my course" means play_list from the next unfinished lesson. When a lesson ends you are told; offer a short practice sheet on that lesson (write_document with exercises, answers at the end), then the next lesson.
 - Series and lists: when what they want comes in parts (episodes, seasons, part 1/2/3, an album, a playlist, a course's lessons), find the parts in order and use play_list, so Next plays the next part. Say how many parts there are.
 - Never bring back an answer, card or page you already gave earlier in the chat unless they ask for it again; a new message is about something new.
 - Say the answer once. Either tell_user it and then finish with a one-line wrap-up, or put it only in finish. Never tell_user the answer and then repeat it in finish.
@@ -771,10 +774,10 @@ class Agent:
           "watch_page", "save_moment", "find_moments"),
          r"remind|schedul|every (day|week|morning|month)|later|tomorrow|tonight|alert|notify|watch|tell me (when|once|if)|"
          r"moment|saved|when .*(out|open|announc|releas)|daily|weekly"),
-        (("write_document",), r"doc|document|pdf|word|letter|cv|resume|write|summar|report|markdown|note"),
+        (("write_document",), r"doc|document|pdf|word|letter|cv|resume|write|summar|report|markdown|note|guide|practi|exercise|learn|course|study|plan"),
         (("picture_guide",), r"picture|draw|diagram|image|show me how|illustrat"),
         (("save_page", "page_theme"), r"save|pdf|print|download|dark|light|theme|night mode"),
-        (("play_media", "find_media", "find_video", "preview_videos", "play_list"), r"episode|season|series|album|playlist|part \d|play|song|music|video|movie|film|watch|listen|audio|sermon|podcast|clip"),
+        (("play_media", "find_media", "find_video", "preview_videos", "play_list"), r"learn|course|lesson|tutorial|study|teach|class|episode|season|series|album|playlist|part \d|play|song|music|video|movie|film|watch|listen|audio|sermon|podcast|clip"),
         (("give_verdict", "check_link", "review_terms"), r"real|fake|scam|legit|genuine|official|safe|trust|link|terms|verify|check (this|if)"),
         (("remember_about_her",), r"remember|my name is|i am a|i live|call me|i work|i study"),
     ]
@@ -1053,7 +1056,9 @@ class Agent:
                 if not items:
                     return "give YouTube links from find_video", False, None
                 start = max(0, min(len(items) - 1, int(a.get("start") or 1) - 1))
-                await self.io.event("media", {**items[start], "size": 0, "queue": items, "start": start})
+                course = str(a.get("course") or "")[:60]
+                await self.io.event("media", {**items[start], "size": 0, "queue": items, "start": start,
+                                              **({"course": course} if course else {})})
                 return (f"playing a list of {len(items)} on their screen from number {start + 1}; Next and Previous move "
                         "through it (app_control media_next / media_previous when they ask)."), False, None
             if name == "preview_videos":

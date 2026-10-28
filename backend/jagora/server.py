@@ -511,6 +511,13 @@ HERE = {"en": "I'm here, still working on it.", "pcm": "I dey here, I still dey 
 AGAIN = {"en": "Sorry, I didn't catch that. Please say it again.", "pcm": "Sorry, I no catch am. Abeg talk am again.",
          "yo": "Ẹ má bínú, mi ò gbọ́ ọ dáadáa. Ẹ jọ̀ọ́ ẹ tún sọ ọ́.", "ha": "Yi haƙuri, ban ji ba. Don Allah ka sake faɗa.",
          "ig": "Ndo, anụghị m ya. Biko kwughachi ya."}
+WELL_DONE = {
+    "en": "Well done, you finished \"{x}\". That is {d} of {n} lessons, {m} minutes so far. Shall I give you a short practice sheet on it before the next one?",
+    "pcm": "Well done, you don finish \"{x}\". Na {d} of {n} lessons, {m} minutes so far. Make I give you small practice on am before the next one?",
+    "yo": "Ẹ kú iṣẹ́, ẹ ti parí \"{x}\". Ẹ̀kọ́ {d} nínú {n} ni, ìṣẹ́jú {m} títí di báyìí. Ṣé kí n fún yín ní ìdánrawò kékeré lórí rẹ̀ kí ẹ tó lọ sí èyí tó kàn?",
+    "ha": "Madalla, ka gama \"{x}\". Darasi {d} cikin {n}, minti {m} zuwa yanzu. In ba ka ɗan aikin gwaji a kai kafin na gaba?",
+    "ig": "Ọ dị mma, ị gụchala \"{x}\". Nke a bụ ihe ọmụmụ {d} n'ime {n}, nkeji {m} ruo ugbu a. Ka m nye gị obere omume na ya tupu nke ọzọ?",
+}
 HERE_IDLE = {"en": "I'm here. What would you like me to do?", "pcm": "I dey here. Wetin you want make I do?",
              "yo": "Mo wà níbí. Kí ni kí n ṣe fún ọ?", "ha": "Ina nan. Me kake so in yi?", "ig": "Anọ m ebe a. Gịnị ka ị chọrọ ka m mee?"}
 
@@ -982,6 +989,14 @@ class Session:
             if lang in ("en", "yo", "ha", "ig", "pcm") and lang != self.lang:
                 self.lang = lang
             await self._to_voice({"type": "lang", "lang": self.lang})
+            return
+        if kind == "media_done":
+            # she finished a lesson (or a video): well done, and practice on it if she wants
+            name = str(ev.get("name") or "")[:90]
+            done, total = int(ev.get("done") or 0), int(ev.get("total") or 0)
+            line = WELL_DONE.get(self.lang, WELL_DONE["en"]).format(x=name, d=done, n=total or done, m=int(ev.get("minutes") or 0))
+            await self.agent_says(task, line)
+            trace.write(self.user_id, "lesson_done", name=name, course=ev.get("course"), done=done, total=total)
             return
         if kind == "view":
             self.viewing = bool(ev.get("on"))

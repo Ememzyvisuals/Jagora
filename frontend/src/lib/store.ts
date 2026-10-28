@@ -14,6 +14,8 @@ export type Profile = {
   gender: "" | "female" | "male";
   state: string;
 };
+export type Course = { name: string; updated: number; lessons: { name: string; url: string; watched: number; length: number; done: boolean }[] };
+
 export const EMPTY_PROFILE: Profile = { full_name: "", phone: "", email: "", date_of_birth: "", gender: "", state: "" };
 
 /** A document Jagora wrote: structured, so it can be shown as a designed page and exported to PDF, Word and Markdown. */
@@ -55,7 +57,9 @@ export type Msg =
   /** a song, voice note or video from a website, played here (Jagora's live view has no sound) */
   | { id: string; kind: "media"; name: string; url: string; type: string; size: number; source?: string;
       /** several videos: previews one after another, or a list to move through with next and previous */
-      queue?: { name: string; url: string; type: string; source?: string }[]; preview?: number }
+      queue?: { name: string; url: string; type: string; source?: string }[]; preview?: number;
+      /** a course she is learning from: her watching is tracked under this name */
+      course?: string }
   /** a task Jagora will do on its own later */
   /** a site's terms and privacy policy, read for her */
   | { id: string; kind: "reading"; read_by: string; name?: string; from?: string; summary: string; risk: "low" | "medium" | "high";
@@ -107,6 +111,10 @@ type State = {
   activeId: string | null;
   /** how often she opened each shortcut or site, so the new tab shows her own top sites first */
   visits: Record<string, { n: number; last: number; title?: string }>;
+  /** what she is learning: per course, each lesson's seconds watched, length and whether she finished it */
+  courses: Record<string, Course>;
+  learnTick: (course: string, lesson: { name: string; url: string }, seconds: number, length: number) => void;
+  learnDone: (course: string, url: string) => void;
   /** her own suggestion buttons under the ask bar, per mode; empty slots fall back to the defaults */
   starters: { guide: string[]; do: string[] };
   /** Jagora's voice off: she still gets every word as text */
@@ -200,6 +208,24 @@ export const useApp = create<State>()(
       tasks: [],
       activeId: null,
       visits: {},
+      courses: {},
+      learnTick: (course, lesson, seconds, length) =>
+        set((s) => {
+          const c: Course = s.courses[course] ?? { name: course, lessons: [], updated: 0 };
+          const lessons = c.lessons.some((l) => l.url === lesson.url) ? c.lessons : [...c.lessons, { name: lesson.name, url: lesson.url, watched: 0, length: 0, done: false }];
+          return {
+            courses: {
+              ...s.courses,
+              [course]: { ...c, updated: Date.now(), lessons: lessons.map((l) => (l.url === lesson.url ? { ...l, watched: l.watched + seconds, length: length || l.length } : l)) },
+            },
+          };
+        }),
+      learnDone: (course, url) =>
+        set((s) => {
+          const c = s.courses[course];
+          if (!c) return {};
+          return { courses: { ...s.courses, [course]: { ...c, updated: Date.now(), lessons: c.lessons.map((l) => (l.url === url ? { ...l, done: true } : l)) } } };
+        }),
       starters: { guide: ["", "", ""], do: ["", "", ""] },
       muted: false,
       translatePages: true,
@@ -284,7 +310,7 @@ export const useApp = create<State>()(
           return sessionStorage;
         }
       }),
-      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, avatar: s.avatar, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, starters: s.starters, muted: s.muted, translatePages: s.translatePages, dataSaver: s.dataSaver }),
+      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, avatar: s.avatar, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, courses: s.courses, starters: s.starters, muted: s.muted, translatePages: s.translatePages, dataSaver: s.dataSaver }),
     },
   ),
 );

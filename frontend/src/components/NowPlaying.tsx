@@ -10,7 +10,8 @@ import { CornersOut, Pause, Play, SkipBack, SkipForward, X } from "@phosphor-ico
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Lang } from "@/lib/i18n";
-import { forget, watchYouTube } from "@/lib/sound";
+import { remoteMediaDone } from "@/lib/engine/remote";
+import { forget, watchYouTube, youTubeInfo } from "@/lib/sound";
 import { useApp } from "@/lib/store";
 
 const L: Record<"which" | "watch" | "preview", Record<Lang, string>> = {
@@ -63,6 +64,44 @@ export function NowPlaying() {
     window.addEventListener("jagora:media", on);
     return () => window.removeEventListener("jagora:media", on);
   }, [control]);
+  // a course: all its lessons are listed in her progress from the start
+  useEffect(() => {
+    if (!m?.course) return;
+    for (const it of items) st().learnTick(m.course, { name: it.name, url: it.url }, 0, 0);
+  }, [m?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // a course: every 5 s of watching counts toward the lesson; when a lesson ends Jagora offers practice
+  const doneFor = useRef("");
+  useEffect(() => {
+    if (!m?.course || !cur) return;
+    const course = m.course;
+    const t = window.setInterval(() => {
+      const v = vid.current;
+      const y = youTubeInfo(frame.current?.contentWindow);
+      const playing = v ? !v.paused : !!y?.playing;
+      const time = v ? v.currentTime : y?.time ?? 0;
+      const length = v ? v.duration || 0 : y?.length ?? 0;
+      if (playing) st().learnTick(course, { name: cur.name, url: cur.url }, 5, length);
+      const ended = (v ? v.ended : !!y?.ended) || (length > 60 && time >= length - 8);
+      if (ended && doneFor.current !== cur.url) {
+        doneFor.current = cur.url;
+        st().learnDone(course, cur.url);
+        const c = st().courses[course];
+        const task = st().activeId;
+        if (task && c)
+          void remoteMediaDone(task, {
+            name: cur.name,
+            course,
+            minutes: Math.round(c.lessons.reduce((n, l) => n + l.watched, 0) / 60),
+            done: c.lessons.filter((l) => l.done).length,
+            total: Math.max(c.lessons.length, items.length),
+            next: items[at + 1]?.name,
+          });
+      }
+    }, 5000);
+    return () => clearInterval(t);
+  }, [m?.course, cur?.url]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // her own pause and play: Jagora then leaves it as she set it
   const toggle = () => {
     forget();

@@ -21,15 +21,27 @@ const ytFrames = () => [...document.querySelectorAll<HTMLIFrameElement>("iframe"
 const yt = (f: HTMLIFrameElement, func: string, args: unknown = "") =>
   f.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), "*");
 
-/* YouTube players tell whether they are playing (with enablejsapi=1, after we "listen") */
-const ytPlaying = new WeakMap<Window, boolean>();
+/* YouTube players tell whether they are playing, where they are and how long the video is (with enablejsapi=1,
+   after we say "listening") */
+export type YtInfo = { playing: boolean; ended: boolean; time: number; length: number };
+const ytInfo = new WeakMap<Window, YtInfo>();
+const ytPlaying = { get: (w: Window) => ytInfo.get(w)?.playing };
+export const youTubeInfo = (w: Window | null | undefined) => (w ? ytInfo.get(w) : undefined);
 if (typeof window !== "undefined")
   window.addEventListener("message", (e) => {
-    if (typeof e.data !== "string" || !/youtube/.test(e.origin)) return;
+    if (typeof e.data !== "string" || !/youtube/.test(e.origin) || !e.source) return;
     try {
-      const d = JSON.parse(e.data) as { event?: string; info?: { playerState?: number } | number };
-      const state = typeof d.info === "object" ? d.info?.playerState : d.event === "onStateChange" ? (d.info as number) : undefined;
-      if (state !== undefined && e.source) ytPlaying.set(e.source as Window, state === 1);
+      const d = JSON.parse(e.data) as { event?: string; info?: { playerState?: number; currentTime?: number; duration?: number } | number };
+      const w = e.source as Window;
+      const was = ytInfo.get(w) ?? { playing: false, ended: false, time: 0, length: 0 };
+      const info = typeof d.info === "object" && d.info ? d.info : {};
+      const state = typeof d.info === "number" && d.event === "onStateChange" ? d.info : info.playerState;
+      ytInfo.set(w, {
+        playing: state !== undefined ? state === 1 : was.playing,
+        ended: state !== undefined ? state === 0 : was.ended,
+        time: info.currentTime ?? was.time,
+        length: info.duration ?? was.length,
+      });
     } catch {}
   });
 /** ask a YouTube frame to report its state (called when the player loads) */

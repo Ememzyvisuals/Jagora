@@ -40,6 +40,13 @@ export function describeScreen(): string {
   if (!desktop()) lines.push(`Chat panel: ${s.sheetOpen ? "open" : "closed"}.`);
   if (s.playing?.queue && s.playing.queue.length > 1)
     lines.push(`Video list on her screen (${s.playing.preview ? "previews" : "playing"}): ` + s.playing.queue.map((q, i) => `${i + 1}. "${q.name}"${i === s.mediaAt ? " (now)" : ""}`).join("; ") + ". media_next and media_previous move through it.");
+  const courses = Object.values(s.courses ?? {}).sort((a, b) => b.updated - a.updated).slice(0, 4);
+  for (const c of courses) {
+    const done = c.lessons.filter((l) => l.done).length;
+    const mins = Math.round(c.lessons.reduce((n, l) => n + l.watched, 0) / 60);
+    const next = c.lessons.find((l) => !l.done);
+    lines.push(`Her course "${c.name}": ${done} of ${c.lessons.length} lessons finished, ${mins} min watched${next ? `, next: "${next.name}" (${Math.round(next.watched / 60)} of ${Math.round(next.length / 60) || "?"} min watched)` : ""}.`);
+  }
   if (s.playing) lines.push(`Playing on her screen now: "${s.playing.queue?.[s.mediaAt]?.name ?? s.playing.name}" (${s.playing.type === "youtube" ? "YouTube video" : s.playing.type}). Do not start it again; stop_media closes it.`);
   if (s.live) lines.push(`Live voice: ${s.liveSmall || s.playing ? "folded to the small bar at the top" : "full screen"}.`);
   const chats = listed();
