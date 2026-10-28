@@ -175,3 +175,18 @@ async def test_jagoras_own_voice_from_the_speaker_is_not_taken_as_her_words(monk
     assert said == [] and any(m["type"] == "drop" and m["id"] == "m1" for m in s.ws.out)
     s._speaker.cancel()
     await asyncio.sleep(0)
+
+
+def test_said_like_people():
+    """From the NRC booking test: "N3,600", "14:01", "30 Oct" and "(Adult ...)" were read out as signs and letters."""
+    t = speech.speakable("Agege to Moniya on 30 Oct: Morning 08:06 has no seats. Only Afternoon 14:01 Standard (Adult N3,600).")
+    assert "three thousand six hundred naira" in t and "N3" not in t
+    assert "Morning eight oh six has" in t  # the part of the day is not said twice
+    assert "two oh one" in t and "30 October" in t and "(" not in t
+    assert "nine o'clock in the morning" in speech.speakable("Results at 9:00 am.")
+    assert "twelve thousand five hundred naira fifty kobo" in speech.speakable("Pay ₦12,500.50 now")
+    assert "L I T S 1 2 3" in speech.speakable("Your reference is LITS-123")
+    assert "3600 náírà" in speech.speakable("Owó rẹ̀ jẹ́ N3,600", "yo")
+    assert "eight oh six" in speech.speakable("08:06", "yo")
+    assert "30 October 2026" in speech.speakable("on 2026-10-30") and "30 October 2026" in speech.speakable("on 30/10/2026")
+    assert speech.words(3600) == "three thousand six hundred" and speech.words(1005) == "one thousand and five"

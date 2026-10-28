@@ -179,8 +179,9 @@ def voice_for(lang: str) -> str:
     return VOICES.get(lang, "john")
 
 
-def speakable(text: str) -> str:
-    """What is read aloud: links, markdown marks and long reference codes are left to the screen."""
+def speakable(text: str, lang: str = "en") -> str:
+    """What is read aloud: links, markdown marks and long reference codes are left to the screen; money, times,
+    dates and signs are written the way a person says them (N3,600 is "three thousand six hundred naira")."""
     t = re.sub(r"\[([^\]]+)\]\((?:https?://|www\.)[^)\s]+\)", r"\1", text)  # [link text](address): say the text
     t = re.sub(r"\b(?:https?://)?(?:www\.)", "", t)  # the address is said by its name below
     t = re.sub(r"https?://", "", t)
@@ -191,7 +192,134 @@ def speakable(text: str) -> str:
     t = re.sub(r"(?m)^\s*(?:[-*+]|\d+[.)])\s+", "", t)  # list markers
     t = re.sub(r"[*_`#>|]", "", t)
     t = re.sub(r"([^\s.!?:;,])[ \t]*\n+", r"\1. ", t)  # a line (a list item, a heading) ends a sentence
+    t = said_like_people(t, lang)
     return say_names(re.sub(r"\s+", " ", t).strip())
+
+
+# ---- money, times, dates and signs, the way people say them --------------------------------------------------------
+# The model writes for the screen ("N3,600", "14:01", "30 Oct", "L13 - Standard (Adult)"); the voice must hear words.
+# Rules, not the model: the same text is always said the same way.
+NAIRA = {"en": "naira", "pcm": "naira", "yo": "náírà", "ha": "naira", "ig": "naira"}
+KOBO = {"en": "kobo", "pcm": "kobo", "yo": "kọ́bọ̀", "ha": "kobo", "ig": "kobo"}
+MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+MON = {m[:3].lower(): m for m in MONTHS} | {"sept": "September"}
+ONES = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split()
+TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
+
+
+def words(n: int) -> str:
+    """A whole number in English words (Nigerian English: 3,600 is "three thousand six hundred")."""
+    if n < 20:
+        return ONES[n]
+    if n < 100:
+        return TENS[n // 10] + ("-" + ONES[n % 10] if n % 10 else "")
+    if n < 1000:
+        return ONES[n // 100] + " hundred" + (" and " + words(n % 100) if n % 100 else "")
+    for size, name in ((10 ** 9, "billion"), (10 ** 6, "million"), (1000, "thousand")):
+        if n >= size:
+            rest = n % size
+            return words(n // size) + " " + name + ((" and " if rest < 100 else " ") + words(rest) if rest else "")
+    return str(n)
+
+
+def _num(s: str, lang: str) -> str:
+    """A number as the voice should read it: words in English and Pidgin; digits without commas otherwise (the
+    Yorùbá, Hausa and Igbo voices read plain digits in their own language)."""
+    s = s.replace(",", "")
+    try:
+        whole, _, frac = s.partition(".")
+        n = int(whole)
+    except ValueError:
+        return s
+    if lang not in ("en", "pcm") or n >= 10 ** 12:
+        return s
+    return words(n) + (" point " + " ".join(ONES[int(c)] for c in frac) if frac and int(frac) else "")
+
+
+def _money(m: re.Match, lang: str) -> str:
+    amount, scale = m.group("amt"), (m.group("scale") or "").lower()
+    mult = {"k": 1000, "m": 10 ** 6, "million": 10 ** 6, "b": 10 ** 9, "bn": 10 ** 9, "billion": 10 ** 9}.get(scale, 1)
+    try:
+        value = float(amount.replace(",", "")) * mult
+    except ValueError:
+        return m.group(0)
+    whole = int(value)
+    kobo = round((value - whole) * 100)
+    out = f"{_num(str(whole), lang)} {NAIRA.get(lang, 'naira')}"
+    if kobo:
+        out += f" {_num(str(kobo), lang)} {KOBO.get(lang, 'kobo')}"
+    return out
+
+
+def _clock(m: re.Match, lang: str, text: str = "") -> str:
+    h, mm = int(m.group(1)), int(m.group(2))
+    ampm = (m.group(3) or "").lower().replace(".", "")
+    if ampm == "pm" and h < 12:
+        h += 12
+    if ampm == "am" and h == 12:
+        h = 0
+    part = "in the morning" if h < 12 else "in the afternoon" if h < 16 else "in the evening" if h < 21 else "at night"
+    h12 = h % 12 or 12
+    # "Morning 08:06": the part of the day is said already, so it is not said twice
+    before = text[max(0, m.start() - 24):m.start()].lower() if text and m.string is text else ""
+    if re.search(r"morning|afternoon|evening|night|aarọ̀|ọ̀sán|alẹ́|safe|rana|yamma|dare|ụtụtụ|ehihie|anyasị", before):
+        part = ""
+    if lang not in ("en", "pcm"):
+        part = ""  # the voice says numbers in English in every language; the time of day is left to the words around
+    if mm == 0:
+        said = f"{words(h12)} o'clock"
+    elif mm < 10:
+        said = f"{words(h12)} oh {ONES[mm]}"
+    else:
+        said = f"{words(h12)} {words(mm)}"
+    return f"{said} {part}".strip()
+
+
+def _date(day: str, month: str, year: str = "") -> str:
+    return f"{int(day)} {month}" + (f" {year}" if year else "")
+
+
+def said_like_people(t: str, lang: str = "en") -> str:
+    # money: N3,600 / ₦3,600 / NGN 3600 / N1.5m / 3,600 naira
+    t = re.sub(r"(?:₦|\bNGN\s?|\bN(?=\d))\s?(?P<amt>\d[\d,]*(?:\.\d+)?)(?:\s?(?P<scale>k|m|bn|b|million|billion)\b)?",
+               lambda m: _money(m, lang), t, flags=re.I)
+    t = re.sub(r"\b(?P<amt>\d[\d,]*(?:\.\d+)?)(?:\s?(?P<scale>k|m|bn|million|billion))?\s?(?:naira|NGN)\b",
+               lambda m: _money(m, lang), t, flags=re.I)
+    # dates: 2026-10-30, 30/10/2026, 30 Oct 2026, Oct 30
+    t = re.sub(r"\b(\d{4})-(\d{2})-(\d{2})\b",
+               lambda m: _date(m.group(3), MONTHS[int(m.group(2)) - 1], m.group(1)) if 1 <= int(m.group(2)) <= 12 else m.group(0), t)
+    t = re.sub(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b",
+               lambda m: _date(m.group(1), MONTHS[int(m.group(2)) - 1], m.group(3)) if 1 <= int(m.group(2)) <= 12 else m.group(0), t)
+    t = re.sub(r"\b(\d{1,2})(?:st|nd|rd|th)?[\s-]+(Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\.?(?=[\s,.;:!?-]|$)",
+               lambda m: f"{int(m.group(1))} {MON[m.group(2).lower()]}", t, flags=re.I)
+    t = re.sub(r"\b(Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\.?\s+(\d{1,2})\b",
+               lambda m: f"{int(m.group(2))} {MON[m.group(1).lower()]}", t, flags=re.I)
+    # times: 14:01, 08:06, 4:21pm, 8.30 am, 4pm
+    t = re.sub(r"\b([01]?\d|2[0-3])[:.]([0-5]\d)(?:\s?(am|pm|a\.m\.|p\.m\.))?(?![\d:])", lambda m: _clock(m, lang, t), t, flags=re.I)
+    t = re.sub(r"\b(1[0-2]|[1-9])\s?(am|pm|a\.m\.|p\.m\.)(?=\W|$)",
+               lambda m: _clock(re.match(r"(\d+):(\d+) ?(\S*)", f"{m.group(1)}:00 {m.group(2)}"), lang, t), t, flags=re.I)
+    # signs and short forms
+    if lang in ("en", "pcm"):
+        t = re.sub(r"(\d+(?:\.\d+)?)\s?%", lambda m: f"{_num(m.group(1), lang)} percent", t)
+        t = re.sub(r"\be\.g\.", "for example", t, flags=re.I)
+        t = re.sub(r"\bi\.e\.", "that is", t, flags=re.I)
+        t = re.sub(r"\bvs\.?\b", "versus", t, flags=re.I)
+        t = re.sub(r"\bNo\.\s?(?=\d)", "number ", t)
+        t = re.sub(r"\b(\d+)\s?(?:mins?)\b", r"\1 minutes", t)
+        t = re.sub(r"\b(\d+)\s?(?:hrs?)\b", r"\1 hours", t)
+        t = re.sub(r"\b(\d+)\s?km\b", r"\1 kilometres", t)
+        t = re.sub(r"\s&\s", " and ", t)
+    t = re.sub(r"\s[-–—]\s|[–—]", ", ", t)  # "L13 - Standard": a pause, not "minus" or "dash"
+    t = re.sub(r"[()\[\]]", ", ", t)  # brackets are a pause
+    t = re.sub(r"(?<=[A-Za-z])/(?=[A-Za-z])", " or ", t)  # yes/no
+    # booking references and codes (LITS-123, AB12CD9): one character at a time, as people read them out
+    t = re.sub(r"\b(?=[A-Z0-9-]*\d)(?=[A-Z0-9-]*[A-Z])[A-Z0-9]{2,}(?:-[A-Z0-9]+)+\b|\b(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{6,}\b",
+               lambda m: " ".join(ch for ch in m.group(0) if ch != "-"), t)
+    t = re.sub(r"\b([A-Z])(\d+)\b", r"\1 \2", t)  # train L13 -> "L 13"
+    t = re.sub(r"\s+,", ",", t)
+    t = re.sub(r",(\s*,)+", ",", t)
+    t = re.sub(r",\s*([.!?])", r"\1", t)
+    return t
 
 
 # How names and abbreviations are said aloud in Nigeria. The voice spells out words in CAPITALS letter by letter
@@ -235,7 +363,7 @@ async def speak_stream(text: str, lang: str, ahead: int = 2) -> AsyncIterator[tu
     import httpx
 
     TTS_CACHE.mkdir(parents=True, exist_ok=True)
-    parts = chunks(speakable(text))
+    parts = chunks(speakable(text, lang))
     if not parts:
         return
     queues: list[asyncio.Queue] = [asyncio.Queue() for _ in parts]
@@ -324,7 +452,7 @@ async def speak(text: str, lang: str, fresh: bool = False, voice: str = "") -> A
 
     TTS_CACHE.mkdir(parents=True, exist_ok=True)
     async with httpx.AsyncClient(timeout=120) as c:
-        for s in sentences(speakable(text)):
+        for s in sentences(speakable(text, lang)):
             key = hashlib.sha256(f"{voice}|{lang}|{s}".encode()).hexdigest()[:32]
             cached = TTS_CACHE / f"{key}.wav"
             if cached.exists() and not fresh:

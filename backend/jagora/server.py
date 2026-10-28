@@ -1047,7 +1047,7 @@ class Session:
             if self.voice_ws is not None:
                 was_speaking = self.voice_speaking
                 self._voice_spoke.clear()
-                if await self._to_voice({"type": "say", "text": speech.speakable(text), "lang": lang}):
+                if await self._to_voice({"type": "say", "text": speech.speakable(text, lang), "lang": lang}):
                     trace.write(self.user_id, "say_sent_to_voice", chars=len(text))
                     if was_speaking:
                         continue  # it queues after what it is saying now
@@ -1126,7 +1126,7 @@ class Session:
         task = ""
         if self._speaking:
             task, text, _ = self._speaking
-            parts = speech.chunks(speech.speakable(text))
+            parts = speech.chunks(speech.speakable(text, self.lang))
             rest += parts[max(0, min(int(heard or 0), len(parts) - 1)):]  # from the start of the piece she was hearing
         while not self._speech_q.empty():
             t, text, _, _ = self._speech_q.get_nowait()
