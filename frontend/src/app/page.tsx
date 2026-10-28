@@ -84,22 +84,26 @@ export default function Landing() {
 
       {/* hero */}
       <section className="relative">
-        <nav className="relative z-10 wrap flex items-center gap-3 pt-[max(16px,env(safe-area-inset-top))]">
-          <Link href="/" className="flex items-center gap-2.5">
-            <Mark size={34} />
-            <span className="font-display text-[24px] font-bold tracking-[-0.03em] text-ink">Jagora</span>
-          </Link>
-          <div className="ml-auto hidden items-center gap-7 text-[15px] font-semibold text-ink md:flex">
-            <a href="#powers" className="hover:opacity-70">What it does</a>
-            <a href="#safe" className="hover:opacity-70">Safety</a>
-            <a href="#languages" className="hover:opacity-70">Languages</a>
-          </div>
-          <Link href="/app" data-amina-point className="liquid-glass ml-auto rounded-full px-5 py-2.5 text-[15px] font-semibold text-ink md:ml-0">
-            Open Jagora
-          </Link>
-        </nav>
+        {/* the top bar: the portfolio's liquid glass, fixed at the top, the page scrolling under it */}
+        <header className="fixed inset-x-0 top-0 z-50 px-3 pt-[max(10px,env(safe-area-inset-top))] sm:px-4 sm:pt-[max(14px,env(safe-area-inset-top))]">
+          <nav className="liquid-glass mx-auto flex w-full max-w-[1180px] items-center gap-3 rounded-[20px] py-2 pl-3 pr-2 2xl:max-w-[1400px]">
+            <Link href="/" className="flex items-center gap-2.5 rounded-[14px] px-1.5 py-1">
+              <Mark size={32} />
+              <span className="font-display text-[23px] font-bold tracking-[-0.03em] text-ink">Jagora</span>
+            </Link>
+            <div className="mx-2 hidden h-5 w-px bg-ink/15 md:block" />
+            <div className="hidden items-center gap-1 text-[15px] font-bold text-ink md:flex">
+              <a href="#powers" className="rounded-[12px] px-3.5 py-2 transition hover:bg-white/50 dark:hover:bg-white/10">What it does</a>
+              <a href="#safe" className="rounded-[12px] px-3.5 py-2 transition hover:bg-white/50 dark:hover:bg-white/10">Safety</a>
+              <a href="#languages" className="rounded-[12px] px-3.5 py-2 transition hover:bg-white/50 dark:hover:bg-white/10">Languages</a>
+            </div>
+            <Link href="/app" data-amina-point className="ml-auto rounded-[14px] bg-ink px-5 py-2.5 text-[15px] font-bold text-paper transition hover:opacity-90">
+              Open Jagora
+            </Link>
+          </nav>
+        </header>
 
-        <div className="wrap relative flex flex-col items-center pb-16 pt-10 text-center md:pt-14">
+        <div className="wrap relative flex flex-col items-center pb-16 pt-28 text-center md:pt-32">
           <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9 }}>
             <Orb size={150} />
           </motion.div>

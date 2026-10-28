@@ -5,7 +5,7 @@
    a card lifts it to the front and straightens it so it can be read.
    Phone: one tilted deck. Scrolling brings the next card forward; a swipe left or right moves through the deck too,
    and the page follows so scrolling and swiping never disagree. */
-import { animate, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform, type MotionValue } from "motion/react";
+import { animate, motion, useMotionValueEvent, useReducedMotion, useScroll, useSpring, useTransform, type MotionValue } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export type StackCard = { icon: ReactNode; title: string; body: string; tone?: string };
@@ -31,7 +31,9 @@ function Fan({ cards }: { cards: StackCard[] }) {
   const box = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: box, offset: ["start end", "center center"] });
-  const p = useTransform(scrollYProgress, [0, 1], [0, 1], { clamp: true });
+  // a mouse wheel scrolls in steps: the cards follow a spring, so the fan opens in one smooth glide, not in jumps
+  const raw = useTransform(scrollYProgress, [0, 1], [0, 1], { clamp: true });
+  const p = useSpring(raw, { stiffness: 90, damping: 22, mass: 0.7, restDelta: 0.0005 });
   const [width, setWidth] = useState(1100);
   const [hot, setHot] = useState<number | null>(null);
   useEffect(() => {
@@ -60,15 +62,19 @@ function FanCard({ c, i, n, p, spread, still, hot, setHot }: {
   const off = i - mid;
   const x = useTransform(p, (v) => (still ? 1 : v) * off * spread + (1 - (still ? 1 : v)) * TILT[i % TILT.length] * 3);
   const y = useTransform(p, (v) => (still ? 1 : v) * (Math.abs(off) ** 2 * 7) + (1 - (still ? 1 : v)) * i * -4);
-  const rotate = useTransform(p, (v) => (still ? 1 : v) * off * 3.2 + (1 - (still ? 1 : v)) * TILT[i % TILT.length]);
+  const tilt = useTransform(p, (v) => (still ? 1 : v) * off * 3.2 + (1 - (still ? 1 : v)) * TILT[i % TILT.length]);
   const isHot = hot === i;
+  // pointing at a card straightens it smoothly (no snap)
+  const straight = useSpring(0, { stiffness: 300, damping: 28 });
+  useEffect(() => straight.set(isHot ? 1 : 0), [isHot, straight]);
+  const rotate = useTransform([tilt, straight] as MotionValue<number>[], ([t, k]: number[]) => t * (1 - k));
   return (
     <motion.article
       onMouseEnter={() => setHot(i)}
       onFocus={() => setHot(i)}
       tabIndex={0}
-      style={{ x, y, rotate: isHot ? 0 : rotate, zIndex: isHot ? 50 : i, left: "50%", marginLeft: -145 }}
-      className="absolute top-8 w-[290px] origin-bottom cursor-default outline-none"
+      style={{ x, y, rotate, zIndex: isHot ? 50 : i, left: "50%", marginLeft: -145, willChange: "transform" }}
+      className="absolute top-8 w-[290px] origin-bottom cursor-default outline-none [backface-visibility:hidden]"
     >
       <motion.div animate={{ scale: isHot ? 1.06 : 1, y: isHot ? -26 : 0 }} transition={{ type: "spring", stiffness: 320, damping: 26 }}>
         <Face c={c} i={i} />

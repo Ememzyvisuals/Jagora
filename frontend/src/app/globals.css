@@ -637,3 +637,30 @@ h3,
     inset 0 0 24px rgba(13, 13, 13, 0.3),
     0 10px 40px -12px rgba(0, 0, 0, 0.5);
 }
+
+/* the glass wordmark (components/glass/GlassWordmark.tsx): the portfolio's liquid glass, shaped like letters */
+.glass-word-body {
+  background: rgba(255, 255, 255, 0.28);
+  -webkit-backdrop-filter: blur(14px) saturate(175%) brightness(1.08);
+  backdrop-filter: url(#liquid-glass-distortion) blur(3px) saturate(175%) brightness(1.08);
+}
+.glass-word-sheen {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.08) 42%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, 0.18) 100%);
+}
+.glass-word-rim {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.45));
+}
+[data-theme="dark"] .glass-word-body {
+  background: rgba(20, 30, 50, 0.32);
+}
+[data-theme="dark"] .glass-word-sheen {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.03) 45%, rgba(255, 255, 255, 0) 100%);
+}
+[data-theme="dark"] .glass-word-rim {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.18));
+}
+
+/* sections jumped to from the fixed top bar land below it */
+section[id] {
+  scroll-margin-top: 96px;
+}

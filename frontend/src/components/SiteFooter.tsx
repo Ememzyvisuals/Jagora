@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { siMeta } from "simple-icons";
 import { BUILDER, PLOTWEAVER, REPO } from "@/lib/credits";
-import { CloudWordmark } from "./glass/CloudWordmark";
+import { GlassWordmark } from "./glass/GlassWordmark";
 import { Glass } from "./glass/Glass";
 import { startPageWars } from "./PageWars";
 import { Amina, aminaHidden, setAminaHidden } from "./mascot/Amina";
@@ -271,7 +271,7 @@ export function SiteFooter() {
 
       {/* the wordmark at the end of the page */}
       <div ref={box} className="mx-auto mt-2 w-full max-w-[2400px] select-none" aria-hidden="true">
-        {w > 0 && <CloudWordmark width={w} family="Jagora Boiling" weight={400} />}
+        {w > 0 && <GlassWordmark width={w} family="Jagora Boiling" weight={400} />}
       </div>
       <Amina />
     </footer>
