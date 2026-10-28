@@ -1373,10 +1373,13 @@ class Session:
                   "UNCLEAR - meant for Jagora but the words make no sense")
         try:
             m = _model()
+            # the model thinks before it answers: it needs room for that (with 10 tokens it never answered, and every
+            # message waited for the time-out)
             rep = await asyncio.wait_for(m.chat([{"role": "user", "content": prompt}], None, effort=settings.effort_fast,
-                                                max_tokens=10, kind="gate"), 5)
+                                                max_tokens=400, kind="gate"), 4)
             word = (rep.text or "").strip().upper()
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
+            trace.write(self.user_id, "voice_gate_failed", error=f"{type(e).__name__}: {str(e)[:160]}")
             return "act"  # when unsure, do not lose her request
         verdict = "ignore" if word.startswith("IGNORE") else "unclear" if word.startswith("UNCLEAR") else "act"
         trace.write(self.user_id, "voice_gate", text=text, verdict=verdict)
@@ -1469,7 +1472,7 @@ class Session:
                   "thing on her list. No greeting words like hello, no title or name for her. Only the line.")
         try:
             rep = await asyncio.wait_for(_model().chat([{"role": "user", "content": prompt}], None, effort=settings.effort_fast,
-                                                       max_tokens=120, kind="welcome"), 8)
+                                                       max_tokens=500, kind="welcome"), 8)
             line = (rep.text or "").strip().strip('"')[:300]
         except Exception:  # noqa: BLE001
             return

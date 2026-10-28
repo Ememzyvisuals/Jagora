@@ -208,6 +208,7 @@ def wrap_soon(turns: int, max_turns: int) -> bool:
 CHANGE_TOOLS = {"click", "type_text", "choose", "set_checkbox", "press_key", "hover", "double_click", "right_click", "drag",
                 "click_at", "upload_file", "set_date", "go_back", "fill_form"}
 
+PROMISE = re.compile(r"\b(i will|i'll|let me|i am going to|i'm going to)\b[^.]{0,80}\b(check|find|look|open|confirm|search|get)\b|\bnext\.?$", re.I)
 SAY_MAX = 480  # characters Jagora says in one go; longer answers are shortened (details go in a document)
 
 
@@ -518,6 +519,8 @@ HOW YOU WORK
 - Voice gets Nigerian names wrong ("uni learning" is UNILAG, "jam" is JAMB, "wake result" is WAEC result). Read their words with Nigerian schools, exams and agencies in mind. When they correct a name ("I said UNILAG"), use their correction for the rest of the chat and do not ask them to confirm it again.
 - Do not greet ("good evening", "hello") and do not repeat back what they told you; go straight to the answer or the first step.
 - In Do mode you press buttons yourself: never ask them to tap something on the page unless it is private (a password, a code) or a robot check. When you point at something for them (Guide mode), it must be in view on their screen.
+- If a page or PDF will not open, or the words are not on the page you are on, do not try the same thing again: open the next search result or another official source.
+- Never end with a promise ("I will check X next"): do it, or say plainly what you could not confirm.
 - Say the answer once, short: at most 3 short sentences (the answer and where it came from). Never send another reply that says the same in other words. Long details go in a document only if useful. Either tell_user it and then finish with a one-line wrap-up, or put it only in finish. Never tell_user the answer and then repeat it in finish.
 - When done, call finish with a short summary in {lang}: the answer, where it was confirmed, what was not confirmed, and the best next step. Offer a document or download if it would help.
 
@@ -598,6 +601,7 @@ class Agent:
     _known: dict | None = None  # the page that answered this question before
     _source: str = ""  # the page the answer was read from this time
     _told_at: int = -99
+    _promised: bool = False  # a finish that promised more work was sent back once
     _told_since_act: bool = False  # she was told something and nothing has been done since
     _heard_since_told: bool = False  # she said something since she was last told  # where in the history Jagora last told her something
     _heard_all: list = field(default_factory=list)  # everything she said during the task
@@ -813,7 +817,7 @@ class Agent:
     VISUAL = re.compile(r"map|picture|photo|image|chart|graph|captcha|colou?r|logo|look like|screenshot|diagram|layout|"
                         r"video|game|seat|where (is|do i)|which (button|icon)", re.I)
 
-    QUESTION_STEPS = 14  # a question (nothing filled in for her) gets this many steps, then she hears what was found
+    QUESTION_STEPS = 20  # a question (nothing filled in for her) gets this many steps, then she hears what was found
 
     def _cap(self) -> int:
         """Steps allowed: a question is answered within QUESTION_STEPS; work on a form gets the full budget."""
@@ -1118,6 +1122,12 @@ class Agent:
             if name == "look":
                 self._want_look = True
                 return "you will see the page as a picture now", True, None
+            if name == "finish" and a.get("success") and PROMISE.search(str(a.get("summary", ""))):
+                # "I will check X next" and then stopping is a promise nobody keeps: do it now, or say plainly what is left
+                if not self._promised:
+                    self._promised = True
+                    return ("not finished: your summary promises more work (\"I will check ... next\"). Do that work now, "
+                            "or finish saying plainly what you found and what you could not confirm, with no promises."), False, None
             if name == "finish" and a.get("summary") and len(str(a["summary"])) > SAY_MAX and not self._told_since_act:
                 return (f"not finished: the summary is too long to speak ({len(str(a['summary']))} characters). Finish again "
                         f"with at most 3 short sentences (under {SAY_MAX} characters)."), False, None
@@ -2191,7 +2201,15 @@ class Agent:
 
     def _looping(self, name: str, args: dict) -> bool:
         key = f"{name}({_short(args)})"
-        return sum(1 for h in self.history[-8:] if h.startswith(key)) >= 3
+        if sum(1 for h in self.history[-8:] if h.startswith(key)) >= 3:
+            return True
+        # the same quote, words or address tried twice and failed (the claim may be worded differently each time)
+        what = str(args.get("quote") or args.get("query") or args.get("url") or "").strip().lower()
+        if what and name in ("show_evidence", "find_text", "go_to"):
+            failed = [h for h in self.history[-10:] if h.startswith(name + "(") and what[:35] in h.lower()
+                      and re.search(r"-> (\"[^\"]*\" is not on|that did not work|could not|not found|is not on this)", h)]
+            return len(failed) >= 2
+        return False
 
     def _record(self, kind: str, data: dict) -> None:
         from jagora import trace
