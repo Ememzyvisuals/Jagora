@@ -587,6 +587,7 @@ class Agent:
     _want_look: bool = False  # the model asked to see the page as a picture next step
     _last_fp_same: bool = False  # the last action left the page exactly as it was
     _changed_any: bool = False
+    _chat_note: str | None = None  # this chat's own memory
     _told_at: int = -99  # where in the history Jagora last told her something
     _heard_all: list = field(default_factory=list)  # everything she said during the task
     _goal: str = ""
@@ -653,6 +654,11 @@ class Agent:
             heard += new
             if self.vault and self._vault_names is None:
                 self._vault_names = await self.vault.names()
+            if self.memory and self._chat_note is None and hasattr(self.memory, "chat_note"):
+                try:
+                    self._chat_note = await self.memory.chat_note()
+                except Exception:  # noqa: BLE001
+                    self._chat_note = ""
             if self.memory and self._facts is None and hasattr(self.memory, "facts"):
                 try:
                     self._facts = await self.memory.facts()
@@ -2065,8 +2071,11 @@ class Agent:
         if self.screen is not None and (seen := self.screen()):
             parts.append("On the user's screen in the Jagora app now (use app_control to change it):\n" + seen[:1500])
         parts.append(f"Their saved details: {self._profile_summary()}")
+        if self._chat_note:
+            parts.append("This chat's memory (what this conversation is about and where it stopped; carry on from it):\n"
+                         + self._chat_note)
         if self._facts:
-            parts.append("What you know about them from before: " + "; ".join(self._facts))
+            parts.append("What you know about them from before (across all chats): " + "; ".join(self._facts))
         here_skills = self._skills.get(registrable(snap.url)) if snap and snap.url.startswith("http") else None
         if here_skills:
             parts.append("What worked on this site before (a guide from earlier successful runs; the page may have changed, "

@@ -989,6 +989,8 @@ class Session:
             if lang in ("en", "yo", "ha", "ig", "pcm") and lang != self.lang:
                 self.lang = lang
             await self._to_voice({"type": "lang", "lang": self.lang})
+            if ev.get("opening") and task:
+                asyncio.create_task(self._welcome_back(task))
             return
         if kind == "media_done":
             # she finished a lesson (or a video): well done, and practice on it if she wants
@@ -1355,6 +1357,31 @@ class Session:
             text = ""
         await self.heard(task, msg_id, text, lang, ev.get("history"))
 
+    async def _welcome_back(self, task: str) -> None:
+        """Live starts inside a chat that already has a story: Jagora opens with one short line that picks it up
+        ("Shall we go on with your Python course, lesson 4?", "Which film today?"), from this chat's own memory."""
+        r = self.runs.get(task)
+        if r and r.busy:
+            return
+        row = await db.one("select note from chat_notes where user_id=? and chat_id=?", (self.user_id, task))
+        if not row:
+            return
+        names = {"en": "English", "pcm": "Nigerian Pidgin", "yo": "Yoruba", "ha": "Hausa", "ig": "Igbo"}
+        prompt = (f"You are Jagora, a warm voice assistant. She just opened a live voice call inside this chat. The chat's "
+                  f"memory:\n{row['note']}\n\nHer screen:\n{(self.screen or '')[:700]}\n\nWrite ONE short spoken line in "
+                  f"{names.get(self.lang, 'English')} (proper spelling and tone marks) that picks up where this chat stopped "
+                  "and offers the natural next step as a question, e.g. go on with the next lesson, another film, the next "
+                  "thing on her list. No greeting words like hello, no title or name for her. Only the line.")
+        try:
+            rep = await asyncio.wait_for(_model().chat([{"role": "user", "content": prompt}], None, effort=settings.effort_fast,
+                                                       max_tokens=120, kind="welcome"), 8)
+            line = (rep.text or "").strip().strip('"')[:300]
+        except Exception:  # noqa: BLE001
+            return
+        if line and not (self.runs.get(task) and self.runs[task].busy):
+            trace.write(self.user_id, "welcome_back", task=task, line=line)
+            await self.agent_says(task, line)
+
     async def settle(self, task: str) -> None:
         """Nothing new was started for her words: her app must not stay on "working" (the client marks a chat
         working as soon as she sends something)."""
@@ -1498,6 +1525,7 @@ class Session:
             await self.send({"type": "status", "task": task, "status": "stopped"})
         finally:
             self.doing = ""
+            asyncio.create_task(update_chat_note(self.user_id, task, self.lang))
             await io.close_step()
             await self.send({"type": "highlight", "task": task, "box": None})
             if self._speech_q.empty():
@@ -1709,6 +1737,32 @@ class WsIO:
                       (wid, self.s.user_id, url, what, None, max(60, every_hours * 60), time.time(), self.s.lang))
 
 
+async def update_chat_note(user_id: str, chat_id: str, lang: str) -> None:
+    """After each task: the chat's own memory, rewritten short by the fast model from its old note and the latest
+    lines: what this chat is about, what was found or done, her choices here (which course, which film, which font),
+    and what comes next. Every chat keeps its own; nothing from one chat spills into another."""
+    try:
+        row = await db.one("select note from chat_notes where user_id=? and chat_id=?", (user_id, chat_id))
+        old = row["note"] if row else ""
+        convo = await db.history(user_id, chat_id, 16)
+        if not convo:
+            return
+        lines = "\n".join(f"{'Her' if m.get('role') == 'user' else 'Jagora'}: {str(m.get('text', ''))[:300]}" for m in convo)
+        prompt = (f"The memory of one chat with Jagora (a voice web assistant), so far:\n{old or '(none yet)'}\n\n"
+                  f"The latest lines of the chat:\n{lines}\n\nWrite the chat's memory again, in English, at most 6 short "
+                  "lines: what this chat is about; what was found or done (with names: the course, the film, the site); "
+                  "her choices and preferences here; where she stopped and what comes next. Facts only, nothing made up.")
+        rep = await asyncio.wait_for(_model().chat([{"role": "user", "content": prompt}], None, effort=settings.effort_fast,
+                                                   max_tokens=400, kind="note"), 20)
+        note = (rep.text or "").strip()[:900]
+        if note:
+            await db.exec("insert into chat_notes (user_id, chat_id, note, t) values (?,?,?,?) on conflict(user_id, chat_id) "
+                          "do update set note=excluded.note, t=excluded.t", (user_id, chat_id, note, time.time()))
+            trace.write(user_id, "chat_memory", chat=chat_id, note=note)
+    except Exception as e:  # noqa: BLE001
+        log.info("chat note not updated: %s", e)
+
+
 class DbMemory:
     """Her reminders, saved moments and scheduled tasks, for the agent."""
 
@@ -1767,6 +1821,11 @@ class DbMemory:
 
     async def remember_fact(self, fact: str) -> None:
         await db.exec("insert into facts (id, user_id, t, fact) values (?,?,?,?)", (uuid.uuid4().hex[:10], self.u, time.time(), fact))
+
+    async def chat_note(self) -> str:
+        """What this chat is about so far (its own memory: each chat remembers its own thread)."""
+        row = await db.one("select note from chat_notes where user_id=? and chat_id=?", (self.u, self.c))
+        return row["note"] if row else ""
 
     async def facts(self) -> list[str]:
         return [r["fact"] for r in await db.exec("select fact from facts where user_id=? order by t desc limit 25", (self.u,))]

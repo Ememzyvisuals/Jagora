@@ -40,7 +40,7 @@ STORM_ASR_WS = os.environ.get("STORM_ASR_WS_URL", "").strip()
 STORM_ASR_KEY = os.environ.get("STORM_ASR_API_KEY", "").strip()
 # one fixed voice per language, the same table as voice/agent.py (John by his catalogue ID)
 STORM_VOICES = {"en": {"speaker_id": "slr70_ngm_09334"}, "ha": {"speaker_id": "slr70_ngm_09334"},
-                "yo": {"name": "Morenike"}, "ig": {"lang": "ig"}, "pcm": {"lang": "pcm"}}
+                "yo": {"name": "Morenike"}, "ig": {"name": "Adaeze"}, "pcm": {"name": "Yemi"}}
 
 
 def storm_asr_http() -> str:

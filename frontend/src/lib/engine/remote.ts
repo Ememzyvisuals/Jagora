@@ -557,9 +557,9 @@ export async function remoteMediaDone(task: string, info: { name: string; course
   } catch {}
 }
 
-export async function remoteFocus(task: string) {
+export async function remoteFocus(task: string, opening = false) {
   try {
-    (await connect()).send(JSON.stringify({ type: "focus", task, lang: S().lang, screen: describeScreen() }));
+    (await connect()).send(JSON.stringify({ type: "focus", task, lang: S().lang, screen: describeScreen(), ...(opening ? { opening: true } : {}) }));
   } catch {}
 }
 

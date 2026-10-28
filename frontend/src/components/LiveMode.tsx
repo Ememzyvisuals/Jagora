@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ask, live as backendLive, voiceNote } from "@/lib/engine";
 import type { Lang } from "@/lib/i18n";
 import { activeTask, useApp } from "@/lib/store";
-import { duckVoice, hush, remoteStop } from "@/lib/engine/remote";
+import { duckVoice, hush, remoteFocus, remoteStop } from "@/lib/engine/remote";
 import { Listener } from "@/lib/turns";
 import { muteHandsFree, reconnectVoice, startHandsFree, stopHandsFree, throughLiveKit, useVoiceLost } from "@/lib/handsfree";
 import { blobToDataUrl, useSpeakingPulse, useVoice, watchForVoice } from "@/lib/voice";
@@ -188,6 +188,10 @@ export function LiveMode() {
       if (gone || !ok || !throughLiveKit()) return startListener();
       viaLiveKit = true;
       setSmart(true);
+      // inside a chat with a story: Jagora opens by picking it up from this chat's memory
+      const st = useApp.getState();
+      const t = st.tasks.find((x) => x.id === st.activeId);
+      if (t && t.messages.length > 1) void remoteFocus(t.id, true);
     });
     const startListener = () => {
     if (gone) return;

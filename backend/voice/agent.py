@@ -64,7 +64,7 @@ SORRY = {
 }
 # Jagora's voice in each language: ONE fixed voice per language, chosen by the language picked in the app, never by
 # what a sentence looks like. The same table is in jagora/speech.py, so both ways of speaking sound the same.
-VOICES = {"en": "John", "ha": "John", "yo": "Morenike", "ig": "lang:ig", "pcm": "lang:pcm"}
+VOICES = {"en": "John", "ha": "John", "yo": "Morenike", "ig": "Adaeze", "pcm": "Yemi"}
 
 
 class Voice:
