@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { voiceNote } from "./engine";
 import { clientLog, duckVoice, hush, remoteFocus } from "./engine/remote";
-import { liveVoiceOn, onLiveVoice, setLiveMic, startLiveVoice, stopLiveVoice, voiceLevels } from "./livevoice";
+import { liveVoiceLost, liveVoiceOn, onLiveVoice, setLiveMic, startLiveVoice, stopLiveVoice, voiceLevels } from "./livevoice";
 import { useApp } from "./store";
 import { Listener } from "./turns";
 import { blobToDataUrl } from "./voice";
@@ -138,6 +138,24 @@ if (typeof window !== "undefined") {
     // Jagora's voice talks into the chat she has open
     if (liveVoiceOn() && s.activeId && (s.activeId !== prev.activeId || s.lang !== prev.lang)) void remoteFocus(s.activeId);
   });
+}
+
+/** The live call dropped by itself; null when all is well. */
+export function useVoiceLost() {
+  const [lost, setLost] = useState(liveVoiceLost());
+  useEffect(() => onLiveVoice(() => setLost(liveVoiceLost())), []);
+  return lost;
+}
+
+/** Back into the call after it dropped: same chat, same language, and Jagora is told where she is (the screen,
+    what is playing, what it was doing), so it carries on from there. */
+export async function reconnectVoice(): Promise<boolean> {
+  clientLog("reconnect_tapped");
+  const ok = await startHandsFree();
+  const id = useApp.getState().activeId;
+  if (ok && id) void remoteFocus(id);
+  clientLog("reconnected", { ok });
+  return ok;
 }
 
 export function useHandsFree() {

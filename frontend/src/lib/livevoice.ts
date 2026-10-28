@@ -18,6 +18,9 @@ export const voiceLevels = { me: { current: 0 }, jagora: { current: 0 } };
 
 const tell = () => subs.forEach((f) => f(!!room));
 export const liveVoiceOn = () => !!room;
+/** The call dropped by itself (network, the phone sleeping): not ended by her. Live mode offers Reconnect. */
+let lost = false;
+export const liveVoiceLost = () => lost;
 
 export function onLiveVoice(f: (on: boolean) => void) {
   subs.add(f);
@@ -59,8 +62,14 @@ export async function startLiveVoice(): Promise<boolean> {
       rm.on(RoomEvent.ParticipantConnected, (p) => clientLog("livekit_joined", { who: p.identity }));
       rm.on(RoomEvent.ParticipantDisconnected, (p) => clientLog("livekit_left", { who: p.identity }));
       rm.on(RoomEvent.Disconnected, (reason) => {
-        clientLog("livekit_disconnected", { reason: String(reason ?? "") });
-        if (room === rm) void stopLiveVoice();
+        clientLog("livekit_disconnected", { reason: String(reason ?? ""), by_her: !wanted });
+        if (room === rm) {
+          const dropped = wanted; // she did not end it
+          void stopLiveVoice().then(() => {
+            lost = dropped;
+            tell();
+          });
+        }
       });
       await rm.connect(d.url, d.token);
       if (!wanted) {
@@ -69,6 +78,7 @@ export async function startLiveVoice(): Promise<boolean> {
       }
       await rm.localParticipant.setMicrophoneEnabled(true, { echoCancellation: true, noiseSuppression: true, autoGainControl: true });
       room = rm;
+      lost = false;
       clientLog("livekit_connected", { room: rm.name, others: rm.remoteParticipants.size });
       // the orb follows whoever is talking
       poll = window.setInterval(() => {
@@ -96,6 +106,7 @@ export async function startLiveVoice(): Promise<boolean> {
 
 export async function stopLiveVoice() {
   wanted = false;
+  lost = false;
   const rm = room;
   room = null;
   clearInterval(poll);

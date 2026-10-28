@@ -14,13 +14,13 @@ import type { Lang } from "@/lib/i18n";
 import { activeTask, useApp } from "@/lib/store";
 import { duckVoice, hush, remoteStop } from "@/lib/engine/remote";
 import { Listener } from "@/lib/turns";
-import { muteHandsFree, startHandsFree, stopHandsFree, throughLiveKit } from "@/lib/handsfree";
+import { muteHandsFree, reconnectVoice, startHandsFree, stopHandsFree, throughLiveKit, useVoiceLost } from "@/lib/handsfree";
 import { blobToDataUrl, useSpeakingPulse, useVoice, watchForVoice } from "@/lib/voice";
 import { browserRecognizer } from "./Composer";
 import { Glass } from "./glass/Glass";
 import { Orb } from "./Orb";
 
-const SAY: Record<"listen" | "think" | "work" | "speak" | "paused" | "hint" | "end" | "live" | "hide", Record<Lang, string>> = {
+const SAY: Record<"listen" | "think" | "work" | "speak" | "paused" | "hint" | "end" | "live" | "hide" | "lost" | "again", Record<Lang, string>> = {
   listen: { en: "Listening…", pcm: "I dey hear you…", yo: "Mo ń gbọ́ yín…", ha: "Ina sauraro…", ig: "Ana m ege ntị…" },
   work: { en: "Working on the page…", pcm: "I dey work for the page…", yo: "Mo ń ṣiṣẹ́ lórí ojú-ìwé náà…", ha: "Ina aiki a shafin…", ig: "Ana m arụ ọrụ na peeji ahụ…" },
   think: { en: "Thinking…", pcm: "I dey think…", yo: "Mo ń ronú…", ha: "Ina tunani…", ig: "Ana m eche echiche…" },
@@ -34,6 +34,8 @@ const SAY: Record<"listen" | "think" | "work" | "speak" | "paused" | "hint" | "e
     ig: "Kwuo ihe ị chọrọ. Jagora ga-aza, wee gee ntị ọzọ.",
   },
   end: { en: "End", pcm: "Stop", yo: "Parí", ha: "Gama", ig: "Kwụsị" },
+  lost: { en: "Voice disconnected", pcm: "Voice don cut", yo: "Ohùn ti já", ha: "Murya ta katse", ig: "Olu akwụsịla" },
+  again: { en: "Reconnect", pcm: "Connect am again", yo: "Tún so pọ̀", ha: "Sake haɗawa", ig: "Jikọọ ọzọ" },
   hide: { en: "Hide this screen", pcm: "Comot this screen", yo: "Pa ojú-iboju yìí mọ́", ha: "Ɓoye wannan allo", ig: "Zoo ihuenyo a" },
   live: { en: "Live", pcm: "Live", yo: "Láàyè", ha: "Kai tsaye", ig: "Ndụ" },
 };
@@ -73,6 +75,19 @@ export function LiveMode() {
   const voice = useVoice();
   const speaking = useSpeakingPulse(orb === "speaking");
   const [muted, setMuted] = useState(false);
+  // the call dropped by itself (weak network, phone asleep): the bar says so, with Reconnect; one quiet retry first
+  const lost = useVoiceLost();
+  const [rejoining, setRejoining] = useState(false);
+  const rejoin = useCallback(async () => {
+    setRejoining(true);
+    await reconnectVoice();
+    setRejoining(false);
+  }, []);
+  useEffect(() => {
+    if (!on || !lost) return;
+    const t = window.setTimeout(() => void rejoin(), 2500);
+    return () => clearTimeout(t);
+  }, [on, lost, rejoin]);
   const [heard, setHeard] = useState("");
   const [phase, setPhase] = useState<"listen" | "think" | "speak" | "work">("listen");
   const busy = useRef(false);
@@ -263,7 +278,7 @@ export function LiveMode() {
   // while Jagora works, the caption says what it is doing right now (its latest step)
   const lastStep = [...(task?.messages ?? [])].reverse().find((m) => m.kind === "step");
   const doing = lastStep && "text" in lastStep ? lastStep.text : "";
-  const label = muted ? SAY.paused[lang] : phase === "speak" ? SAY.speak[lang] : phase === "work" ? doing || SAY.work[lang] : phase === "think" ? SAY.think[lang] : SAY.listen[lang];
+  const label = lost ? SAY.lost[lang] : muted ? SAY.paused[lang] : phase === "speak" ? SAY.speak[lang] : phase === "work" ? doing || SAY.work[lang] : phase === "think" ? SAY.think[lang] : SAY.listen[lang];
   const orbState = phase === "speak" ? "speaking" : phase === "work" ? "working" : phase === "think" ? "thinking" : muted ? "idle" : "listening";
 
   return (
@@ -284,6 +299,11 @@ export function LiveMode() {
                 <button onClick={() => (setShowPage(false), setSmall(false))} className="min-w-0 max-w-[48vw] truncate text-left text-[14px] font-medium" aria-label="Back to live view">
                   {label}
                 </button>
+                {lost && (
+                  <button onClick={() => void rejoin()} disabled={rejoining} className="h-10 shrink-0 rounded-full bg-white px-4 text-[13.5px] font-semibold text-ink transition active:scale-95 disabled:opacity-60">
+                    {SAY.again[lang]}
+                  </button>
+                )}
                 <button onClick={toggleMute} className="grid h-10 w-10 place-items-center rounded-full bg-white/12" aria-label={muted ? "Turn microphone on" : "Turn microphone off"}>
                   {muted ? <MicrophoneSlash size={18} /> : <Microphone size={18} />}
                 </button>
@@ -336,6 +356,11 @@ export function LiveMode() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {lost && (
+                <button onClick={() => void rejoin()} disabled={rejoining} className="h-16 rounded-full bg-white px-6 text-[17px] font-semibold text-ink shadow-[0_12px_24px_-12px_rgba(10,20,40,.4)] transition active:scale-95 disabled:opacity-60">
+                  {SAY.again[lang]}
+                </button>
+              )}
               <button onClick={toggleMute} className="glass-2 grid h-16 w-16 place-items-center rounded-full text-ink transition active:scale-95" aria-label={muted ? "Turn microphone on" : "Turn microphone off"}>
                 {muted ? <MicrophoneSlash size={26} /> : <Microphone size={26} />}
               </button>

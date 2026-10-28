@@ -37,6 +37,8 @@ export function describeScreen(): string {
     lines.push(`Open chat: "${t.title}" (${t.status}).${page}`);
   } else lines.push("No chat open (the start screen with suggestions and her top sites).");
   if (!desktop()) lines.push(`Chat panel: ${s.sheetOpen ? "open" : "closed"}.`);
+  if (s.playing) lines.push(`Playing on her screen now: "${s.playing.name}" (${s.playing.type === "youtube" ? "YouTube video" : s.playing.type}). Do not start it again; stop_media closes it.`);
+  if (s.live) lines.push(`Live voice: ${s.liveSmall || s.playing ? "folded to the small bar at the top" : "full screen"}.`);
   const chats = listed();
   if (chats.length)
     lines.push("Her chats, as listed: " + chats.map((c, i) => `${i + 1}. "${c.title}"${c.id === s.activeId ? " (open)" : ""}`).join("; ") + ".");
