@@ -1026,6 +1026,9 @@ class Agent:
                 if n.kind in ("redirect", "download"):  # ads and pop-ups closed for her need no row in the chat
                     await self.io.event("guard", {"kind": n.kind, "site": n.site, "text": n.reason})
                 self.history.append(f"(guard: {n.reason})")
+            elif n.kind == "expired_certificate":
+                self.history.append(f"({n.reason}: it is an official source, so you may read it, but never type her "
+                                    "details or sign in there)")
             elif n.kind == "cookie":
                 self.history.append("(guard: declined a cookie banner)")
             elif n.kind == "dialog":

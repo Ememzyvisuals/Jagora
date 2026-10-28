@@ -481,6 +481,11 @@ class Browser:
         except Exception:  # noqa: BLE001
             pass
 
+    @staticmethod
+    def _official_host(url: str) -> bool:
+        host = urlparse(url).hostname or ""
+        return guard.check(url).official or bool(re.search(r"\.(edu|gov)\.ng$", host))
+
     def notice(self, kind: str, v: SiteVerdict) -> None:
         if self.notices and self.notices[-1].kind == kind and self.notices[-1].site == v.site:
             return
@@ -624,6 +629,13 @@ class Browser:
             self.log("goto_done", url=page.url, status=resp.status if resp else None, seconds=round(time.monotonic() - t0, 2))
         except Exception as e:  # noqa: BLE001
             self.log("goto_failed", url=url, error=str(e).splitlines()[0][:200], seconds=round(time.monotonic() - t0, 2))
+            if "ERR_CERT" in str(e) and self._official_host(url):
+                # an official site with an expired certificate: its page is still read (her choice), as a copy
+                body, ctype, _ = await self.fetch(url)
+                if "pdf" in ctype or body[:4] == b"%PDF":
+                    return await self.open_pdf(url)
+                await page.set_content(body.decode("utf-8", "replace"), wait_until="domcontentloaded")
+                return
             if "Download is starting" in str(e) or "net::ERR_ABORTED" in str(e):
                 return await self.open_pdf(url)  # most often a PDF the browser wants to save
             raise ActionError(f"the page did not open ({str(e).splitlines()[0][:120]})") from e
@@ -853,7 +865,13 @@ class Browser:
                     text = " ".join(doc[i].get_text() for i in range(min(doc.page_count, 6)))
                     title = (doc.metadata or {}).get("title") or u.split("/")[-1]
                 else:
-                    await p.goto(u, wait_until="domcontentloaded", timeout=30000)
+                    try:
+                        await p.goto(u, wait_until="domcontentloaded", timeout=30000)
+                    except Exception as e:  # noqa: BLE001
+                        if "ERR_CERT" not in str(e) or not self._official_host(u):
+                            raise
+                        body, _, _ = await self.fetch(u)  # official site, expired certificate: read as a copy (her choice)
+                        await p.set_content(body.decode("utf-8", "replace"), wait_until="domcontentloaded")
                     try:
                         await p.wait_for_load_state("networkidle", timeout=4000)
                     except Exception:  # noqa: BLE001
@@ -895,7 +913,18 @@ class Browser:
         v = guard.check(url)
         if v.blocked:
             raise ActionError(f"blocked: {v.reason}")
-        r = await self._ctx.request.get(url, timeout=60000, max_redirects=5)
+        try:
+            r = await self._ctx.request.get(url, timeout=60000, max_redirects=5)
+        except Exception as e:  # noqa: BLE001
+            # Her choice: a recognised official site (on Jagora's official list, or a .gov.ng / .edu.ng address) whose
+            # security certificate has expired is still read, because it is the trusted source (UNILAG's admissions
+            # site had one). Only reading a public document: nothing of hers is ever sent there this way.
+            host = urlparse(url).hostname or ""
+            if "certificate" not in str(e).lower() or not self._official_host(url):
+                raise
+            self.log("expired_certificate_official_read", url=url)
+            self.notices.append(Notice("expired_certificate", host, f"{host} has an expired security certificate; read only"))
+            r = await self._ctx.request.get(url, timeout=60000, max_redirects=5, ignore_https_errors=True)
         if not r.ok:
             raise ActionError(f"the file did not download (status {r.status})")
         body = await r.body()
