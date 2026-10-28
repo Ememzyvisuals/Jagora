@@ -71,7 +71,7 @@ async def test_hush_stops_jagora_mid_sentence(monkeypatch):
     async def fake_stream(text, lang, ahead=2):
         for i in range(50):
             await asyncio.sleep(0.02)
-            yield 0, 24000, b"\0\0" * 100
+            yield 0, 24000, b"\1\0" * 4800  # 0.2 s, as STORM sends it
 
     monkeypatch.setattr(server.speech, "enabled", lambda: True)
     monkeypatch.setattr(server.speech, "speak_stream", fake_stream)

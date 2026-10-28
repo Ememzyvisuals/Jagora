@@ -33,7 +33,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from jagora import auth, speech
-from jagora import lite
+from jagora import lite, voicefx
 from jagora.agent import Agent
 from jagora.browser import Browser
 from jagora.config import FILES_DIR, INGESTED, PORTALS_DIR, settings
@@ -225,7 +225,7 @@ HELLO = {  # exactly the lines shown in the languages section of the landing pag
 }
 
 
-HELLO_VERSION = 2  # raise this to throw away every hello recording and make them all again
+HELLO_VERSION = 3  # raise this to throw away every hello recording and make them all again
 
 
 def _hello_file(lang: str) -> Path:
@@ -250,7 +250,9 @@ async def _make_hello(lang: str) -> Path | None:
     for c in clips:
         with wave.open(io.BytesIO(c)) as w:
             rate = w.getframerate()
-            frames += w.readframes(w.getnframes()) + b"\0\0" * int(rate * 0.12)
+            fx = voicefx.Stretcher(rate)
+            raw = w.readframes(w.getnframes())
+            frames += voicefx.louder(fx.feed(raw) + fx.flush()) + b"\0\0" * int(rate * 0.12)
     proc = await asyncio.create_subprocess_exec(
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le", "-ar", str(rate), "-ac", "1", "-i", "pipe:0",
         "-codec:a", "libmp3lame", "-b:a", "48k", "-f", "mp3", "pipe:1", stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
@@ -460,14 +462,29 @@ class Session:
             try:
                 await self.send({"type": "orb", "state": "speaking"})
                 utt = mid()
-                async for i, rate, pcm in speech.speak_stream(text, lang):
-                    if gen != self._gen:
-                        break
+                fx: voicefx.Stretcher | None = None
+                at, last_rate = -1, 24000
+
+                async def out(i: int, rate: int, pcm: bytes) -> None:
+                    pcm = voicefx.louder(pcm)
+                    if not pcm:
+                        return
                     if self.lite:
                         block, r2 = lite.voice_chunk(pcm, rate)
                         await self.send({"type": "pcm", "task": task, "utt": utt, "n": i, "rate": r2, "codec": "adpcm", "data": base64.b64encode(block).decode()})
                     else:
                         await self.send({"type": "pcm", "task": task, "utt": utt, "n": i, "rate": rate, "data": base64.b64encode(pcm).decode()})
+
+                async for i, rate, pcm in speech.speak_stream(text, lang):
+                    if gen != self._gen:
+                        break
+                    if i != at:  # a new sentence: finish the last one, start fresh
+                        if fx:
+                            await out(at, last_rate, fx.flush())
+                        fx, at, last_rate = voicefx.Stretcher(rate), i, rate
+                    await out(i, rate, fx.feed(pcm))
+                if fx and gen == self._gen:
+                    await out(at, last_rate, fx.flush())
             except Exception as e:  # noqa: BLE001
                 log.warning("speech failed: %s", e)
             if self._speech_q.empty() and gen == self._gen:
