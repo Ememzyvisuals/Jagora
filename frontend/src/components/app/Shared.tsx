@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ago } from "@/lib/hooks";
 import { LANGS } from "@/lib/i18n";
 import { useApp, type Task } from "@/lib/store";
+import { plain } from "../Rich";
 import { IconBrowser, IconDetails, IconLetter, IconPasteMessage, IconRegister, IconScam, IconShield, IconSnapPaper } from "../icons";
 
 export function TaskIcon({ task, size = 40 }: { task: Task; size?: number }) {
@@ -19,6 +20,10 @@ export function TaskIcon({ task, size = 40 }: { task: Task; size?: number }) {
 }
 
 export function lastLine(task: Task) {
+  return plain(rawLastLine(task));
+}
+
+function rawLastLine(task: Task) {
   for (let i = task.messages.length - 1; i >= 0; i--) {
     const m = task.messages[i];
     if (m.kind === "agent") return m.text;

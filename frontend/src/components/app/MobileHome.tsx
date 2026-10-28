@@ -15,6 +15,7 @@ import {
   Sun,
   GraduationCap,
   House,
+  List,
   IdentificationCard,
   MagnifyingGlass,
   Newspaper,
@@ -36,7 +37,7 @@ import Link from "next/link";
 import { useEffect, useState, type ComponentType } from "react";
 import { ask, live, quick } from "@/lib/engine";
 import { LANGS, type Lang } from "@/lib/i18n";
-import { activeTask, useApp } from "@/lib/store";
+import { activeTask, isTab, useApp } from "@/lib/store";
 import { ago } from "@/lib/hooks";
 import { useSpeakingPulse } from "@/lib/voice";
 import { CloudWordmark } from "../glass/CloudWordmark";
@@ -139,6 +140,10 @@ export const CARDS: { id: "register" | "scam" | "paper"; thumb: string; source: 
     ),
   },
 ];
+
+/** her chat history (the menu); MobileApp shows it */
+export const openHistory = () => dispatchEvent(new CustomEvent("jagora:app", { detail: { action: "show_history", value: "" } }));
+export const CHATS = { en: "Chats", pcm: "Chats", yo: "Àwọn ìjíròrò", ha: "Hirarraki", ig: "Mkparịta ụka" } as const;
 
 export type NewsItem = { title: string; link: string; image: string | null; date: string | null; source: string };
 
@@ -296,7 +301,13 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
       >
         {/* top row */}
         <div className="flex items-center justify-between px-4 pt-[max(14px,env(safe-area-inset-top))]">
-          <div className="relative">
+          <div className="relative flex items-center gap-2">
+            {/* her chats, like ChatGPT's menu (History.tsx) */}
+            <Glass radius={22} bezel={12} refraction={30} pressable className="cursor-pointer" onClick={openHistory}>
+              <span className="grid h-11 w-11 place-items-center text-ink" role="button" aria-label={CHATS[lang]}>
+                <List size={21} weight="bold" />
+              </span>
+            </Glass>
             <Glass radius={22} bezel={12} refraction={30} pressable className="cursor-pointer" onClick={() => setLangOpen((v) => !v)} data-tour="lang">
               <span className="flex h-11 items-center gap-2 px-3">
                 <Flag />
@@ -484,7 +495,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
   const sheet = useApp((s) => s.sheetOpen);
   const setSheet = useApp((s) => s.setSheet);
   const orb = useApp((s) => s.orb);
-  const count = useApp((s) => s.tasks.length);
+  const count = useApp((s) => s.tasks.filter(isTab).length);
   const task = useApp(activeTask);
   const pulse = useSpeakingPulse(orb === "speaking");
   const [small, setSmall] = useState(false);
@@ -563,6 +574,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
                       <Glass radius={24} bezel={14} refraction={30} blur={14} tint="rgba(255,255,255,.86)">
                         <div className="p-1.5">
                           {[
+                            { k: "chats", Icon: List, label: CHATS[lang], on: openHistory },
                             { k: "home", Icon: House, label: NAV.home[lang], on: () => setScreen("home") },
                             { k: "fwd", Icon: CaretRight, label: NAV.fwd[lang], on: () => task?.kind === "browse" && setScreen("page") },
                             { k: "full", Icon: CornersOut, label: "Full screen", on: () => void toggleFullscreen() },

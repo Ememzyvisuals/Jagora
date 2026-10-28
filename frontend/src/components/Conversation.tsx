@@ -12,6 +12,7 @@ import { useApp, type Msg, type Task } from "@/lib/store";
 import { IconLock, IconScam, IconShield } from "./icons";
 import { Evidence, FileCard, MediaCard, MomentCard, PicturesCard, PlanCard, PointAskCard, ReadingCard, RecordCard, ReminderCard, ScheduledCard, TermsCard, VoiceBubble } from "./ChatCards";
 import { remotePictures } from "@/lib/engine/remote";
+import { Rich } from "./Rich";
 
 const IN_PICTURES: Record<Lang, string> = { en: "Show me in pictures", pcm: "Show me for picture", yo: "Fi hàn mí ní àwòrán", ha: "Nuna mini a hotuna", ig: "Gosi m na foto" };
 
@@ -23,7 +24,7 @@ export function Conversation({ task }: { task: Task }) {
     end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [task.messages.length, task.messages.at(-1)]);
   return (
-    <div className="flex flex-col gap-3 px-4 pb-4 pt-2">
+    <div className="flex flex-col gap-3 px-4 pb-4 pt-4">
       {task.messages.map((m, i) => (
         <motion.div key={m.id} {...enter}>
           <Item m={m} task={task} />
@@ -63,20 +64,20 @@ function Item({ m, task }: { m: Msg; task: Task }) {
     case "user":
       if (m.voice) return <VoiceBubble m={m} />;
       return (
-        <div className="flex justify-end">
-          <div className="max-w-[85%] rounded-[20px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[15.5px] leading-snug text-paper">
+        <div className="flex justify-end pl-10">
+          <div className="min-w-0 max-w-full rounded-[20px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[15.5px] leading-snug text-paper">
             {m.attachment && (
               <div className="mb-1 flex items-center gap-1.5 text-[13px] text-paper/75">
                 {m.attachment.kind === "image" ? <ImageIcon size={14} /> : m.attachment.kind === "link" ? <LinkSimple size={14} /> : <Paperclip size={14} />}
-                {m.attachment.name === "sample" ? "Sample letter" : m.attachment.name}
+                <span className="truncate">{m.attachment.name === "sample" ? "Sample letter" : m.attachment.name}</span>
               </div>
             )}
-            {m.text}
+            <Rich text={m.text} tone="dark" />
           </div>
         </div>
       );
     case "agent":
-      return <p className="pr-6 text-[17px] leading-[1.5] text-ink">{m.text}</p>;
+      return <Rich text={m.text} className="pr-6 text-[17px] leading-[1.5] text-ink" />;
     case "step":
       return (
         <div className="flex items-center gap-2 text-[13.5px] text-ink-3">
@@ -144,7 +145,7 @@ function Confirm({ m, task }: { m: Extract<Msg, { kind: "confirm" }>; task: Task
           <Hand size={14} weight="fill" /> {lang === "yo" ? "Mo ń dúró de yín" : lang === "pcm" ? "I dey wait for you" : lang === "ha" ? "Ina jiran ka" : lang === "ig" ? "Ana m eche gị" : "Waiting for you"}
         </div>
       )}
-      <p className="text-[16.5px] font-medium leading-snug text-ink">{m.question}</p>
+      <Rich text={m.question} className="text-[16.5px] font-medium leading-snug text-ink" />
       {m.value && <p className="mt-2 font-display text-[30px] font-semibold tracking-[-0.02em] text-ink">{m.value}</p>}
       {m.detail && !m.value && <p className="mt-1 text-[13px] text-ink-3">{m.detail}</p>}
       {waiting ? (
@@ -170,13 +171,13 @@ function Choice({ m, task }: { m: Extract<Msg, { kind: "choice" }>; task: Task }
   if (!m.choices.length)
     return (
       <div className="glass-3 rounded-[22px] p-4">
-        <p className="text-[16.5px] font-medium text-ink">{m.question}</p>
+        <Rich text={m.question} className="text-[16.5px] font-medium text-ink" />
         {m.picked ? <p className="mt-1 text-[14px] text-ink-3">{m.picked}</p> : <p className="mt-1 text-[13px] text-ink-3">Type or speak your answer below.</p>}
       </div>
     );
   return (
     <div className="glass-2 rounded-[24px] p-4">
-      <p className="text-[16.5px] font-medium text-ink">{m.question}</p>
+      <Rich text={m.question} className="text-[16.5px] font-medium text-ink" />
       <div className="mt-3 flex flex-wrap gap-2">
         {m.choices.map((c) => (
           <button
@@ -199,7 +200,7 @@ function Handoff({ m, task }: { m: Extract<Msg, { kind: "handoff" }>; task: Task
     <div className="glass-3 flex gap-3 rounded-[22px] p-4">
       <IconLock size={40} className="shrink-0" />
       <div className="min-w-0">
-        <p className="text-[15.5px] font-medium leading-snug text-ink">{m.text}</p>
+        <Rich text={m.text} className="text-[15.5px] font-medium leading-snug text-ink" />
         {m.status === "waiting" ? (
           <button className="btn btn-ink mt-3 h-10 px-5 text-[14.5px]" onClick={() => answer(task.id, m.id, "done")}>
             {t("done", lang)}

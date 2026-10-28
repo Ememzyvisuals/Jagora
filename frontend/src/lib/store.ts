@@ -75,7 +75,13 @@ export type Task = {
   status: TaskStatus;
   createdAt: number;
   messages: Msg[];
+  /** she closed this chat's web page: the chat stays in her history, it is just no longer a tab */
+  tabClosed?: boolean;
 };
+
+/** A tab is a website Jagora opened, like a browser tab. A chat with no page (a question, a scam check, a letter) is
+    only in her chat history. */
+export const isTab = (t: Task) => t.kind === "browse" && !!t.url && !t.tabClosed;
 
 export type Pointer = { x: number; y: number; visible: boolean; clicking: boolean };
 export type Highlight = { x: number; y: number; w: number; h: number; tone: "point" | "stop" } | null;
@@ -128,6 +134,7 @@ type State = {
   newTask: (t: Omit<Task, "id" | "createdAt" | "messages" | "status"> & { messages?: Msg[] }) => string;
   setActive: (id: string | null) => void;
   closeTask: (id: string) => void;
+  closeTab: (id: string) => void;
   push: (taskId: string, m: Msg) => void;
   update: (taskId: string, msgId: string, patch: Partial<Msg>) => void;
   drop: (taskId: string, msgId: string) => void;
@@ -200,8 +207,10 @@ export const useApp = create<State>()(
         }));
         return id;
       },
-      setActive: (activeId) => set({ activeId }),
+      // opening a chat whose page was closed opens the page (and its tab) again
+      setActive: (activeId) => set((s) => ({ activeId, tasks: activeId ? s.tasks.map((t) => (t.id === activeId && t.tabClosed ? { ...t, tabClosed: false } : t)) : s.tasks })),
       closeTask: (id) => set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id), activeId: s.activeId === id ? null : s.activeId })),
+      closeTab: (id) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, tabClosed: true } : t)), activeId: s.activeId === id ? null : s.activeId })),
       push: (taskId, m) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, messages: [...t.messages, m] } : t)) })),
       drop: (taskId, msgId) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, messages: t.messages.filter((m) => m.id !== msgId) } : t)) })),
       update: (taskId, msgId, patch) =>
@@ -211,7 +220,7 @@ export const useApp = create<State>()(
           ),
         })),
       setStatus: (taskId, status) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, status } : t)) })),
-      setUrl: (taskId, url) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, url } : t)) })),
+      setUrl: (taskId, url) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, url, tabClosed: false } : t)) })),
       setMeta: (taskId, meta) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, ...meta } : t)) })),
       setSheet: (sheetOpen) => set({ sheetOpen }),
       setLive: (live) => set({ live, showPage: false }),

@@ -5,19 +5,21 @@
 import { Plus, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion, useDragControls } from "motion/react";
 import { useEffect, useState } from "react";
-import { activeTask, useApp, type Task } from "@/lib/store";
+import { activeTask, isTab, useApp, type Task } from "@/lib/store";
 import { reportScreen } from "@/lib/appctl";
 import { AgentPanel } from "../AgentPanel";
 import { Orb } from "../Orb";
 import { PageView } from "../PageView";
 import { WorkOrb } from "../WorkCaption";
 import { TaskIcon, lastLine } from "./Shared";
+import { shortUrl } from "../Rich";
 import { BottomBar, EdgeBlur, Home } from "./MobileHome";
 import { Backdrop } from "../glass/Backdrop";
 import { Glass } from "../glass/Glass";
 import { Tour } from "../Tour";
 import { LiveMode } from "../LiveMode";
 import { InstallPrompt } from "../InstallPrompt";
+import { History } from "./History";
 
 type Screen = "home" | "page" | "tabs";
 
@@ -33,6 +35,7 @@ export function MobileApp() {
   }, [screen]);
   const shown = screen === "tabs" ? under : screen;
   const [tabsFull, setTabsFull] = useState(false);
+  const [history, setHistory] = useState(false); // her chats (the menu)
   // the tabs button toggles the stack; closing tabs returns to the screen she came from
   const go = (s: Screen) => {
     if (screen === "tabs" && (s === "tabs" || s === "home")) return setScreen(under);
@@ -42,9 +45,10 @@ export function MobileApp() {
 
   // Jagora can change the screen by voice (lib/appctl.ts), and knows which screen is showing
   useEffect(() => {
-    reportScreen("screen", screen === "tabs" ? "the tabs (all chats as cards)" : shown === "page" ? "the live web page, full screen" : "home (ask bar, suggestions, top sites)");
+    reportScreen("screen", screen === "tabs" ? "the tabs (the websites Jagora opened, as cards)" : shown === "page" ? "the live web page, full screen" : "home (ask bar, suggestions, top sites)");
     reportScreen("pageShown", shown === "page" ? "yes" : "no");
-  }, [screen, shown]);
+    reportScreen("extra", history ? "her chat history panel is open" : "");
+  }, [screen, shown, history]);
   useEffect(() => {
     const on = (e: Event) => {
       const { action } = (e as CustomEvent<{ action: string }>).detail;
@@ -53,11 +57,26 @@ export function MobileApp() {
       else if (action === "hide_page" || action === "go_home" || action === "new_chat") setScreen("home");
       else if (action === "show_tabs") go("tabs");
       else if (action === "hide_tabs" && screen === "tabs") setScreen(under);
-      else if (action === "open_chat") setScreen(t?.kind === "browse" && t.url ? "page" : "home");
+      else if (action === "open_chat") {
+        setHistory(false);
+        setScreen(t?.kind === "browse" && t.url ? "page" : "home");
+      }
+      else if (action === "show_history") setHistory(true);
+      else if (action === "hide_history") setHistory(false);
     };
     window.addEventListener("jagora:app", on);
     return () => window.removeEventListener("jagora:app", on);
   });
+
+  // open a chat from her history or the tabs: its page if it has one, else the conversation
+  const openChat = (id: string) => {
+    setActive(id);
+    const t = useApp.getState().tasks.find((x) => x.id === id);
+    const page = t?.kind === "browse" && !!t.url;
+    setHistory(false);
+    setScreen(page ? "page" : "home");
+    if (!page) setSheet(true);
+  };
 
   // a task with a web page opens the page; Jagora's sheet slides down while it works so she can watch
   useEffect(() => {
@@ -88,7 +107,7 @@ export function MobileApp() {
       <AnimatePresence initial={false}>
         {shown === "home" && (
           <motion.div key="home" className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <Home onOpen={(id) => (setActive(id), setScreen(useApp.getState().tasks.find((x) => x.id === id)?.kind === "browse" ? "page" : "home"), setSheet(true))} />
+            <Home onOpen={openChat} />
           </motion.div>
         )}
         {shown === "page" && (
@@ -101,12 +120,7 @@ export function MobileApp() {
         {screen === "tabs" && (
           <motion.div key="tabs" className="absolute inset-0 z-30" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
             <Tabs
-              onOpen={(id) => {
-                setActive(id);
-                const k = useApp.getState().tasks.find((x) => x.id === id)?.kind;
-                setScreen(k === "browse" ? "page" : "home");
-                if (k !== "browse") setSheet(true);
-              }}
+              onOpen={openChat}
               onNew={() => (setActive(null), setScreen("home"), setSheet(true))}
               onDone={() => setScreen(under)}
               full={tabsFull}
@@ -120,6 +134,7 @@ export function MobileApp() {
       {shown === "page" && !sheet && screen !== "tabs" && <WorkOrb onOpen={() => setSheet(true)} />}
       {!(screen === "tabs" && tabsFull) && <BottomBar screen={screen} setScreen={go} />}
       <Sheet open={sheet} onClose={() => setSheet(false)} />
+      <History open={history} onClose={() => setHistory(false)} onOpen={openChat} onNew={() => (setHistory(false), setActive(null), setScreen("home"), setSheet(true))} />
       {screen === "home" && !sheet && <Tour />}
       <LiveMode />
       {screen === "home" && !sheet && <InstallPrompt />}
@@ -133,7 +148,7 @@ export function MobileApp() {
 function thumbFor(task: Task) {
   if (task.kind === "scam") return "/thumbs/sms.webp";
   if (task.kind === "paper") return "/thumbs/letter.webp";
-  if (task.kind === "browse" && task.url) return "/thumbs/skills-fair.webp";
+  if (task.kind === "browse" && task.url.includes("/practice/skills")) return "/thumbs/skills-fair.webp"; // other sites: their name and Jagora's last words
   return null;
 }
 
@@ -178,7 +193,7 @@ function TabCard({ task, index, count, full, onOpen, onClose }: { task: Task; in
             <img src={thumb} alt="" className="h-full w-full object-cover object-left-top" draggable={false} />
           ) : (
             <span className="flex h-full w-full flex-col justify-end gap-1 bg-gradient-to-b from-[#6fb2f2] to-[#dcecfb] p-5">
-              <span className="text-[13px] font-semibold text-ink-2">{task.title}</span>
+              <span className="text-[13px] font-semibold text-ink-2">{task.url ? shortUrl(task.url) : task.title}</span>
               <span className="line-clamp-3 text-[16px] font-medium leading-snug text-ink">{lastLine(task)}</span>
             </span>
           )}
@@ -191,8 +206,9 @@ function TabCard({ task, index, count, full, onOpen, onClose }: { task: Task; in
 /* Tabs open the way the reference does: the screen behind blurs and the tab stack rises from the bottom, above the
    bar. Drag it up for the full-screen stack; drag it down, tap the blur or tap the tabs button again to close. */
 function Tabs({ full, setFull, onOpen, onNew, onDone }: { full: boolean; setFull: (v: boolean) => void; onOpen: (id: string) => void; onNew: () => void; onDone: () => void }) {
-  const tasks = useApp((s) => s.tasks);
-  const close = useApp((s) => s.closeTask);
+  const all = useApp((s) => s.tasks);
+  const close = useApp((s) => s.closeTab); // closing a tab closes the page; the chat stays in her history
+  const tasks = all.filter(isTab); // tabs are the websites Jagora opened, nothing else
   const list = [...tasks].reverse(); // newest at the front of the stack
   const shown = full ? list : list.slice(-3);
   const spring = { type: "spring", stiffness: 300, damping: 34 } as const;
@@ -231,7 +247,7 @@ function Tabs({ full, setFull, onOpen, onNew, onDone }: { full: boolean; setFull
           {tasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center text-snow">
               <p className="text-[17px] font-semibold">No tabs open</p>
-              <p className="mt-1 text-[14.5px] text-snow/80">Add a tab and tell Jagora what you need.</p>
+              <p className="mt-1 text-[14.5px] text-snow/80">Websites Jagora opens for you show here. Your chats are in the menu.</p>
             </div>
           ) : (
             <div className={full ? "pb-[250px]" : "pb-[96px]"}>

@@ -79,6 +79,8 @@ export function runApp(action: string, value = "") {
       return tell("hide_chat");
     case "show_tabs":
     case "hide_tabs":
+    case "show_history":
+    case "hide_history":
     case "go_home":
       return tell(action);
     case "open_chat": {

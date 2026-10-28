@@ -26,6 +26,7 @@ import {
   Moon,
   Sun,
   X,
+  Trash,
   CellSignalFull,
   CellSignalLow,
 } from "@phosphor-icons/react";
@@ -43,7 +44,7 @@ import { useEffect, useState } from "react";
 import { ask, live, quick } from "@/lib/engine";
 import { ago } from "@/lib/hooks";
 import { LANGS, type Lang } from "@/lib/i18n";
-import { activeTask, useApp, type Task } from "@/lib/store";
+import { activeTask, isTab, useApp, type Task } from "@/lib/store";
 import { useSpeakingPulse } from "@/lib/voice";
 import { TalkOrb } from "../AgentPanel";
 import { Composer } from "../Composer";
@@ -106,6 +107,7 @@ export function DesktopApp() {
   const setLang = useApp((s) => s.setLang);
   const setActive = useApp((s) => s.setActive);
   const closeTask = useApp((s) => s.closeTask);
+  const closeTab = useApp((s) => s.closeTab);
   const profile = useApp((s) => s.profile);
   const [langOpen, setLangOpen] = useState(false);
   const [side, setSide] = useState(false);
@@ -133,8 +135,8 @@ export function DesktopApp() {
       const { action } = (e as CustomEvent<{ action: string }>).detail;
       if (action === "show_page") setPageHidden(false);
       else if (action === "hide_page" || action === "go_home") setPageHidden(true);
-      else if (action === "show_tabs") setSide(true);
-      else if (action === "hide_tabs") setSide(false);
+      else if (action === "show_tabs" || action === "show_history") setSide(true);
+      else if (action === "hide_tabs" || action === "hide_history") setSide(false);
     };
     window.addEventListener("jagora:app", on);
     return () => window.removeEventListener("jagora:app", on);
@@ -145,7 +147,7 @@ export function DesktopApp() {
     <div className="relative h-dvh overflow-hidden p-6 xl:p-8">
       <Backdrop />
       <Glass radius={30} bezel={26} refraction={70} blur={10} tint="rgba(255,255,255,.55)" interactive={false} lens={{ blurAmount: 0.3, refraction: 0.5, zRadius: 26, chromAberration: 0.06, brightness: 0.04 }} lensTint={0.42} className="flex h-full flex-col overflow-hidden">
-        {/* Jagora's own tabs: one per task (not a copy of the real browser's tabs) */}
+        {/* Jagora's own tabs: one per website it opened, like a browser (chats without a page live in the sidebar) */}
         <div className="no-scrollbar flex h-12 shrink-0 items-center gap-1.5 overflow-x-auto px-3">
           <button
             onClick={() => setSide((v) => !v)}
@@ -161,7 +163,7 @@ export function DesktopApp() {
           >
             <Mark size={16} /> Home
           </button>
-          {tasks.map((x) => (
+          {tasks.filter(isTab).map((x) => (
             <div
               key={x.id}
               role="button"
@@ -170,7 +172,7 @@ export function DesktopApp() {
               className={`group flex h-9 max-w-[220px] shrink-0 items-center gap-2 rounded-[14px] pl-3.5 pr-2 text-[13.5px] font-medium transition ${x.id === task?.id ? "bg-white/75 text-ink shadow-[inset_0_1px_1px_rgba(255,255,255,1)]" : "text-ink-2 hover:bg-white/40"}`}
             >
               <span className="truncate">{x.title}</span>
-              <button onClick={(e) => (e.stopPropagation(), closeTask(x.id))} className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-black/5" aria-label={`Close ${x.title}`}>
+              <button onClick={(e) => (e.stopPropagation(), closeTab(x.id))} className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-black/5" aria-label={`Close ${x.title}`}>
                 <X size={11} weight="bold" />
               </button>
             </div>
@@ -258,8 +260,8 @@ export function DesktopApp() {
                     </span>
                   </span>
                   <StatusMark s={x.status} />
-                  <button onClick={(e) => (e.stopPropagation(), closeTask(x.id))} className="hidden text-ink-3 group-hover:block" aria-label="Close task">
-                    <X size={13} />
+                  <button onClick={(e) => (e.stopPropagation(), closeTask(x.id))} className="hidden text-ink-3 hover:text-ink group-hover:block" aria-label={`Delete ${x.title}`} title="Delete chat">
+                    <Trash size={14} />
                   </button>
                 </div>
               ))}

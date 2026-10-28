@@ -113,8 +113,11 @@ def pcm_to_wav(pcm: bytes, rate: int = 24000) -> bytes:
 
 def speakable(text: str) -> str:
     """What is read aloud: links, markdown marks and long reference codes are left to the screen."""
-    t = re.sub(r"https?://\S+", "", text)
+    t = re.sub(r"\[([^\]]+)\]\((?:https?://|www\.)[^)\s]+\)", r"\1", text)  # [link text](address): say the text
+    t = re.sub(r"(?:https?://|www\.)\S+", "", t)
+    t = re.sub(r"(?m)^\s*(?:[-*+]|\d+[.)])\s+", "", t)  # list markers
     t = re.sub(r"[*_`#>|]", "", t)
+    t = re.sub(r"([^\s.!?:;,])[ \t]*\n+", r"\1. ", t)  # a line (a list item, a heading) ends a sentence
     return re.sub(r"\s+", " ", t).strip()
 
 

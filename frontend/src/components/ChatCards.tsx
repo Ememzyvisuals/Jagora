@@ -5,6 +5,7 @@
    - FileCard: a file Jagora downloaded for her
    - VoiceBubble: her voice note (or live turn), playable, with the words Jagora heard */
 import { ArrowSquareOut, Bell, BellRinging, DownloadSimple, FileText, FilePdf, Pause, Play, SealCheck, Warning, X } from "@phosphor-icons/react";
+import { Rich } from "./Rich";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -331,7 +332,7 @@ export function PointAskCard({ m }: { m: Extract<Msg, { kind: "pointask" }> }) {
   const setSheet = useApp((s) => s.setSheet);
   return (
     <div className={`rounded-[20px] p-4 ring-1 ${m.status === "waiting" ? "bg-white ring-accent/40 dark:bg-[#23262d]" : "bg-white/60 ring-black/5"}`}>
-      <p className="text-[15.5px] font-semibold leading-snug text-ink">{m.question}</p>
+      <Rich text={m.question} className="text-[15.5px] font-semibold leading-snug text-ink" />
       {m.status === "waiting" && (
         <button onClick={() => setSheet(false)} className="btn btn-ink mt-3 h-10 px-4 text-[14px] md:hidden">
           {POINT[lang]}
@@ -366,7 +367,7 @@ export function ReadingCard({ m }: { m: Extract<Msg, { kind: "reading" }> }) {
         {READ.title[lang]}
         {m.from ? ` · ${m.from}` : ""}
       </p>
-      <p className="mt-1 text-[15.5px] leading-snug text-ink">{m.summary}</p>
+      <Rich text={m.summary} className="mt-1 text-[15.5px] leading-snug text-ink" />
       {m.facts.length > 0 && (
         <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[14.5px]">
           {m.facts.slice(0, 8).map((f, i) => (
@@ -449,7 +450,7 @@ export function TermsCard({ m }: { m: Extract<Msg, { kind: "terms" }> }) {
           <p className={`text-[15px] font-semibold ${tone}`}>{TERMS[m.verdict][lang]}</p>
         </div>
       </div>
-      <p className="mt-2.5 text-[15px] leading-snug text-ink">{m.summary}</p>
+      <Rich text={m.summary} className="mt-2.5 text-[15px] leading-snug text-ink" />
       {m.points.length > 0 && (
         <ul className="mt-2 flex flex-col gap-1.5">
           {m.points.map((p, i) => (
