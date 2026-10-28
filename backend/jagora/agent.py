@@ -1034,6 +1034,9 @@ class Agent:
                 key = re.sub(r"\W+", " ", msg).strip().lower()
                 if key and key == self._said_key:
                     return "already told them that; do not repeat it", False, None
+                if self._said_last and _same_news(self._said_last, msg) and not self._heard_since_told:
+                    return ("not said: you told them nearly this already. Say only what is new, in one short sentence, "
+                            "or finish"), False, None
                 if self._told_since_act and not self._heard_since_told:
                     # one reply per thing found: nothing new happened since she was told, so nothing new is said
                     return ("not said: you already told them and nothing new happened since. Do not say it again in other "

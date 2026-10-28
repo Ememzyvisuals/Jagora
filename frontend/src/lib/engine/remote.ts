@@ -113,6 +113,9 @@ function connect(): Promise<WebSocket> {
     sock.binaryType = "arraybuffer";
     sock.onopen = () => {
       sock.send(JSON.stringify({ type: "net", lite: liteWanted() }));
+      // every new connection says whether she is looking and what screen she has, so a page opened later by voice is
+      // sized for her phone and its picture is sent (a phone that went to sleep had said "not looking")
+      sock.send(JSON.stringify({ type: "view", on: !document.hidden, device: device() }));
       ws = sock;
       void sendVideo();
       resolve(sock);
@@ -559,7 +562,7 @@ export async function remoteMediaDone(task: string, info: { name: string; course
 
 export async function remoteFocus(task: string, opening = false) {
   try {
-    (await connect()).send(JSON.stringify({ type: "focus", task, lang: S().lang, screen: describeScreen(), ...(opening ? { opening: true } : {}) }));
+    (await connect()).send(JSON.stringify({ type: "focus", task, lang: S().lang, screen: describeScreen(), device: device(), ...(opening ? { opening: true } : {}) }));
   } catch {}
 }
 

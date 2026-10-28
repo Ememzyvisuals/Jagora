@@ -529,6 +529,7 @@ CHECKIN = re.compile(r"\b(are you (there|still there|hearing me|with me)|(i'?m|i
                      r"hello\??$|can you hear me|where are you|you still dey|ṣé o wà|se o wa|kana nan|ị nọ ebe a)\b", re.I)
 HERE = {"en": "I'm here, still working on it.", "pcm": "I dey here, I still dey do am.",
         "yo": "Mo wà níbí, mo ṣì ń ṣe é.", "ha": "Ina nan, ina kan aikin.", "ig": "Anọ m ebe a, a ka m na-arụ ya."}
+REPEAT_ASK = re.compile(r"\b(repeat( (that|it|yourself))?|say (that|it) again|come again|what did you say|tun so|tún sọ|sake fad|kwughachi|talk am again)\b", re.I)
 AGAIN = {"en": "Sorry, I didn't catch that. Please say it again.", "pcm": "Sorry, I no catch am. Abeg talk am again.",
          "yo": "Ẹ má bínú, mi ò gbọ́ ọ dáadáa. Ẹ jọ̀ọ́ ẹ tún sọ ọ́.", "ha": "Yi haƙuri, ban ji ba. Don Allah ka sake faɗa.",
          "ig": "Ndo, anụghị m ya. Biko kwughachi ya."}
@@ -543,6 +544,16 @@ HERE_IDLE = {"en": "I'm here. What would you like me to do?", "pcm": "I dey here
              "yo": "Mo wà níbí. Kí ni kí n ṣe fún ọ?", "ha": "Ina nan. Me kake so in yi?", "ig": "Anọ m ebe a. Gịnị ka ị chọrọ ka m mee?"}
 
 
+def _contained(late: str, said: str) -> bool:
+    """Are these (late) words already part of what was said? Same words, nearly the same order."""
+    import difflib
+
+    a, b = re.sub(r"\W+", " ", late.lower()).strip(), re.sub(r"\W+", " ", said.lower()).strip()
+    if not a:
+        return True
+    return a in b or difflib.SequenceMatcher(None, a, b[-len(a) - 20:]).ratio() > 0.75
+
+
 def is_noise(text: str) -> bool:
     """A scrap the microphone caught (one word, a cough read as a word): not something to act on mid-task."""
     words = re.findall(r"\w+", text)
@@ -550,7 +561,7 @@ def is_noise(text: str) -> bool:
 
 SEND_WAIT = 6.0  # seconds a message may wait on her connection before the connection counts as gone
 RECONNECT_GRACE = 60.0
-PAGE_WAIT = 6.0  # seconds Jagora's voice waits for a new page to reach her screen  # seconds a dropped session (and its task) waits for her app to come back
+PAGE_WAIT = 1.5  # seconds Jagora's voice waits for a new page to reach her screen  # seconds a dropped session (and its task) waits for her app to come back
 KEEP_FOR_LATER = {"task", "msg", "update", "status", "url", "notify", "account", "speech_end"}
 
 
@@ -869,12 +880,15 @@ class Session:
             task, text, lang, gen = await self._speech_q.get()
             if gen != self._gen:
                 continue
-            # a page is opening: wait (a few seconds at most) until she can see it before talking about it
+            # a page is opening: wait a moment (1.5 s at most) so she can see it as Jagora talks about it. Never longer:
+            # a page that does not show must never hold back what Jagora says (it used to wait 6 s for every line,
+            # and her next words then dropped the reply before it was said)
             if not self._page_ready.is_set() and self.viewing:
                 try:
                     await asyncio.wait_for(self._page_ready.wait(), PAGE_WAIT)
                 except asyncio.TimeoutError:
-                    pass
+                    trace.write(self.user_id, "speech_did_not_wait_for_page", note="no picture reached her screen in time")
+                    self._page_ready.set()  # the next lines do not wait again
                 if gen != self._gen:
                     continue
             if self.voice_ws is not None and await self._to_voice({"type": "say", "text": speech.speakable(text), "lang": lang}):
@@ -1000,6 +1014,14 @@ class Session:
         task = str(ev.get("task") or "")
         if task:
             self.active_task = task
+        if isinstance(ev.get("device"), dict) and ev["device"].get("w") and self.browser is None:
+            self.device = ev["device"]  # her screen, so a page opened later (also by voice) fits it
+        if kind in ("start", "focus", "answer", "audio", "video") and not self.viewing:
+            # she is using the app, so she is looking (a phone that slept had said "not looking" and never took it back)
+            self.viewing = True
+            trace.write(self.user_id, "viewing_again", because=kind)
+            self._video_key = True
+            self._video_kick.set()
         if kind == "net":
             await self.set_lite(bool(ev.get("lite")))
             return
@@ -1210,6 +1232,11 @@ class Session:
             text = str(ev.get("text") or "").strip()
             if not task or not text:
                 return
+            if self._flushed and time.time() - self._flushed[1] < 20 and _contained(text, self._flushed[0]):
+                # the voice's late turn end for words already answered from what was showing: not a new message
+                trace.write(self.user_id, "voice_words_already_answered", text=text)
+                self._flushed = None
+                return
             if is_stop(text):
                 self._reset_turn()
                 await self.silence(task)
@@ -1229,9 +1256,9 @@ class Session:
                 await self.send({"type": "orb", "state": "listening"})
                 await self.send({"type": "speech_end", "task": task})
         elif kind == "stall":
-            # she spoke and nothing came back for a while: say where things are, in her language
-            r = self.runs.get(task)
-            self.speak(task, (HERE if r and r.busy else HERE_IDLE).get(self.lang, HERE["en"]))
+            # the voice noticed a quiet moment after her words: Jagora's server is gathering her message or working on
+            # it, so nothing is said (an "I'm here" here talked over her and over real answers)
+            pass
         elif kind == "user" and ev.get("state") == "speaking":
             self._wait_more()  # she started again: her next words join this message
             await self.send({"type": "orb", "state": "listening"})
@@ -1247,6 +1274,7 @@ class Session:
     _hearing_task = ""
     _partial = ""  # words showing now, not yet ended by the voice
     _asked_again = 0.0  # when she was last asked to say it again (never twice in a row)
+    _flushed: tuple[str, float] | None = None  # a message taken from the words showing, before the voice ended it
     _flush: asyncio.Task | None = None
 
     @property
@@ -1298,9 +1326,10 @@ class Session:
                   f"(speech recognition, language {self.lang}): \"{text}\"\n\nThe chat so far:\n{lines or '(nothing yet)'}\n\n"
                   f"Her screen now:\n{(self.screen or '')[:900]}\n\nJagora is {'working on a task' if r and r.busy else 'not busy'}.\n\n"
                   "Is this her talking to Jagora? Reply with one word:\n"
-                  "ACT - a request, question or answer for Jagora (even short, even repeated on purpose)\n"
+                  "ACT - a request, question or answer for Jagora (even short, even repeated on purpose, or asking Jagora "
+                  "to repeat or say more)\n"
                   "IGNORE - not for Jagora: words a speech recogniser makes up from silence or noise, a film or TV or song "
-                  "playing, her talking to someone else, or the same thing she already said and Jagora already answered\n"
+                  "playing, her talking to someone else, or an exact echo of words she said a moment ago\n"
                   "UNCLEAR - meant for Jagora but the words make no sense")
         try:
             m = _model()
@@ -1328,6 +1357,7 @@ class Session:
         if not text:
             return
         trace.write(self.user_id, "voice_message", text=text, from_partial=from_partial)
+        self._flushed = (text, time.time()) if from_partial else None
         if is_noise(text):
             # a scrap the room made (a word from the TV, a cough heard as a word): not her, so nothing happens
             log.info("voice: ignored a scrap: %r", text[:40])
@@ -1476,6 +1506,11 @@ class Session:
             elif kind in ("choice", "handoff", "point"):
                 self._resolve(task, mid_, text)
                 return
+        if text and REPEAT_ASK.search(text) and len(text.split()) <= 8 and self._said:
+            # "say that again": the last thing Jagora said, again, at once
+            self.speak(task, self._said[-1][1])
+            await self.settle(task)
+            return
         if text and CHECKIN.search(text) and len(text.split()) <= 9:
             # "are you there?": answer at once; it is not a new request and does not interrupt the work
             self.speak(task, (HERE if r and r.busy else HERE_IDLE).get(self.lang, HERE["en"]))

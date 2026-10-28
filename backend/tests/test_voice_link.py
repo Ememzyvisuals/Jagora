@@ -161,3 +161,27 @@ async def test_words_not_meant_for_jagora_do_nothing_and_say_again_is_never_repe
         await s._flush_turn("t", 0)
     assert got == []
     assert len(said) == 1  # asked to say it again once, not every time
+
+
+async def test_late_turn_end_is_not_a_second_message_and_using_the_app_means_looking(monkeypatch):
+    s = server.Session(WS(), "u1")
+    s.active_task = "t"
+    got = []
+
+    async def heard(task, msg_id, text, lang, history):
+        got.append(text)
+
+    async def gate(task, text):
+        return "act"
+
+    monkeypatch.setattr(s, "heard", heard)
+    monkeypatch.setattr(s, "_gate", gate)
+    await s.on_voice({"type": "partial", "text": "i use my last year so and you no hear you please repeat yourself"})
+    await s._flush_turn("t", 0)
+    await s.on_voice({"type": "words", "text": "and you no hear you please repeat yourself"})  # the voice's late turn end
+    await asyncio.sleep(0.05)
+    assert got == ["i use my last year so and you no hear you please repeat yourself"]
+    # a phone that slept said "not looking"; when she uses the app again the live picture is sent again
+    s.viewing = False
+    await s.handle({"type": "focus", "task": "t", "lang": "en", "device": {"mobile": True, "w": 411, "h": 900}})
+    assert s.viewing and s.device["w"] == 411
