@@ -58,6 +58,29 @@ async function pullChats() {
   if (got.length) useApp.setState((s) => ({ tasks: [...s.tasks, ...got].sort((a, b) => b.createdAt - a.createdAt) }));
 }
 
+/** Her payment records (kept on the server the moment a page shows what to pay): put back into their chats on any
+    device, so the evidence of what she paid is never lost, even if a session closed while she was away. */
+export async function pullPayments() {
+  if (!API || !getToken()) return;
+  const r = await fetch(`${API}/payments`, { headers: auth() }).catch(() => null);
+  if (!r?.ok) return;
+  const list = (await r.json()) as (Extract<Msg, { kind: "payment" }> & { chat_id: string })[];
+  useApp.setState((s) => ({
+    tasks: s.tasks.map((t) => {
+      const mine = list.filter((p) => p.chat_id === t.id);
+      if (!mine.length) return t;
+      let messages = t.messages;
+      for (const p of mine) {
+        const { chat_id: _c, ...rest } = p;
+        void _c;
+        const card = { ...rest, kind: "payment" } as Msg;
+        messages = messages.some((m) => m.id === p.id) ? messages.map((m) => (m.id === p.id ? card : m)) : [...messages, card];
+      }
+      return { ...t, messages };
+    }),
+  }));
+}
+
 /* A chat she deletes (swipe, bin, "clear all", or by voice) is deleted on the server too, so it does not come back on
    her next visit or her other devices, once the few seconds she has to undo it have passed. */
 const deleting = new Map<string, ReturnType<typeof setTimeout>>();
@@ -96,6 +119,7 @@ export async function syncAccount() {
   if (!API || !getToken()) return;
   await pullSettings().catch(() => {});
   await pullChats().catch(() => {});
+  await pullPayments().catch(() => {});
   if (!listening) {
     listening = true;
     useApp.subscribe((st, prev) => {

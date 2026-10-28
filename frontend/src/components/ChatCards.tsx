@@ -560,3 +560,104 @@ export function RecordCard({ m }: { m: Extract<Msg, { kind: "record" }> }) {
     </div>
   );
 }
+
+/* ---- her payment record: what to pay, to whom, and where it stands. Saved on the server the moment it appears, so
+   she can leave for her bank app and come back (even on another device) and still see exactly what she paid. ---- */
+const PAY: Record<"title" | "amount" | "to" | "account" | "bank" | "ref" | "copy" | "copied" | "paid" | "check" | "kept", Record<Lang, string>> = {
+  title: { en: "Payment record", pcm: "Payment record", yo: "Àkọsílẹ̀ ìsanwó", ha: "Rikodin biya", ig: "Ndekọ ịkwụ ụgwọ" },
+  amount: { en: "Amount", pcm: "Amount", yo: "Iye owó", ha: "Adadi", ig: "Ego ole" },
+  to: { en: "Pay to", pcm: "Pay to", yo: "Sanwó fún", ha: "Biya zuwa", ig: "Kwụọ" },
+  account: { en: "Account number", pcm: "Account number", yo: "Nọ́mbà àkáǹtì", ha: "Lambar asusu", ig: "Nọmba akaụntụ" },
+  bank: { en: "Bank", pcm: "Bank", yo: "Báǹkì", ha: "Banki", ig: "Ụlọ akụ" },
+  ref: { en: "Reference", pcm: "Reference", yo: "Nọ́mbà ìtọ́kasí", ha: "Lambar shaida", ig: "Nọmba ntụaka" },
+  copy: { en: "Copy", pcm: "Copy", yo: "Dà á kọ", ha: "Kwafa", ig: "Detuo" },
+  copied: { en: "Copied", pcm: "Don copy", yo: "Ó ti dà á", ha: "An kwafa", ig: "Edetuola" },
+  paid: { en: "I have paid", pcm: "I don pay", yo: "Mo ti sanwó", ha: "Na biya", ig: "Akwụọla m" },
+  check: { en: "Check this payment", pcm: "Check this payment", yo: "Ṣàyẹ̀wò ìsanwó yìí", ha: "Duba wannan biyan", ig: "Lelee ịkwụ ụgwọ a" },
+  kept: {
+    en: "Kept safe in this chat. You can go to your bank app and come back; Jagora keeps the page open for you.",
+    pcm: "E dey safe for this chat. You fit go your bank app come back; Jagora go keep the page open for you.",
+    yo: "A ti pa á mọ́ sínú ìjíròrò yìí. Ẹ lè lọ sí áàpù báǹkì yín kí ẹ padà; Jagora á ṣí ojú ìwé náà sílẹ̀ fún yín.",
+    ha: "An adana a wannan hira. Za ka iya zuwa manhajar bankinka ka dawo; Jagora za ta riƙe shafin a buɗe maka.",
+    ig: "Echekwara ya na mkparịta ụka a. Ị nwere ike ịga ngwa ụlọ akụ gị wee laghachi; Jagora ga-edebe ibe ahụ meghere maka gị.",
+  },
+};
+const PAY_STATUS: Record<Extract<Msg, { kind: "payment" }>["status"], Record<Lang, string>> = {
+  waiting: { en: "Waiting for your payment", pcm: "E dey wait make you pay", yo: "Ń dúró de ìsanwó yín", ha: "Ana jiran biyanka", ig: "Na-eche ịkwụ ụgwọ gị" },
+  paid_by_her: { en: "You said you paid, checking", pcm: "You talk say you don pay, I dey check", yo: "Ẹ ní ẹ ti sanwó, à ń ṣàyẹ̀wò", ha: "Ka ce ka biya, ana dubawa", ig: "Ị sịrị na ị kwụọla, a na-elele" },
+  confirmed: { en: "Confirmed", pcm: "E don confirm", yo: "Ó ti dájú", ha: "An tabbatar", ig: "Ekwenyela" },
+  failed: { en: "Not received", pcm: "E no enter", yo: "Kò wọlé", ha: "Ba a karɓa ba", ig: "Anataghị ya" },
+};
+
+export function PaymentCard({ m, task }: { m: Extract<Msg, { kind: "payment" }>; task: string }) {
+  const lang = useApp((s) => s.lang);
+  const [copied, setCopied] = useState(false);
+  const open = m.status === "waiting" || m.status === "paid_by_her";
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText((m.account ?? "").replace(/\s/g, ""));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {}
+  };
+  const say = async (text: string) => (await import("@/lib/engine")).ask(text, undefined, { chat: task });
+  const host = (() => {
+    try {
+      return m.site ? new URL(m.site).hostname.replace(/^www\./, "") : "";
+    } catch {
+      return "";
+    }
+  })();
+  const tone = m.status === "confirmed" ? "bg-ok/15 text-ok" : m.status === "failed" ? "bg-danger-soft text-danger" : "bg-accent-soft text-accent-deep";
+  const row = (label: string, value?: string, extra?: React.ReactNode) =>
+    value ? (
+      <div className="flex items-center gap-3 py-1.5">
+        <span className="w-[108px] shrink-0 text-[13px] font-medium text-ink-3">{label}</span>
+        <span className="min-w-0 flex-1 break-words text-[15px] font-semibold text-ink">{value}</span>
+        {extra}
+      </div>
+    ) : null;
+  return (
+    <div className="glass rounded-[22px] p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[15.5px] font-bold text-ink">{PAY.title[lang]}</span>
+        <span className={`rounded-full px-2.5 py-1 text-[12.5px] font-bold ${tone}`}>{PAY_STATUS[m.status][lang]}</span>
+      </div>
+      <p className="mt-1.5 text-[14.5px] font-semibold leading-snug text-ink">{m.what}</p>
+      <div className="mt-2 divide-y divide-black/5">
+        {row(PAY.amount[lang], m.amount)}
+        {row(PAY.to[lang], m.pay_to)}
+        {row(
+          PAY.account[lang],
+          m.account,
+          <button onClick={() => void copy()} className="btn btn-glass h-9 shrink-0 px-3 text-[13px] font-semibold">
+            {copied ? PAY.copied[lang] : PAY.copy[lang]}
+          </button>,
+        )}
+        {row(PAY.bank[lang], m.bank)}
+        {row(PAY.ref[lang], m.reference)}
+      </div>
+      {m.note && <p className="mt-2 text-[13.5px] font-medium leading-snug text-ink-2">{m.note}</p>}
+      <p className="mt-2 text-[12.5px] leading-snug text-ink-3">
+        {host && <span className="font-semibold text-ink-2">{host} · </span>}
+        {new Date(m.since < 1e12 ? m.since * 1000 : m.since).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+      </p>
+      {open && <p className="mt-2 text-[13px] leading-snug text-ink-2">{PAY.kept[lang]}</p>}
+      {open && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {m.status === "waiting" && (
+            <button onClick={() => void say(PAY.paid[lang])} className="btn btn-ink h-11 flex-1 text-[15px] font-semibold">
+              {PAY.paid[lang]}
+            </button>
+          )}
+          <button
+            onClick={() => void say(`${PAY.check[lang]}: ${m.what}${m.reference ? `, ${m.reference}` : ""}${host ? `, ${host}` : ""}`)}
+            className="btn btn-glass h-11 flex-1 text-[14.5px] font-semibold"
+          >
+            {PAY.check[lang]}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

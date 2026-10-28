@@ -20,6 +20,7 @@ Two modes:
 from __future__ import annotations
 
 import asyncio
+import os
 import base64
 import datetime as dt
 import json
@@ -312,6 +313,18 @@ COMMON = [
           "profile_field": {"type": "string", "enum": PROFILE_FIELDS, "description": "when it is one of her details (name, "
                             "phone, email, address...): the box offers to save it to her details and is filled in already "
                             "if she saved it before"}}, ["element", "label", "field"]),
+    tool("keep_payment", "Her payment record, kept in the chat and on the server so she never loses track of money, even if "
+         "she leaves the app or the connection drops. Call it the moment a page shows what to pay (status waiting), when she "
+         "says she has paid (paid_by_her), and when the site confirms or refuses it (confirmed / failed). Copy everything "
+         "exactly as the page shows it. Then show_evidence of the page that shows it.",
+         {"what": {"type": "string", "description": "e.g. 'Train ticket Lagos to Ibadan, 2 Nov, 8:00, Standard, seat 14'"},
+          "amount": {"type": "string", "description": "as shown, e.g. 'N6,000'"},
+          "pay_to": {"type": "string", "description": "the account name or company receiving it"},
+          "account": {"type": "string", "description": "the account number to pay into, if a transfer"},
+          "bank": {"type": "string"}, "reference": {"type": "string", "description": "booking or payment reference"},
+          "status": {"type": "string", "enum": ["waiting", "paid_by_her", "confirmed", "failed"]},
+          "note": {"type": "string", "description": "anything she must know, in their language (e.g. 'the account expires in 30 minutes')"}},
+         ["what", "status"]),
     tool("ask_form", "Several boxes she fills herself in ONE card in the chat (better than typing on the live page): e.g. a "
          "booking's passenger name, phone, email and NIN together. Each value goes straight into its box on the page; you never "
          "see private ones. Plain details (name, email, phone, address) can be saved to her details with one tick and are "
@@ -533,8 +546,10 @@ HOW YOU WORK
 - Exact spellings: a name, email address, home address or username you do not already have from their saved details is never typed from what you heard (voice gets spellings wrong). Use ask_private with field name, email, address or text, and a label that guides them ("Type your full name as it is on your WAEC certificate").
 - She never has to type on the live page: whatever only she knows goes in a box in the chat. Two or more at once (passenger details, a sign-up form): ONE ask_form card; one thing: ask_private. Give profile_field for her details so the card can fill them from what she saved and offer to save new ones. Her saved details you already have go straight in with fill_form (profile_field). The page itself is only for things she must do there (a captcha, a picture check).
 - Sign-ins: if the site already shows her signed in (her sign-ins are kept between sessions), carry on. If it asks her to sign in, use use_saved_login when she saved one; otherwise email or phone and password in ONE ask_form card, and any code or "verify it's you" number with ask_private (fetch_code when it went to her email). Never make her type on the live page.
+- Money: the moment a page shows what to pay, call keep_payment (waiting) and show_evidence of it, BEFORE she leaves to pay. She may leave Jagora for her bank app; the session and this page are kept for her while she pays. When she says she has paid: keep_payment (paid_by_her), press the page's "I have paid" or check the booking, then keep_payment again with confirmed (and the reference) or failed. If "Open payments in this chat" are listed, check those first: open the site, find the booking or payment status, and tell her.
 - After a booking, payment or registration, always get the proof for her: the ticket, slip, receipt or confirmation, with download (its Download button, or page_as_pdf for a confirmation page), and say what she must bring or show.
-- Choices on a booking (date, time or train, class, coach, seat number, number of passengers, one way or return): read what the page offers and ask her with ask_user, with the options and prices as the page shows them (for seats, the free seat numbers). Never choose for her, unless she says any is fine.
+- Choices on a booking (date, time or train, class, coach, seat number, number of passengers, one way or return): read what the page offers and ask her with ask_user, with the options and prices as the page shows them. Never choose for her, unless she says any is fine.
+- Seats: read the seat map fresh (look at it: taken seats are usually greyed, crossed or marked booked) and offer ONLY the seats still open, never booked ones; say how many are open and, if useful, which are by the window. The moment she picks one, select it on the page at once, then look again to confirm it is now hers (selected or held in her name) before going on. If someone took it meanwhile, tell her plainly and offer the nearest open seats. Seats go fast: never leave her choice waiting.
 - Private values (account number, NIN, BVN, card, OTP, PIN, password): use ask_private. Never type them yourself, never ask them to say them aloud, never repeat them.
 - Submitting, paying, sending, agreeing to terms, or leaving the website needs their yes: write the yes/no question in `ask`, in {lang}. If the user says no, do not try again; ask what they want.
 - Jagora's guard blocks adult, phishing and fake sites, closes ads and pop-ups and stops redirect tricks. If a page was blocked, tell them briefly and find a safe source.
@@ -1401,6 +1416,8 @@ class Agent:
 
             if name == "ask_form":
                 return await self._ask_form(snap, a)
+            if name == "keep_payment":
+                return await self._keep_payment(a)
 
             el = snap.element(int(a.get("element", -1)))
             if el is None:
@@ -1648,6 +1665,21 @@ class Agent:
         value = ""  # noqa: F841  (dropped: never logged, spoken or sent to the model)
         self._trail_add("private", f'the user filled "{str(a.get("label") or field)[:50]}" on {self._here()} privately')
         return f"filled by them ({n} characters in the box){saved}", False, None
+
+    async def _keep_payment(self, a):
+        """Her money trail: one record per payment in this chat, updated as it moves on."""
+        b = self.browser
+        here = (b.pdf.url if b and b.pdf else (b.page.url if b and b.page else "")) or ""
+        rec = {k: str(a.get(k) or "")[:300] for k in ("what", "amount", "pay_to", "account", "bank", "reference", "status", "note")}
+        rec["site"] = rec.get("site") or here
+        if not getattr(self, "_payment_id", ""):
+            self._payment_id = "pay-" + os.urandom(5).hex()
+        rec["id"] = self._payment_id
+        await self.io.event("payment", rec)
+        self._trail_add("payment", f'{rec["status"]}: {rec["what"][:60]} {rec["amount"]}')
+        if rec["status"] in ("confirmed", "failed"):
+            self._payment_id = ""
+        return f'payment record kept ({rec["status"]}); she can see it in the chat even if she leaves', False, None
 
     async def _ask_form(self, snap, a):
         """Several boxes in one card: she fills them in the chat, each value goes straight into its box on the page."""

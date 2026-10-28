@@ -134,7 +134,9 @@ function connect(): Promise<WebSocket> {
    and the server carries on with the same session and sends what she missed (server.py Session.attach). */
 let retry = 0;
 let retryTimer = 0;
-const running = () => S().tasks.some((t) => t.status === "working") || S().live;
+// a task working or waiting for her (a yes, a box, "I have paid"), a payment not finished, or Live on
+const running = () =>
+  S().tasks.some((t) => t.status === "working" || t.status === "waiting" || t.messages.some((m) => m.kind === "payment" && (m.status === "waiting" || m.status === "paid_by_her"))) || S().live;
 function comeBack() {
   if (typeof window === "undefined" || !BACKEND || retryTimer || document.hidden || !running()) return;
   const wait = Math.min(10_000, 800 * 2 ** retry);
@@ -156,7 +158,11 @@ if (typeof window !== "undefined" && BACKEND)
   }, 1500);
 if (typeof window !== "undefined")
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && (!ws || ws.readyState === WebSocket.CLOSED)) comeBack();
+    if (document.hidden || (ws && ws.readyState !== WebSocket.CLOSED)) return;
+    // back from her bank app or another app: straight back in (no waiting), and her payments are refreshed
+    retry = 0;
+    if (running()) void connect().catch(() => comeBack());
+    void import("../sync").then((m) => m.pullPayments()).catch(() => undefined);
   });
 
 /* ---- data saver (backend lite.py): on slow or costly networks the voice comes compressed and the live view smaller ---- */

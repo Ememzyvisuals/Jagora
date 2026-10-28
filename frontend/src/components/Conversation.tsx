@@ -10,7 +10,7 @@ import type { Lang } from "@/lib/i18n";
 import { t } from "@/lib/i18n";
 import { PLAIN_FIELDS, useApp, type FormField, type Msg, type Task } from "@/lib/store";
 import { IconLock, IconScam, IconShield } from "./icons";
-import { Evidence, FileCard, MediaCard, MomentCard, PicturesCard, PlanCard, PointAskCard, ReadingCard, RecordCard, ReminderCard, ScheduledCard, TermsCard, VoiceBubble } from "./ChatCards";
+import { Evidence, FileCard, PaymentCard, MediaCard, MomentCard, PicturesCard, PlanCard, PointAskCard, ReadingCard, RecordCard, ReminderCard, ScheduledCard, TermsCard, VoiceBubble } from "./ChatCards";
 import { remotePictures } from "@/lib/engine/remote";
 import { Rich } from "./Rich";
 
@@ -136,6 +136,8 @@ function Item({ m, task }: { m: Msg; task: Task }) {
       return <SecretAsk m={m} task={task} />;
     case "form":
       return <FormAsk m={m} task={task} />;
+    case "payment":
+      return <PaymentCard m={m} task={task.id} />;
     case "verdict":
       return <Verdict m={m} />;
     case "explain":

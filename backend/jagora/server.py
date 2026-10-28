@@ -49,6 +49,9 @@ logging.getLogger("httpx").setLevel(logging.WARNING)  # every database call was 
 
 YES = re.compile(r"^\s*(yes|yeah|yep|ok(ay)?|sure|go ahead|do it|correct|right|bẹ́ẹ̀ ?ni|bee ?ni|ó dáa|o daa|eh|ee|e ?h?n|"
                  r"i ?ya|toh|haka ne|eeh|ọ́ dị mma|o di mma|ee|make you do am|na so|oya)\b", re.I)
+# "I have paid" answers "have you paid?" with a yes (in every language she speaks)
+PAID = re.compile(r"\b(i ?(have|'ve)? ?(just )?(paid|sent( it| the money)?|transferred)|i don (pay|send)|mo ti (sanwó|sanwo|fi ránṣẹ́|fi ranse)|"
+                  r"na biya|na tura|akwụọla m|akwuola m|ezigala m)\b", re.I)
 NO = re.compile(r"^\s*(no|nope|don'?t|do not|stop|cancel|wait|rárá|rara|bẹ́ẹ̀ kọ́|a'a|aa|mba|ewo|no o|abeg no)\b", re.I)
 
 db = DB()
@@ -338,6 +341,16 @@ async def push_unsubscribe(request: Request):
     return {"ok": True}
 
 
+@app.get("/payments")
+async def payments(request: Request):
+    """Her payment records on any device (the evidence of what she paid, kept even if a session closed)."""
+    uid = _user_from(request)
+    if not uid:
+        raise HTTPException(401)
+    rows = await db.exec("select chat_id, data from payments where user_id=? order by updated desc limit 50", (uid,))
+    return [{"chat_id": r["chat_id"], **json.loads(r["data"])} for r in rows]
+
+
 @app.get("/chats")
 async def chats(request: Request):
     """Her chats on any device: newest first."""
@@ -583,6 +596,9 @@ def is_noise(text: str) -> bool:
 
 SEND_WAIT = 6.0  # seconds a message may wait on her connection before the connection counts as gone
 RECONNECT_GRACE = 60.0
+HOLD_TASK = 20 * 60.0  # a task still running or waiting for her: kept this long while her app is away
+HOLD_MONEY = 60 * 60.0  # a payment in progress (she went to her bank app): kept this long
+HOLD_CHECK = 10.0  # seconds between checks while a session is held
 VOICE_START_WAIT = 7.0  # seconds for Jagora's LiveKit voice to start a reply before the app says it instead
 PAGE_WAIT = 1.5  # seconds Jagora's voice waits for a new page to reach her screen  # seconds a dropped session (and its task) waits for her app to come back
 KEEP_FOR_LATER = {"task", "msg", "update", "status", "url", "notify", "account", "speech_end"}
@@ -596,6 +612,7 @@ class Session:
         self.files: dict[str, str] = {}  # files she gave in the chat, kept for this session only
         self.translate = False
         self.runs: dict[str, Run] = {}
+        self.money: dict[str, bool] = {}  # chat -> a payment is in progress there (the session is held for her)
         self.browser: Browser | None = None
         self.active_task = ""
         self.since = time.time()
@@ -726,9 +743,60 @@ class Session:
             if r.busy:
                 await self.send({"type": "status", "task": task, "status": "working"})
 
+    async def keep_payment(self, task: str, data: dict) -> None:
+        """Her payment record: saved on the server at once (so it survives anything), and shown or updated in the chat."""
+        now = time.time()
+        open_ = await db.one("select id, data from payments where user_id=? and chat_id=? and status in ('waiting','paid_by_her') "
+                             "order by updated desc limit 1", (self.user_id, task))
+        rec = {k: v for k, v in data.items() if v}
+        new = True
+        if open_:
+            old = json.loads(open_["data"])
+            same = (not rec.get("reference") or not old.get("reference") or rec.get("reference") == old.get("reference"))
+            if same:  # the same payment moving on (even from a later run in this chat)
+                rec = {**old, **rec, "id": open_["id"]}
+                new = False
+        rec.setdefault("id", "pay-" + secrets.token_hex(5))
+        rec["updated"] = now
+        rec.setdefault("since", now)
+        status = rec.get("status") or "waiting"
+        await db.exec("insert into payments (id, user_id, chat_id, t, updated, status, data) values (?,?,?,?,?,?,?) "
+                      "on conflict(id) do update set updated=excluded.updated, status=excluded.status, data=excluded.data",
+                      (rec["id"], self.user_id, task, rec["since"], now, status, json.dumps(rec, ensure_ascii=False)))
+        trace.write(self.user_id, "payment", task=task, status=status, what=rec.get("what", ""), amount=rec.get("amount", ""))
+        card = {"kind": "payment", **{k: rec.get(k, "") for k in ("what", "amount", "pay_to", "account", "bank", "reference",
+                                                                   "status", "note", "site")}, "since": rec["since"], "updated": now}
+        if new:
+            await self.send({"type": "msg", "task": task, "msg": {"id": rec["id"], **card}})
+        else:
+            await self.send({"type": "update", "task": task, "id": rec["id"], "patch": card})
+        self.money[task] = status in ("waiting", "paid_by_her")
+
+    def held(self) -> float:
+        """How long this session is kept for her while her app is away: long while money is moving (she went to pay in
+        her bank app) or a task is waiting for her, a minute otherwise."""
+        if any(self.money.values()):
+            return HOLD_MONEY
+        if any(r.busy for r in self.runs.values()):
+            return HOLD_TASK
+        return RECONNECT_GRACE
+
     async def close_later(self, ws: WebSocket, grace: float = RECONNECT_GRACE) -> None:
-        """The connection dropped: wait a little for her app to come back before stopping her task."""
+        """The connection dropped: wait for her app to come back before stopping her task. Paying in her bank app or
+        checking her NIN somewhere else can take many minutes: the page, the task and her place are kept for her."""
+        away = time.time()
+        told = False
         await asyncio.sleep(grace)
+        while self.ws is ws and SESSIONS.get(self.user_id) is self and grace and time.time() - away < self.held():
+            if not told:
+                told = True
+                trace.write(self.user_id, "session_held", money=any(self.money.values()), minutes=round(self.held() / 60))
+                if any(self.money.values()):
+                    with contextlib.suppress(Exception):
+                        await push.send(self.user_id, "Jagora is keeping your payment",
+                                        "Your booking page is kept open for you. Come back to Jagora when you have paid.",
+                                        f"/app?chat={next(t for t, on in self.money.items() if on)}", tag="money")
+            await asyncio.sleep(HOLD_CHECK)
         if self.ws is ws and SESSIONS.get(self.user_id) is self:
             SESSIONS.pop(self.user_id, None)
             await self.close()
@@ -1543,6 +1611,9 @@ class Session:
             # answer the most recent open question with her words
             mid_, (kind, fut) = list(r.waiting.items())[-1]
             if kind == "confirm":
+                if PAID.search(text) and not NO.search(text):
+                    self._resolve(task, mid_, "yes")
+                    return
                 if YES.search(text) or NO.search(text):
                     self._resolve(task, mid_, "yes" if YES.search(text) and not NO.search(text) else "no")
                     return
@@ -1806,6 +1877,9 @@ class WsIO:
             self.r.step_id = mid()
             await s.send({"type": "msg", "task": t, "msg": {"id": self.r.step_id, "kind": "step", "text": data["text"], "status": "doing"}})
             await s.send({"type": "orb", "state": "thinking"})
+        elif kind == "payment":
+            await self.close_step()
+            await s.keep_payment(t, data)
         elif kind == "record":
             await self.close_step()
             await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "record", "steps": data.get("steps", [])[-120:],
@@ -1978,9 +2052,20 @@ class DbMemory:
                       (self.u, key, question[:300], url[:500], answer[:900], time.time()))
 
     async def chat_note(self) -> str:
-        """What this chat is about so far (its own memory: each chat remembers its own thread)."""
+        """What this chat is about so far (its own memory: each chat remembers its own thread), with any payment in
+        it that is not finished, so a new run (or a new session after everything closed) checks it first."""
         row = await db.one("select note from chat_notes where user_id=? and chat_id=?", (self.u, self.c))
-        return row["note"] if row else ""
+        note = row["note"] if row else ""
+        pays = await db.exec("select data, status from payments where user_id=? and chat_id=? and status in ('waiting','paid_by_her') "
+                             "order by updated desc limit 3", (self.u, self.c))
+        if pays:
+            lines = []
+            for p in pays:
+                d = json.loads(p["data"])
+                lines.append(f'- {p["status"]}: {d.get("what", "")}, {d.get("amount", "")}, to {d.get("pay_to", "")} '
+                             f'{d.get("account", "")} {d.get("bank", "")}, reference {d.get("reference", "none")}, on {d.get("site", "")}')
+            note = (note + "\n" if note else "") + "Open payments in this chat (check them first):\n" + "\n".join(lines)
+        return note
 
     async def facts(self) -> list[str]:
         return [r["fact"] for r in await db.exec("select fact from facts where user_id=? order by t desc limit 25", (self.u,))]

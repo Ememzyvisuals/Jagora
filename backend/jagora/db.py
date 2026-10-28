@@ -53,6 +53,8 @@ SCHEMA = [
          t real not null, uses integer not null default 1, primary key (site, goal_key))""",
     """create table if not exists replays (goal_key text primary key, steps text not null, t real not null,
          uses integer not null default 1)""",
+    """create table if not exists payments (id text primary key, user_id text not null, chat_id text not null, t real not null,
+         updated real not null, status text not null, data text not null)""",
     """create table if not exists chat_notes (user_id text not null, chat_id text not null, note text not null,
          t real not null, primary key (user_id, chat_id))""",
     """create table if not exists known (user_id text not null, qkey text not null, question text not null, url text not null,
