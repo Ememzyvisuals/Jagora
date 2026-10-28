@@ -211,7 +211,11 @@ async def entrypoint(ctx: JobContext) -> None:
                 # the voice stays the one for her app language (set by "lang"); a message never switches it
                 text = str(d.get("text") or "").strip()
                 if text:
-                    session.say(text, allow_interruptions=True, add_to_chat_ctx=False)
+                    log.info("SAY (%d chars, %s): %s", len(text), voice.speaker, text[:120])
+                    try:
+                        session.say(text, allow_interruptions=True, add_to_chat_ctx=False)
+                    except Exception as e:  # noqa: BLE001
+                        log.warning("say failed: %s", e)
             elif kind == "hush":
                 try:
                     await session.interrupt(force=True)

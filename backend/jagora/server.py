@@ -583,6 +583,7 @@ def is_noise(text: str) -> bool:
 
 SEND_WAIT = 6.0  # seconds a message may wait on her connection before the connection counts as gone
 RECONNECT_GRACE = 60.0
+VOICE_START_WAIT = 7.0  # seconds for Jagora's LiveKit voice to start a reply before the app says it instead
 PAGE_WAIT = 1.5  # seconds Jagora's voice waits for a new page to reach her screen  # seconds a dropped session (and its task) waits for her app to come back
 KEEP_FOR_LATER = {"task", "msg", "update", "status", "url", "notify", "account", "speech_end"}
 
@@ -627,6 +628,7 @@ class Session:
         self._last_url = ""
         self._missed: list[dict] = []
         self._stats_task: asyncio.Task | None = None
+        self._voice_spoke = asyncio.Event()  # Jagora's voice on LiveKit started speaking
         # what the live picture did, summed up every few seconds in the session log
         self.stream = {"video_frames": 0, "keyframes": 0, "photos": 0, "bytes": 0, "dropped_busy_line": 0,
                        "skipped_not_viewing": 0, "skipped_no_task": 0, "skipped_no_picture": 0, "encode_failed": 0}
@@ -913,8 +915,23 @@ class Session:
                     self._page_ready.set()  # the next lines do not wait again
                 if gen != self._gen:
                     continue
-            if self.voice_ws is not None and await self._to_voice({"type": "say", "text": speech.speakable(text), "lang": lang}):
-                continue  # Jagora's voice on LiveKit says it (and handles her talking over it)
+            if self.voice_ws is not None:
+                was_speaking = self.voice_speaking
+                self._voice_spoke.clear()
+                if await self._to_voice({"type": "say", "text": speech.speakable(text), "lang": lang}):
+                    trace.write(self.user_id, "say_sent_to_voice", chars=len(text))
+                    if was_speaking:
+                        continue  # it queues after what it is saying now
+                    # Jagora's voice on LiveKit says it. If it has not started within a few seconds (it failed on
+                    # this text, or the voice is stuck), the reply is spoken the other way, so she always hears it
+                    try:
+                        await asyncio.wait_for(self._voice_spoke.wait(), VOICE_START_WAIT)
+                        continue
+                    except asyncio.TimeoutError:
+                        if gen != self._gen:
+                            continue  # she spoke meanwhile: this reply is out of date
+                        trace.write(self.user_id, "voice_did_not_speak", note="spoken through the app instead", text=text[:200])
+                        await self._to_voice({"type": "hush"})
             self._speaking = (task, text, lang)
             try:
                 await self.send({"type": "orb", "state": "speaking"})
@@ -1272,6 +1289,7 @@ class Session:
             state = str(ev.get("agent") or "")
             self.voice_speaking = state == "speaking"
             if state == "speaking":
+                self._voice_spoke.set()
                 self._page_ready.set()
                 await self.send({"type": "orb", "state": "speaking"})
             elif state == "listening":
