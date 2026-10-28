@@ -334,9 +334,7 @@ h3,
   --ang: 160deg;
   --sheen: 0;
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.55),
-    inset 0 -1px 1px rgba(255, 255, 255, 0.18),
-    inset 0 0 18px rgba(255, 255, 255, 0.07),
+    inset 0 1px 1px rgba(255, 255, 255, 0.35),
     0 1px 2px rgba(20, 40, 80, 0.06),
     0 14px 34px -16px rgba(20, 45, 90, 0.32);
   transition: transform 0.45s cubic-bezier(0.2, 1.4, 0.3, 1), box-shadow 0.3s ease;
@@ -353,7 +351,7 @@ h3,
   border-radius: inherit;
   padding: 1px;
   /* a clean hairline: bright along the top, fading down the sides, faint at the bottom */
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.22) 40%, rgba(255, 255, 255, 0.12) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.12) 40%, rgba(255, 255, 255, 0.06) 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -621,13 +619,12 @@ h3,
    with a plain frosted blur where url() filters are not supported (Safari, iOS). */
 .liquid-glass {
   position: relative;
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.24);
   -webkit-backdrop-filter: blur(16px) saturate(160%);
   backdrop-filter: url(#liquid-glass-distortion) blur(2px) saturate(160%);
-  border: 1px solid rgba(13, 13, 13, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    inset 0 0 18px rgba(255, 255, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
     0 10px 40px -12px rgba(13, 13, 13, 0.18);
 }
 [data-theme="dark"] .liquid-glass {

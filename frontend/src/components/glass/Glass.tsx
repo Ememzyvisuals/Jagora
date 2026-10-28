@@ -72,7 +72,7 @@ function displacementMap(w: number, h: number, r: number, bezel: number) {
 /** the frosted house style needs at least this much white to read like the desktop surfaces */
 function whiter(tint: string) {
   const m = tint.match(/^rgba\(\s*255\s*,\s*255\s*,\s*255\s*,\s*([\d.]+)\s*\)$/);
-  return m ? `rgba(255,255,255,${Math.max(0.72, parseFloat(m[1]))})` : tint;
+  return m ? `rgba(255,255,255,${Math.max(0.6, parseFloat(m[1]))})` : tint;
 }
 
 export type GlassProps = HTMLAttributes<HTMLDivElement> & {
