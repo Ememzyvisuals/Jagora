@@ -38,21 +38,21 @@ class Encoder:
         c = av.CodecContext.create("libx264", "w")
         c.width, c.height = self.w, self.h
         c.pix_fmt = "yuv420p"
-        # the rate control works per frame from the frame rate: give it the real one (12, or 6 in data saver), not
+        # the rate control works per frame from the frame rate: give it the real one (8, or 5 in data saver), not
         # millisecond timestamps, or it budgets the bitrate for 1000 frames a second and every frame turns to mush
-        self.fps = 6 if lite else 12
+        self.fps = 5 if lite else 8
         c.framerate = Fraction(self.fps, 1)
         c.time_base = Fraction(1, self.fps)
         kbps = KBPS[tier]
         c.options = {
-            "preset": "veryfast",
+            "preset": "superfast",  # light enough for a one-core budget (~8 ms a frame)
             "tune": "zerolatency",
             "profile": "baseline",
             "crf": str(CRF[tier]),
             "maxrate": f"{kbps}k",
             "bufsize": f"{kbps}k",  # one second of buffer: short bursts allowed, floods not
             "x264-params": "keyint=120:min-keyint=30:scenecut=0:bframes=0:repeat-headers=1:aud=1:annexb=1:sliced-threads=0",
-            "threads": "2",
+            "threads": "1",
         }
         self.ctx = c
         self.last_pts = -1

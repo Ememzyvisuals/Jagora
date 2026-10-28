@@ -52,7 +52,7 @@ async def test_video_keyframe_then_frames_at_full_sharpness(tmp_path):
         assert vids and vids[0][0] == 2 and any(m[0] == 3 for m in vids)  # a keyframe first, then frames
         dec = av.CodecContext.create("h264", "r")
         frames = [fr for m in vids for pkt in dec.parse(m[1:]) for fr in dec.decode(pkt)]
-        assert frames and frames[-1].width >= 2 * 400  # device pixels: twice the phone page's width
+        assert frames and frames[-1].width >= 600  # 1.5 picture pixels per page pixel (the old screencast gave 412)
         assert sum(len(m) for m in vids) < 400_000  # a few seconds of scrolling stays small
         assert not any(m[0] == 1 for m in after)  # no photos while video is on
     finally:

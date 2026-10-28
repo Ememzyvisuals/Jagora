@@ -199,6 +199,40 @@ function LiveStage({ taskId, interactive, pointer, full, pointAsk }: { taskId: s
     return () => ro.disconnect();
   }, [size.w, size.h, full]);
 
+  /* her finger scrolls the real page, any time (like a browser): moves are gathered and sent ~20 times a second,
+     and a quick flick at the end carries on a little */
+  const drag = useRef<{ y: number; t: number; v: number; pending: number; timer: number } | null>(null);
+  const flush = () => {
+    const d = drag.current;
+    if (!d || !d.pending) return;
+    void remoteInput(taskId, { action: "scroll", dy: d.pending });
+    d.pending = 0;
+  };
+  const swipe = {
+    onTouchStart: (e: React.TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      drag.current = { y: e.touches[0].clientY, t: performance.now(), v: 0, pending: 0, timer: window.setInterval(flush, 50) };
+    },
+    onTouchMove: (e: React.TouchEvent) => {
+      const d = drag.current;
+      if (!d || e.touches.length !== 1) return;
+      const y = e.touches[0].clientY, now = performance.now();
+      const dy = (d.y - y) / (fit.s || 1); // screen pixels -> page pixels
+      d.v = dy / Math.max(1, now - d.t);
+      d.pending += dy;
+      d.y = y;
+      d.t = now;
+    },
+    onTouchEnd: () => {
+      const d = drag.current;
+      if (!d) return;
+      clearInterval(d.timer);
+      if (performance.now() - d.t < 80 && Math.abs(d.v) > 0.3) d.pending += Math.max(-1600, Math.min(1600, d.v * 320)); // a flick
+      flush();
+      drag.current = null;
+    },
+  };
+
   const toPage = (e: { clientX: number; clientY: number }) => {
     const r = img.current?.getBoundingClientRect();
     if (!r) return null;
@@ -206,7 +240,7 @@ function LiveStage({ taskId, interactive, pointer, full, pointAsk }: { taskId: s
   };
 
   return (
-    <div ref={box} className="relative h-full w-full bg-white" onWheel={(e) => interactive && void remoteInput(taskId, { action: "scroll", dy: e.deltaY })}>
+    <div ref={box} className="relative h-full w-full bg-white" onWheel={(e) => void remoteInput(taskId, { action: "scroll", dy: e.deltaY / fit.s })} {...swipe}>
       <canvas
         ref={img}
         role="img"
@@ -223,7 +257,7 @@ function LiveStage({ taskId, interactive, pointer, full, pointAsk }: { taskId: s
           if (p) void remoteInput(taskId, { action: "tap", ...p });
           keys.current?.focus({ preventScroll: true });
         }}
-        className={`absolute top-0 select-none ${pointAsk ? "cursor-crosshair" : interactive ? "cursor-pointer" : ""} ${src ? "" : "invisible"}`}
+        className={`absolute top-0 touch-none select-none ${pointAsk ? "cursor-crosshair" : interactive ? "cursor-pointer" : ""} ${src ? "" : "invisible"}`}
         style={{ left: fit.left, width: fit.w, height: fit.h }}
       />
       {!src && (

@@ -425,7 +425,11 @@ class Session:
 
     def _cast_mode(self) -> str:
         if self.video:
-            return "vlite" if self.lite else "signal"
+            if self.lite:
+                return "vlite"
+            # phones: Chrome only signals a change and full_frame() takes the sharper picture; computers: the
+            # screencast frame is already full size, so it is used as is
+            return "signal" if (self.browser and self.browser.mobile) or self.device.get("mobile") else "vfull"
         return "lite" if self.lite else "full"
 
     async def send_bytes(self, data: bytes, kind: str = "frame") -> None:
@@ -473,7 +477,7 @@ class Session:
         """Chrome's screencast: the page changed. Video: wake the encoder (it takes a sharp frame itself). Photos:
         send this one, unless the last is still on its way (then only the newest is sent later: no backlog)."""
         if self.video:
-            if self.lite:
+            if self._cast_mode() != "signal":
                 self._latest_jpeg = base64.b64decode(jpeg)
             self._video_kick.set()
             return
@@ -532,7 +536,7 @@ class Session:
                     await asyncio.sleep(wait)
                     self._video_kick.clear()  # this frame covers changes made while waiting
                 last = time.monotonic()
-                jpeg = self._latest_jpeg if self.lite else await b.full_frame()
+                jpeg = await b.full_frame() if self._cast_mode() == "signal" else self._latest_jpeg
                 if not jpeg:
                     continue
                 w, h = video.jpeg_size(jpeg)
@@ -756,13 +760,21 @@ class Session:
     async def on_input(self, task: str, ev: dict) -> None:
         """A tap, typing, a key or scrolling on the live picture. Allowed when Jagora is not acting: she took over,
         Jagora is waiting for her, or nothing is running. What she types goes to the page only; it is not logged."""
+        if not self.browser:
+            return
+        b = self.browser
+        if ev.get("action") == "scroll":
+            # scrolling only changes what she looks at: allowed any time, even while Jagora reads or works (it reads
+            # the page again before its next action)
+            try:
+                await b.wheel(float(ev.get("dy", 0)))
+            except Exception as e:  # noqa: BLE001
+                log.info("scroll failed: %s", e)
+            return
         r = self.runs.get(task)
         if r and r.busy and r.free.is_set() and not r.waiting:
             await self.send({"type": "hint", "task": task, "text": "Tap Take over first, so Jagora waits for you."})
             return
-        if not self.browser:
-            return
-        b = self.browser
         try:
             act = ev.get("action")
             if act == "tap":

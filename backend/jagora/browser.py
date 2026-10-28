@@ -184,7 +184,9 @@ class Browser:
         self.notices: list[Notice] = []
         self.on_frame: Callable[[str], None] | None = None
         self._cdp = None
-        self._ring_shown = False  # is a ring drawn on the page now (see ring())
+        self._ring_shown = False
+        self._shot_cdp = None  # CDP session for full_frame(), per tab
+        self._shot_page = None  # is a ring drawn on the page now (see ring())
         self.cast = "full"  # how the live view is captured (lite.SCREENCAST): photos, data saver, or video
         self.opening = 0  # >0 while Jagora opens a tab itself (the guard leaves those alone)
         # pages in her language: the language to show (empty = as published), and an optional translator for tests
@@ -281,11 +283,22 @@ class Browser:
             self.cast = mode
             await self._restart_screencast()
 
-    async def full_frame(self) -> bytes | None:
-        """The page as she would see it on her screen, at full sharpness (device pixels), for the video stream."""
+    async def full_frame(self, scale: float = 1.5) -> bytes | None:
+        """The page as she sees it, sharper than Chrome's screencast (which is always at page-pixel size): one quick
+        CDP capture at `scale` page pixels per pixel (1.5 on phones: sharp, and light on the server)."""
         try:
-            return await self._need_page().screenshot(type="jpeg", quality=88, caret="initial", timeout=4000)
+            page = self._need_page()
+            if self._shot_cdp is None or self._shot_page is not page:
+                self._shot_cdp = await self._ctx.new_cdp_session(page)
+                self._shot_page = page
+            sx, sy = await page.evaluate("[scrollX, scrollY]")
+            vw, vh = self.viewport["width"], self.viewport["height"]
+            r = await asyncio.wait_for(self._shot_cdp.send("Page.captureScreenshot", {
+                "format": "jpeg", "quality": 85, "optimizeForSpeed": True,
+                "clip": {"x": sx, "y": sy, "width": vw, "height": vh, "scale": scale}}), 4)
+            return base64.b64decode(r["data"])
         except Exception:  # noqa: BLE001
+            self._shot_cdp = None
             return None
 
     async def _restart_screencast(self) -> None:
