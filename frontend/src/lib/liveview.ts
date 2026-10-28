@@ -38,7 +38,7 @@ export class Painter {
 
   constructor(
     private canvas: HTMLCanvasElement,
-    private hooks: { needKey: () => void; videoBroken: () => void },
+    private hooks: { needKey: () => void; videoBroken: () => void; log?: (event: string, data?: Record<string, unknown>) => void },
   ) {
     this.ctx = canvas.getContext("2d", { alpha: false });
   }
@@ -50,6 +50,7 @@ export class Painter {
 
   private size(w: number, h: number) {
     if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.hooks.log?.("picture_size", { w, h, first: this.canvas.width === 300 && this.canvas.height === 150 });
       this.canvas.width = w;
       this.canvas.height = h;
       this.onSize?.(w, h);
@@ -74,8 +75,9 @@ export class Painter {
         this.ctx?.drawImage(bmp, 0, 0);
         bmp.close();
       }
-    } catch {
+    } catch (e) {
       /* a broken picture: the next one replaces it */
+      this.hooks.log?.("photo_broken", { error: String(e).slice(0, 200) });
     } finally {
       this.drawing = false;
     }
@@ -89,13 +91,15 @@ export class Painter {
         this.reset();
         this.decoder = new VideoDecoder({
           output: (frame) => {
+            if (!this.shown) this.hooks.log?.("video_first_painted", { w: frame.displayWidth, h: frame.displayHeight, codec: this.codec });
             this.shown = true;
             clearTimeout(this.watchdog);
             this.size(frame.displayWidth, frame.displayHeight);
             this.ctx?.drawImage(frame, 0, 0);
             frame.close();
           },
-          error: () => {
+          error: (e) => {
+            this.hooks.log?.("video_decoder_error", { error: String(e).slice(0, 200), codec: this.codec });
             this.decoder = null;
             this.ready = false;
             this.hooks.videoBroken();
@@ -104,7 +108,9 @@ export class Painter {
         try {
           this.decoder.configure({ codec, optimizeForLatency: true, hardwareAcceleration: "no-preference" });
           this.codec = codec;
-        } catch {
+          this.hooks.log?.("video_decoder_ready", { codec });
+        } catch (e) {
+          this.hooks.log?.("video_decoder_refused", { codec, error: String(e).slice(0, 200) });
           return this.hooks.videoBroken();
         }
       }
@@ -121,6 +127,7 @@ export class Painter {
       this.watchdog = window.setTimeout(() => {
         this.watchdog = 0;
         if (!this.shown) {
+          this.hooks.log?.("video_never_painted", { codec: this.codec, note: "switching to photos" });
           this.reset();
           this.hooks.videoBroken();
         }

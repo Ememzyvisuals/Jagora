@@ -551,6 +551,10 @@ class Session:
         self._page_ready.set()
         self._last_url = ""
         self._missed: list[dict] = []
+        self._stats_task: asyncio.Task | None = None
+        # what the live picture did, summed up every few seconds in the session log
+        self.stream = {"video_frames": 0, "keyframes": 0, "photos": 0, "bytes": 0, "dropped_busy_line": 0,
+                       "skipped_not_viewing": 0, "skipped_no_task": 0, "skipped_no_picture": 0, "encode_failed": 0}
         self.voice_ws: WebSocket | None = None  # Jagora's voice worker on LiveKit, while she talks through it
         self._hearing: str = ""  # the chat bubble showing what the voice hears as she speaks  # chat messages that could not be sent, delivered when she reconnects
 
@@ -563,18 +567,44 @@ class Session:
             return "signal" if (self.browser and self.browser.mobile) or self.device.get("mobile") else "vfull"
         return "lite" if self.lite else "full"
 
+    async def _stream_stats(self) -> None:
+        """Every 5 s while the browser is open: what the live picture did (sent, skipped and why), into the log."""
+        try:
+            while self.browser is not None:
+                await asyncio.sleep(5)
+                b = self.browser
+                seen = b.frames_seen if b else 0
+                if b:
+                    b.frames_seen = 0
+                if seen or any(self.stream.values()):
+                    trace.write(self.user_id, "stream", chrome_frames=seen, mode=self._cast_mode(), viewing=self.viewing,
+                                video=self.video, task=self.active_task, page=(b.page.url if b and b.page else ""),
+                                line_dead=self.ws is self._dead_ws, **self.stream)
+                    for k in self.stream:
+                        self.stream[k] = 0
+        finally:
+            self._stats_task = None
+
     async def send_bytes(self, data: bytes, kind: str = "frame") -> None:
         """Binary messages: the live view (1 = JPEG photo, 2 = video keyframe, 3 = video frame), no base64. A picture
         is never worth waiting for: if the line is busy or gone, this one is skipped (the next one replaces it)."""
         ws = self.ws
         if ws is self._dead_ws or self._send_lock.locked():
+            self.stream["dropped_busy_line"] += 1
             return
         async with self._send_lock:
             try:
                 await asyncio.wait_for(ws.send_bytes(data), SEND_WAIT)
                 self.sent[kind] += len(data)
+                self.stream["bytes"] += len(data)
+                k = data[:1]
+                self.stream["photos" if k == b"\x01" else "keyframes" if k == b"\x02" else "video_frames"] += 1
+                if not self._page_ready.is_set():
+                    trace.write(self.user_id, "stream_first_picture_sent", kind={b"\x01": "photo", b"\x02": "keyframe"}.get(k, "video"),
+                                bytes=len(data))
                 self._page_ready.set()
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
+                trace.write(self.user_id, "stream_line_dead", error=f"{type(e).__name__}: {str(e)[:200]}")
                 self._dead_ws = ws
 
     async def send(self, msg: dict) -> None:
@@ -640,6 +670,12 @@ class Session:
     async def get_browser(self) -> Browser:
         if self.browser is None:
             self.browser = await Browser(self.device).start()
+            uid = self.user_id
+            self.browser.on_log = lambda what, **d: trace.write(uid, "browser_" + what, **d)
+            trace.write(uid, "browser_started", viewport=self.browser.viewport, mobile=self.browser.mobile,
+                        device=self.device, cast=self._cast_mode())
+            if not self._stats_task:
+                self._stats_task = asyncio.create_task(self._stream_stats())
             self.browser.cast = self._cast_mode()
             self.browser.translate_to = self.lang if self.translate and self.lang != "en" else ""
             await self.browser.start_screencast(self._frame)
@@ -657,7 +693,10 @@ class Session:
             return
         if not self.viewing:
             self._held_frame = jpeg  # sent when she comes back
+            self.stream["skipped_not_viewing"] += 1
             return
+        if not self.active_task:
+            self.stream["skipped_no_task"] += 1
         self._latest_jpeg = base64.b64decode(jpeg)
         now = time.monotonic()
         if self._frame_busy or now - self._last_frame < lite.FRAME_GAP["lite" if self.lite else "full"] or not self.active_task:
@@ -681,6 +720,8 @@ class Session:
             self._frame_busy = False
 
     async def set_video(self, on: bool) -> None:
+        if on != self.video:
+            trace.write(self.user_id, "stream_video", on=on, note="" if on else "photos instead of video")
         if on == self.video:
             if on:
                 self._video_key = True
@@ -713,6 +754,7 @@ class Session:
                 self._video_kick.clear()
                 b = self.browser
                 if not self.video or not self.viewing or not b or not b.page or not self.active_task:
+                    self.stream["skipped_not_viewing" if not self.viewing else "skipped_no_task"] += 1
                     continue
                 wait = last + lite.VIDEO_GAP["lite" if self.lite else "full"] - time.monotonic()
                 if wait > 0:
@@ -727,6 +769,7 @@ class Session:
                     except Exception:  # noqa: BLE001
                         jpeg = None
                 if not jpeg:
+                    self.stream["skipped_no_picture"] += 1
                     # the page was busy (loading, or Jagora reading it for itself): try again shortly. A still page
                     # sends no more change signals, so without this her screen could stay on "Opening the page"
                     asyncio.get_running_loop().call_later(0.4, self._video_kick.set)
@@ -737,11 +780,14 @@ class Session:
                         enc.close()
                     enc = video.Encoder(w, h, lite=self.lite)
                     self._video_key = True
+                    trace.write(self.user_id, "stream_encoder", width=w, height=h, lite=self.lite)
                 key, self._video_key = self._video_key, False
                 try:
                     out = await asyncio.to_thread(enc.encode, jpeg, int(last * 1000), key)
                 except Exception as e:  # noqa: BLE001
                     log.warning("video encode failed: %s", e)
+                    self.stream["encode_failed"] += 1
+                    trace.write(self.user_id, "stream_encode_failed", error=str(e)[:200])
                     enc = None
                     continue
                 for data, is_key in out:

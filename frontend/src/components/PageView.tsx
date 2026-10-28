@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { activeTask, useApp } from "@/lib/store";
 import { registerFrame } from "@/lib/engine/frame";
 import { live } from "@/lib/engine";
-import { onRemoteFrame, remoteInput, remotePoint, remoteTakeover, remoteTranslate, requestKeyframe, videoFailed } from "@/lib/engine/remote";
+import { clientLog, onRemoteFrame, remoteInput, remotePoint, remoteTakeover, remoteTranslate, requestKeyframe, videoFailed } from "@/lib/engine/remote";
 import { Painter } from "@/lib/liveview";
 import { PAGE_PILL, PILL } from "@/lib/glassRegistry";
 import { Glass } from "./glass/Glass";
@@ -174,12 +174,20 @@ function LiveStage({ taskId, interactive, pointer, full, pointAsk }: { taskId: s
   useEffect(() => {
     const c = img.current;
     if (!c) return;
-    const painter = new Painter(c, { needKey: requestKeyframe, videoBroken: videoFailed });
-    painter.onSize = () => setSrc(true);
+    const painter = new Painter(c, { needKey: requestKeyframe, videoBroken: videoFailed, log: clientLog });
+    let shown = false;
+    painter.onSize = () => ((shown = true), setSrc(true));
     const off = onRemoteFrame((f) => painter.push(f));
+    clientLog("live_page_opened", { task: taskId });
+    // still nothing to show after a while: say so in the log (the stream lines around it tell why)
+    const t5 = window.setTimeout(() => !shown && clientLog("live_page_still_blank", { task: taskId, after_s: 5 }), 5000);
+    const t15 = window.setTimeout(() => !shown && clientLog("live_page_still_blank", { task: taskId, after_s: 15 }), 15000);
     return () => {
       off();
       painter.reset();
+      clearTimeout(t5);
+      clearTimeout(t15);
+      clientLog("live_page_closed", { task: taskId, had_picture: shown });
     };
   }, []);
 

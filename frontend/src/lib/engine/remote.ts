@@ -45,8 +45,21 @@ export function onRemoteFrame(f: (frame: LiveFrame) => void) {
   if (videoOn) requestKeyframe(); // a new screen showing the video starts from a keyframe
   return () => void frameListeners.delete(f);
 }
+/* the live picture as it reaches this app, summed up every 5 s for the session log */
+const got = { photos: 0, keyframes: 0, video: 0, bytes: 0, listeners: 0 };
+if (typeof window !== "undefined")
+  setInterval(() => {
+    if (got.photos + got.keyframes + got.video === 0) return;
+    got.listeners = frameListeners.size;
+    clientLog("picture_received", { ...got, note: got.listeners ? "" : "no live page is open on screen to show them" });
+    got.photos = got.keyframes = got.video = got.bytes = 0;
+  }, 5000);
 function gotFrame(data: ArrayBuffer) {
   const b = new Uint8Array(data);
+  if (b[0] === 1) got.photos++;
+  else if (b[0] === 2) got.keyframes++;
+  else if (b[0] === 3) got.video++;
+  got.bytes += b.length;
   const kind = b[0] as 1 | 2 | 3;
   if (kind !== 1 && kind !== 2 && kind !== 3) return;
   const f: LiveFrame = { kind, data: b.subarray(1) };
@@ -79,6 +92,7 @@ export function clientLog(event: string, data: Record<string, unknown> = {}) {
 export function requestKeyframe() {
   if (!videoOn || performance.now() - keyAsked < 800) return;
   keyAsked = performance.now();
+  clientLog("asked_for_keyframe");
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "video", on: true }));
 }
 export function videoFailed() {

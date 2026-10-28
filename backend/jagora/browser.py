@@ -341,6 +341,9 @@ class Browser:
         self.expect_tab: str = ""
         self.notices: list[Notice] = []
         self.on_frame: Callable[[str], None] | None = None
+        # the session recorder (trace.py): everything the browser does, so a blank live page can be explained
+        self.on_log: Callable[..., None] | None = None
+        self.frames_seen = 0  # screencast frames from Chrome since the last summary
         self._cdp = None
         self._ring_shown = False
         self.confirm_ok_until = 0.0
@@ -381,7 +384,27 @@ class Browser:
         finally:
             self.opening -= 1
 
+    def log(self, what: str, **data) -> None:
+        if self.on_log:
+            try:
+                self.on_log(what, **data)
+            except Exception:  # noqa: BLE001
+                pass
+
     def _wire(self, p: Page) -> None:
+        tab = lambda: self.pages.index(p) if p in getattr(self, "pages", []) else -1  # noqa: E731
+        p.on("framenavigated", lambda f: f == p.main_frame and self.log("navigated", url=f.url, tab=tab(), shown=p is self.page))
+        p.on("domcontentloaded", lambda _: self.log("page_ready", url=p.url, tab=tab()))
+        p.on("load", lambda _: self.log("page_loaded", url=p.url, tab=tab()))
+        p.on("pageerror", lambda e: self.log("page_script_error", url=p.url, error=str(e)[:300]))
+        p.on("console", lambda m: m.type == "error" and self.log("page_console_error", url=p.url, text=m.text[:300]))
+        p.on("crash", lambda _: self.log("page_crashed", url=p.url, tab=tab()))
+        p.on("close", lambda _: self.log("tab_closed", url=p.url))
+        p.on("popup", lambda q: self.log("popup_opened", url=q.url, from_url=p.url))
+        p.on("requestfailed", lambda r: r.resource_type == "document" and self.log(
+            "page_request_failed", url=r.url, error=(r.failure or "")[:200]))
+        p.on("response", lambda r: r.request.resource_type == "document" and r.status >= 400 and self.log(
+            "page_http_error", url=r.url, status=r.status))
         p.on("dialog", lambda d: asyncio.ensure_future(self._dialog(d)))  # pop-ups never block, and the model hears them
         p.on("download", lambda d: asyncio.ensure_future(self._stray_download(d)))
         p.on("filechooser", lambda fc: self._file_wanted())
@@ -502,8 +525,9 @@ class Browser:
                 "format": "jpeg", "quality": 85, "optimizeForSpeed": True,
                 "clip": {"x": sx, "y": sy, "width": vw, "height": vh, "scale": scale}}), 4)
             return base64.b64decode(r["data"])
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             self._shot_cdp = None
+            self.log("picture_failed", url=self.page.url if self.page else "", error=f"{type(e).__name__}: {str(e)[:200]}")
             return None
 
     async def _restart_screencast(self) -> None:
@@ -518,7 +542,14 @@ class Browser:
                     pass
             cdp = await self._ctx.new_cdp_session(self.page)
 
+            first = [True]
+
             def frame(ev):
+                self.frames_seen += 1
+                if first[0]:
+                    first[0] = False
+                    self.log("screencast_first_frame", url=self.page.url if self.page else "", hold=self.hold,
+                             meta={k: ev.get("metadata", {}).get(k) for k in ("deviceWidth", "deviceHeight")})
                 if self.on_frame and not self.hold:
                     self.on_frame(ev["data"])
                 asyncio.ensure_future(cdp.send("Page.screencastFrameAck", {"sessionId": ev["sessionId"]}))
@@ -526,8 +557,10 @@ class Browser:
             cdp.on("Page.screencastFrame", frame)
             await cdp.send("Page.startScreencast", lite.SCREENCAST[self.cast])
             self._cdp = cdp
+            self.log("screencast_started", mode=self.cast, url=self.page.url, settings=lite.SCREENCAST[self.cast])
         except Exception as e:  # noqa: BLE001
             log.warning("screencast unavailable: %s", e)
+            self.log("screencast_failed", error=str(e)[:300])
 
     # ---- reading the page -----------------------------------------------------------------------------------------
 
@@ -584,9 +617,13 @@ class Browser:
         self.pdfs.pop(id(page), None)
         if url.lower().split("?")[0].endswith(".pdf"):
             return await self.open_pdf(url)
+        t0 = time.monotonic()
+        self.log("goto", url=url)
         try:
             resp = await page.goto(url, wait_until="domcontentloaded", timeout=35000)
+            self.log("goto_done", url=page.url, status=resp.status if resp else None, seconds=round(time.monotonic() - t0, 2))
         except Exception as e:  # noqa: BLE001
+            self.log("goto_failed", url=url, error=str(e).splitlines()[0][:200], seconds=round(time.monotonic() - t0, 2))
             if "Download is starting" in str(e) or "net::ERR_ABORTED" in str(e):
                 return await self.open_pdf(url)  # most often a PDF the browser wants to save
             raise ActionError(f"the page did not open ({str(e).splitlines()[0][:120]})") from e
@@ -933,6 +970,7 @@ class Browser:
             return {"rect": None, "image": crop_pdf_evidence(pv.doc, h["page"], h["rects"]), "page": h["page"], "text": h["snippet"]}
         page = self._need_page()
         self.hold = True
+        self.log("live_picture_held", reason="Jagora is looking at something for itself; her picture waits")
         try:
             at = await page.evaluate("[scrollX, scrollY]")
             got = await self._highlight(quote, near)
@@ -942,6 +980,7 @@ class Browser:
             return got
         finally:
             self.hold = False
+            self.log("live_picture_released")
 
     async def _highlight(self, quote: str, near: int | None = None) -> dict | None:
         await self.show_original()
