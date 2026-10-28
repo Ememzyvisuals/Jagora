@@ -8,6 +8,9 @@ export type Mode = "guide" | "do";
 
 export type Profile = {
   full_name: string;
+  first_name?: string;
+  last_name?: string;
+  address?: string;
   phone: string;
   email: string;
   date_of_birth: string; // YYYY-MM-DD
@@ -26,9 +29,11 @@ export type DocBlock =
   | { t: "table"; head: string[]; rows: string[][]; caption?: string }
   | { t: "note"; text: string };
 export type JDoc = { title: string; subtitle?: string; kind: string; summary: string[]; blocks: DocBlock[]; sources: { title: string; url: string }[]; created: number; lang: string };
+/** one box in a form card: she fills several at once in the chat, each goes into its own box on the page */
+export type FormField = { key: string; label: string; field: SecretField; digits?: number; profile_field?: keyof Profile };
 export type SecretField = "account" | "nin" | "bvn" | "otp" | "pin" | "password" | "phone" | "card" | "other" | "name" | "email" | "address" | "text";
 /** what she types herself because it must be spelled exactly (not private: shown as she types) */
-export const PLAIN_FIELDS = new Set<SecretField>(["name", "email", "address", "text"]);
+export const PLAIN_FIELDS = new Set<SecretField>(["name", "email", "address", "text", "phone"]);
 export type Attachment = { kind: "image" | "doc" | "link"; name: string; url?: string };
 
 export type Msg =
@@ -42,7 +47,8 @@ export type Msg =
   | { id: string; kind: "handoff"; text: string; status: "waiting" | "done" }
   /** something she should type rather than say aloud (account number, NIN, BVN, OTP, PIN, password). The value goes
       straight to the website field; the app keeps only a masked hint, and it is never spoken or sent to the model. */
-  | { id: string; kind: "secret"; label: string; field: SecretField; digits?: number; status: "waiting" | "done" | "skipped"; shown?: string }
+  | { id: string; kind: "secret"; label: string; field: SecretField; digits?: number; profile_field?: keyof Profile; status: "waiting" | "done" | "skipped"; shown?: string }
+  | { id: string; kind: "form"; title: string; fields: FormField[]; status: "waiting" | "done" | "skipped"; shown?: string[] }
   | { id: string; kind: "verdict"; verdict: "scam" | "safe" | "unsure"; title: string; reasons: string[]; link?: string }
   | { id: string; kind: "explain"; title: string; image: string; sections: { label: string; text: string; box: [number, number, number, number] }[] }
   | { id: string; kind: "doc"; doc: JDoc }

@@ -182,6 +182,9 @@ class UserIO(Protocol):
     async def event(self, kind: str, data: dict) -> None: ...
 
 
+SECRET_FIELDS = ["account", "nin", "bvn", "otp", "pin", "password", "phone", "card", "other", "name", "email", "address", "text"]
+PLAIN_FIELDS = {"name", "email", "address", "text", "phone"}
+NEVER_KEEP = {"otp", "pin", "card", "cvv", "password"}  # never saved anywhere from a form card
 PROFILE_FIELDS = ["full_name", "first_name", "last_name", "phone", "email", "date_of_birth", "gender", "state", "address"]
 EL = {"type": "integer", "description": "the element's number on the latest page"}
 WHY = {"type": "string", "description": "short reason, for the log"}
@@ -225,7 +228,7 @@ def yt_embed(video_id: str) -> str:
 
 YT_ID = re.compile(r"(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/)|youtu\.be/)([\w-]{11})")
 
-FILL_TOOLS = {"type_text", "choose", "set_checkbox", "upload_file", "set_date", "fill_form", "drag", "use_saved_login",
+FILL_TOOLS = {"ask_form", "type_text", "choose", "set_checkbox", "upload_file", "set_date", "fill_form", "drag", "use_saved_login",
               "ask_private", "hand_over"}
 
 COMMON = [
@@ -270,9 +273,12 @@ COMMON = [
           "claim": {"type": "string", "description": "the fact this proves, in their language, one short sentence"},
           "near_page": {"type": "integer", "description": "for PDFs: the page find_text reported"}},
          ["quote", "claim"]),
-    tool("download", "Download a file for them (a brochure, form, timetable or result slip) from a link address or a link "
-         "element on the page. The user gets it in the chat. Never app installers.",
-         {"url": {"type": "string"}, "element": EL, "name": {"type": "string", "description": "a clear file name"}, "step": STEP}, []),
+    tool("download", "Download a file for them (a brochure, form, timetable, result slip, ticket, receipt, booking slip) from a "
+         "link address, a link or 'Download' button on the page (a button with no address is pressed and its file taken), "
+         "or page_as_pdf: the open page itself kept as a PDF (a ticket or confirmation shown as a page). The user gets it in "
+         "the chat. Never app installers.",
+         {"url": {"type": "string"}, "element": EL, "name": {"type": "string", "description": "a clear file name"},
+          "page_as_pdf": {"type": "boolean"}, "step": STEP}, []),
     tool("write_document", "Write a well-organised document for them from what you found (a study plan, a summary of "
          "requirements, a comparison). Only facts you confirmed, each source listed. The user can read it and download it as "
          "PDF, Word or Markdown. Write it in their language unless the user asked otherwise.",
@@ -301,8 +307,21 @@ COMMON = [
          "addresses, home addresses, usernames (field name, email, address or text: shown as they type). The label tells them "
          "what to type and how, e.g. 'Type your surname exactly as on your NIN slip'.",
          {"element": EL, "label": {"type": "string", "description": "what to type, in their language"},
-          "field": {"type": "string", "enum": ["account", "nin", "bvn", "otp", "pin", "password", "phone", "card", "other", "name", "email", "address", "text"]},
-          "digits": {"type": "integer"}}, ["element", "label", "field"]),
+          "field": {"type": "string", "enum": SECRET_FIELDS},
+          "digits": {"type": "integer"},
+          "profile_field": {"type": "string", "enum": PROFILE_FIELDS, "description": "when it is one of her details (name, "
+                            "phone, email, address...): the box offers to save it to her details and is filled in already "
+                            "if she saved it before"}}, ["element", "label", "field"]),
+    tool("ask_form", "Several boxes she fills herself in ONE card in the chat (better than typing on the live page): e.g. a "
+         "booking's passenger name, phone, email and NIN together. Each value goes straight into its box on the page; you never "
+         "see private ones. Plain details (name, email, phone, address) can be saved to her details with one tick and are "
+         "filled in already if saved. Use it whenever a page needs two or more things only she knows.",
+         {"title": {"type": "string", "description": "what this is for, in their language, e.g. 'Passenger details'"},
+          "fields": {"type": "array", "items": {"type": "object", "properties": {
+              "element": EL, "label": {"type": "string", "description": "what to type, in their language"},
+              "field": {"type": "string", "enum": SECRET_FIELDS}, "digits": {"type": "integer"},
+              "profile_field": {"type": "string", "enum": PROFILE_FIELDS}}, "required": ["element", "label", "field"]}}},
+         ["title", "fields"]),
     tool("update_plan", "For tasks with several steps: show them your plan as a checklist and keep it current (mark steps "
          "doing/done/skipped as you go, add steps you discover). Send the whole list each time.",
          {"steps": {"type": "array", "items": {"type": "object", "properties": {
@@ -420,7 +439,7 @@ ACT_TOOLS = [
 ]
 APP_ACTIONS = ["show_page", "hide_page", "show_chat", "hide_chat", "show_tabs", "hide_tabs", "open_chat", "new_chat",
                "close_chat", "scroll_chat", "set_language", "set_mode", "voice", "data_saver", "theme", "fullscreen",
-               "end_live", "hide_live", "show_live", "stop_media", "media_next", "media_previous", "media_pause", "media_play", "media_seek", "media_save", "media_resume", "amina", "my_details", "go_home", "show_history", "hide_history"]
+               "end_live", "hide_live", "show_live", "stop_media", "media_next", "media_previous", "media_pause", "media_play", "media_seek", "media_save", "media_resume", "media_volume", "media_speed", "media_mute", "media_unmute", "media_big", "media_restart", "amina", "my_details", "go_home", "show_history", "hide_history"]
 APP_TOOL = tool(
     "app_control",
     "Control the Jagora app itself on the user's screen (not the website): show or hide the live web page, show or hide "
@@ -430,7 +449,10 @@ APP_TOOL = tool(
     "down while the call goes on (hide_live: 'close this live screen', 'remove this screen'), bring it back (show_live), "
     "close the song or video playing on their screen (stop_media), next or previous in the list playing (media_next, "
     "media_previous), pause or play it (media_pause, media_play), move it back or forward (media_seek: 'go back 10 "
-    "seconds' is value -10, 'skip 30 seconds' +30, 'go to 2 minutes' 2:00), pause it and keep her place in this chat to "
+    "seconds' is value -10, 'forward it' or 'skip 30 seconds' +30, 'go to 2 minutes' 2:00, 'half way' 50%), start it again "
+    "(media_restart), louder or softer (media_volume +20 / -20, or an exact 0 to 100), mute or unmute (media_mute, media_unmute), "
+    "faster or slower (media_speed 1.5, 0.75, +0.25; 1 is normal), make it fill the screen or back to normal "
+    "(media_big on / off), pause it and keep her place in this chat to "
     "watch later (media_save: 'save it for later', 'I will continue later'), play the saved one on from where she stopped "
     "(media_resume: 'continue my video'), show or hide Amina, open their "
     "saved details, go to the start screen. Use it whenever they ask for something on the screen ('close this', 'show me "
@@ -440,7 +462,8 @@ APP_TOOL = tool(
      "value": {"type": "string", "description": "for open_chat/close_chat: the chat's number or title from the screen, "
                "or 'last'/'previous'; scroll_chat: up, down, top, bottom; set_language: yo, ha, ig, pcm, en; set_mode: "
                "do or guide; voice, data_saver, fullscreen, amina: on or off (data_saver also auto); theme: dark or light; "
-               "media_seek: -10, +30 or 1:20"}},
+               "media_seek: -10, +30, 1:20 or 50%; media_volume: +20, -20 or 0 to 100; media_speed: 0.5 to 2 or +0.25; "
+               "media_big: on or off"}},
     ["action"])
 
 DO_TOOLS = COMMON + ACT_TOOLS
@@ -485,6 +508,9 @@ LIMITS YOU KEEP
 - Downloads: only free and legal ones (offered for free by the owner, public domain, Creative Commons, or with a licence that allows it). For music and films that are sold or streamed, show them the official store or streaming page instead of pirate sites. For fonts, open the licence and tell them plainly whether it is free for personal and for commercial use.
 - People: for public figures, use what is public (official pages, news). For private people, help only with what they themselves made public, and never gather home addresses, phone numbers or a profile of someone.
 - Payments (electricity tokens, fees, tickets): only on the official site, the amount and meter or account confirmed with them, card details and OTP through ask_private, and their yes before paying.
+- Before any payment, read the whole order back in one short message and wait for their yes: what it is (route, date, time, class, seats, names), the total amount, and who receives the money.
+- Account names: when a page shows the name that belongs to an account number (a transfer, "verify account", a bank-transfer payment), tell them that exact name and compare it with who should get the money. If it is a person's name or anything other than the company or its payment company (Flutterwave, Paystack, Remita), say plainly that it does not match and do not pay. You cannot send money from their bank; when a page asks them to transfer, show the account number, bank, name and amount as written, and after they say they have paid, press the page's "I have paid" button and wait for the confirmation.
+- Train tickets: book only on NRC's own booking sites (Lagos-Ibadan nrc.gsds.ng, Abuja-Kaduna nrc.tps.ng, Warri-Itakpe nrc-fane.ng, all listed on nrc.gov.ng). Tickets are paid by card on Flutterwave from that site. NRC warns that anyone asking for payment into a personal bank account for train tickets is a scammer: say so if you see it. Booking needs an account with their NIN (through ask_private) and opens about a day ahead; tell them if the date they want is not open yet. At the end, show the ticket or booking reference with show_evidence and tell them to keep it for the station.
 
 HOW YOU WORK
 - Talk only through tell_user, ask_user, point_at, hand_over, ask_private, give_verdict and finish, always in {lang}. Never mention element numbers, tools, code or technical words. Numbers, dates and money stay as digits.
@@ -505,6 +531,10 @@ HOW YOU WORK
 - If you cannot tell which thing the user means on a page, use ask_point so the user taps it. For things without a number (maps, charts, canvas, images), use click_at with screenshot pixels. Use hover for hover menus, drag for sliders and drop zones, upload_file for their files, set_date for date boxes.
 - One-time codes: ask them whether to read it from their email (open their mail in a new tab, then fetch_code) or whether the user will type it (ask_private). Captchas and "are you human" checks: hand_over so the user does it on the live page.
 - Exact spellings: a name, email address, home address or username you do not already have from their saved details is never typed from what you heard (voice gets spellings wrong). Use ask_private with field name, email, address or text, and a label that guides them ("Type your full name as it is on your WAEC certificate").
+- She never has to type on the live page: whatever only she knows goes in a box in the chat. Two or more at once (passenger details, a sign-up form): ONE ask_form card; one thing: ask_private. Give profile_field for her details so the card can fill them from what she saved and offer to save new ones. Her saved details you already have go straight in with fill_form (profile_field). The page itself is only for things she must do there (a captcha, a picture check).
+- Sign-ins: if the site already shows her signed in (her sign-ins are kept between sessions), carry on. If it asks her to sign in, use use_saved_login when she saved one; otherwise email or phone and password in ONE ask_form card, and any code or "verify it's you" number with ask_private (fetch_code when it went to her email). Never make her type on the live page.
+- After a booking, payment or registration, always get the proof for her: the ticket, slip, receipt or confirmation, with download (its Download button, or page_as_pdf for a confirmation page), and say what she must bring or show.
+- Choices on a booking (date, time or train, class, coach, seat number, number of passengers, one way or return): read what the page offers and ask her with ask_user, with the options and prices as the page shows them (for seats, the free seat numbers). Never choose for her, unless she says any is fine.
 - Private values (account number, NIN, BVN, card, OTP, PIN, password): use ask_private. Never type them yourself, never ask them to say them aloud, never repeat them.
 - Submitting, paying, sending, agreeing to terms, or leaving the website needs their yes: write the yes/no question in `ask`, in {lang}. If the user says no, do not try again; ask what they want.
 - Jagora's guard blocks adult, phishing and fake sites, closes ads and pop-ups and stops redirect tricks. If a page was blocked, tell them briefly and find a safe source.
@@ -513,7 +543,7 @@ HOW YOU WORK
 - Do not ask "what do you want me to do?" when the request is already clear from the conversation; only ask when two real choices remain.
 - Be quick on simple questions (dates, news, prices, results): search once, open the best official or news result, read the answer, then say it. Do not visit page after page when one already answers it.
 - You also run the Jagora app on their screen: "On the user's screen" tells you what they see (the chat, the live page, their tabs). When they ask to close, open, show, hide, switch, scroll or change something there, use app_control right away, then carry on with the task.
-- While a video plays on their screen ("Playing on her screen now"), the microphone may catch the film. Act only on words clearly meant for you (next, another one, I don't like it, pause, stop, louder); ignore anything that sounds like the film's dialogue and say nothing. When she talks, whatever plays is paused for you and plays on by itself when you are done; touch it (media_pause, stop_media, media_next) only if what she said is about it. "Pause", "go back 10 seconds", "rewind 2 seconds", "save it for later": app_control at once (media_pause, media_seek, media_save), then at most a couple of words. "I don't like this one, find another one": the next one in the list if there is a list (media_next); otherwise find_video again for the same thing, leaving out the one she rejected. "Saved in this chat to watch later" means she can continue it: "continue" or "play my video" is media_resume.
+- While a video plays on their screen ("Playing on her screen now"), the microphone may catch the film. Act only on words clearly meant for you (next, another one, I don't like it, pause, stop, louder); ignore anything that sounds like the film's dialogue and say nothing. When she talks, whatever plays is paused for you and plays on by itself when you are done; touch it (media_pause, stop_media, media_next) only if what she said is about it. You have full control of the player: whatever she asks it to do (pause, play, forward, back, a time, half way, start again, louder, softer, mute, faster, slower, fill the screen, next, previous, close, save for later), do it at once with app_control, then at most a couple of words. "Forward it" with no number is +30; "a bit" is 10 seconds. "How far am I" or "how long is left": answer from the time on her screen. "I don't like this one, find another one": the next one in the list if there is a list (media_next); otherwise find_video again for the same thing, leaving out the one she rejected. "Saved in this chat to watch later" means she can continue it: "continue" or "play my video" is media_resume.
 - Choosing with them (videos, music, films, courses, tutorials, fonts, products, schools, jobs, anything with several good options): find the options fast (find_video for anything to watch or listen to, search for the rest), give them the best 3 as ask_user choices with short titles, and WAIT for their pick. Then play it (play_media) or open its page (go_to) so they see it. If they said "just play" or named one, skip the question. Stay with them after: "next", "another one", "not this one" means the next option, or search again for better ones.
 - Show what you read: when the answer comes from a website, open that page with go_to so it is on their screen while you tell them (read_sources is for comparing several in the background). When no website is needed (a quick fact, a chat), stay on their home screen.
 - Learning (a course, a skill, an exam subject): ask their level if unknown, find good beginner playlists (find_video "<subject> full course for beginners playlist"), offer the best 3 channels as choices, then play the lessons in order with play_list and a course name, so their watching is tracked ("Her course ..." lines show minutes watched and lessons finished). Offer a short study guide (write_document: the plan, lesson by lesson, how long each day, what to practise). "Continue my course" means play_list from the next unfinished lesson. When a lesson ends you are told; offer a short practice sheet on that lesson (write_document with exercises, answers at the end), then the next lesson.
@@ -799,7 +829,7 @@ class Agent:
         if self.screen is not None:  # the app is open on their screen: Jagora can drive it too
             base = base + [APP_TOOL]
         if snap is None:  # no page open yet: page tools make no sense
-            page_only = {"click", "type_text", "choose", "set_checkbox", "press_key", "point_at", "hand_over", "ask_private",
+            page_only = {"click", "type_text", "choose", "set_checkbox", "press_key", "point_at", "hand_over", "ask_private", "ask_form",
                          "find_text", "list_links", "pdf_page", "show_evidence", "scroll", "go_back", "switch_tab", "close_tab",
                          "read_page", "page_tables", "find_media", "use_saved_login", "page_theme", "save_page", "fetch_code",
                          "hover", "double_click", "right_click", "drag", "click_at", "upload_file", "set_date", "ask_point",
@@ -1369,6 +1399,9 @@ class Agent:
                 hit = await b.click_at(float(a["x"]), float(a["y"]), bool(a.get("double")))
                 return f'clicked the spot{f" ({hit[:60]})" if hit else ""}', True, None
 
+            if name == "ask_form":
+                return await self._ask_form(snap, a)
+
             el = snap.element(int(a.get("element", -1)))
             if el is None:
                 return f"there is no element {a.get('element')} on this page; read the page again", True, None
@@ -1503,7 +1536,12 @@ class Agent:
             return f"not typed: {gate.reason}", False, None
         kind = fields.field_kind(el)
         if kind == "account":
-            return "not typed: account numbers are private. Use ask_private.", False, None
+            # an account number she wrote in this chat herself (who to pay, her meter or account to credit) may be typed;
+            # anything else goes through ask_private. The bank's name for it is read back to her before any payment.
+            digits = re.sub(r"\D", "", str(a.get("text", "")))
+            hers = " ".join(re.sub(r"\D", "", m.get("text", "")) for m in self.conversation if m.get("role") == "user")
+            if not (len(digits) >= 10 and digits in hers):
+                return "not typed: account numbers are private. Use ask_private.", False, None
         searching = el.type == "search" or bool(re.search(r"search|query|\bq\b|find", f"{el.name} {el.placeholder} {el.label}", re.I))
         if not searching and not await self._may_act():
             return "the user did not allow filling forms on this site; stop and ask them what they want", True, None
@@ -1598,7 +1636,11 @@ class Agent:
             return "the user skipped it; ask what the user wants to do", True, None
         n = await self.browser.fill_secret(el.id, value)
         saved = ""
-        if save and self.vault:
+        pf = str(a.get("profile_field") or "")
+        if save and field in PLAIN_FIELDS and pf in PROFILE_FIELDS:
+            self.profile[pf] = value  # her app keeps it in her details too
+            saved = f"; saved to her details as {pf}"
+        elif save and self.vault:
             url = self.browser.pdf.url if self.browser.pdf else self.browser.page.url
             site_ = await self.vault.save(str(a.get("label") or a.get("field") or "login"), url, str(a.get("field", "other")), value)
             saved = f'; the user saved it as "{str(a.get("label") or a.get("field"))[:60]}" for {site_} (use_saved_login next time)'
@@ -1606,6 +1648,71 @@ class Agent:
         value = ""  # noqa: F841  (dropped: never logged, spoken or sent to the model)
         self._trail_add("private", f'the user filled "{str(a.get("label") or field)[:50]}" on {self._here()} privately')
         return f"filled by them ({n} characters in the box){saved}", False, None
+
+    async def _ask_form(self, snap, a):
+        """Several boxes in one card: she fills them in the chat, each value goes straight into its box on the page."""
+        want = [f for f in (a.get("fields") or []) if isinstance(f, dict)][:10]
+        if not want:
+            return "no fields given", False, None
+        found = []
+        for f in want:
+            el = snap.element(int(f.get("element", -1)))
+            if el is None:
+                return f"there is no element {f.get('element')} on this page; read the page again", True, None
+            found.append((el, f))
+        ask_form = getattr(self.io, "ask_form", None)
+        if not ask_form:  # an older app: one box at a time
+            out = [(await self._private(el, f))[0] for el, f in found]
+            return "; ".join(out), True, None
+        s = self._here()
+        for el, f in found:
+            field = str(f.get("field", "other")).lower()
+            if (field in ("card", "cvv") or fields.field_kind(el) in ("card", "cvv")) and s and not guard.check(s).official \
+                    and s not in PAYMENT_SITES and not self._she_named(s):
+                return await self._private(el, f)  # the card guard says why it stops
+        if not await self._may_share(str(a.get("title") or "details")):
+            return "the user did not want their details on this site; stop and ask them what they want", True, None
+        boxes = []
+        for i, (el, f) in enumerate(found):
+            field = str(f.get("field", "other")).lower()
+            pf = str(f.get("profile_field") or "")
+            boxes.append({"key": str(i), "label": str(f.get("label", ""))[:120], "field": field,
+                          **({"digits": int(f["digits"])} if f.get("digits") else {}),
+                          **({"profile_field": pf} if pf in PROFILE_FIELDS and field in PLAIN_FIELDS else {})})
+        rect = await self.browser.rect(found[0][0].id, show=True)
+        got = await ask_form(rect, str(a.get("title", ""))[:120], boxes)
+        values = got.get("values") if isinstance(got, dict) else None
+        save = bool(got.get("save")) if isinstance(got, dict) else False
+        if not values:
+            return "the user skipped it; ask what the user wants to do", True, None
+        report, kept, vaulted = [], [], []
+        url = self.browser.pdf.url if self.browser.pdf else self.browser.page.url
+        for i, (el, f) in enumerate(found):
+            value = str(values.get(str(i)) or "")
+            label = str(f.get("label") or f.get("field") or "box")[:50]
+            if not value:
+                report.append(f'"{label}": left empty by them')
+                continue
+            try:
+                n = await self.browser.fill_secret(el.id, value)
+            except Exception as e:  # noqa: BLE001
+                report.append(f'"{label}": could not be filled ({str(e)[:80]})')
+                continue
+            field = str(f.get("field", "other")).lower()
+            pf = str(f.get("profile_field") or "")
+            if save and field in PLAIN_FIELDS and pf in PROFILE_FIELDS:
+                self.profile[pf] = value
+                kept.append(pf)
+            elif save and self.vault and field not in PLAIN_FIELDS and field not in NEVER_KEEP:
+                await self.vault.save(label, url, field, value)
+                vaulted.append(label)
+                self._vault_names = None
+            report.append(f'"{label}": filled ({n} characters)')
+        values = {}  # noqa: F841  (dropped: never logged, spoken or sent to the model)
+        self._trail_add("private", f'the user filled {len(found)} boxes on {self._here()} in one card')
+        extra = (f"; saved to her details: {', '.join(kept)}" if kept else "") + \
+                (f"; saved for this site: {', '.join(vaulted)} (use_saved_login next time)" if vaulted else "")
+        return "; ".join(report) + extra + ". Look at the page to check the boxes before going on.", True, None
 
     async def _go_to(self, a, new_tab: bool = False):
         url = str(a.get("url", "")).strip()
@@ -1746,11 +1853,27 @@ class Agent:
     async def _download(self, a, snap: Snapshot | None, play: bool = False):
         b = await self._ensure_browser()
         url = str(a.get("url") or "")
+        button = None
         if not url and a.get("element") is not None and snap:
             el = snap.element(int(a["element"]))
             url = el.href if el else ""
+            button = el if el and not url else None
         if not url and b.pdf:
             url = b.pdf.url
+        if not url and (button or a.get("page_as_pdf")) and not play:
+            # a "Download ticket" button with no address, or the ticket / receipt page itself: kept as a file for her
+            try:
+                data, ctype, name = await (b.download_by_click(button.id) if button else b.page_as_pdf())
+            except Exception as e:  # noqa: BLE001
+                return f"could not get the file: {str(e)[:120]}", True, None
+            nice = re.sub(r"[^\w.\- ]+", "", str(a.get("name") or "")).strip()
+            if nice:
+                ext = Path(name).suffix
+                name = nice if nice.lower().endswith(ext.lower()) else nice + ext
+            if INSTALLER.search(name):
+                return "refused: that file is a program or app installer, which Jagora never downloads", False, None
+            await self._give_file(name[:90], data, ctype, b.page.url, False)
+            return f"downloaded {name[:90]} ({len(data) // 1024} KB) and gave it to them", True, None
         if url and await self._leaks(url):
             return "refused: that address carries data read on another site", False, None
         if not url:
@@ -1965,6 +2088,7 @@ class Agent:
             "choose": lambda: f'choose in "{label}"',
             "set_checkbox": lambda: f'tick "{label}"',
             "ask_private": lambda: f'the user types their {a.get("field", "private value")} into "{label}"',
+            "ask_form": lambda: "the user fills " + ", ".join(str(f.get("label", ""))[:30] for f in a.get("fields", [])[:6]) + " in one card",
             "use_saved_login": lambda: f'their saved login into "{label}"',
             "upload_file": lambda: f'upload their file to "{label}"',
             "set_date": lambda: f'set the date in "{label}"',

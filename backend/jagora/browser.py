@@ -18,6 +18,7 @@ import html
 import io
 import logging
 import re
+import mimetypes
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,6 +26,7 @@ from typing import Any, Callable
 from urllib.parse import urljoin, urlparse
 
 from playwright.async_api import Browser as PWBrowser, BrowserContext, Page, async_playwright
+from playwright.async_api import TimeoutError as PlaywrightTimeout
 
 from jagora import guard as guardmod
 from jagora import lite
@@ -352,13 +354,16 @@ class Browser:
         self._shot_cdp = None  # CDP session for full_frame(), per tab
         self._shot_page = None  # is a ring drawn on the page now (see ring())
         self.cast = "full"  # how the live view is captured (lite.SCREENCAST): photos, data saver, or video
+        self._taking_download = False
         self.opening = 0  # >0 while Jagora opens a tab itself (the guard leaves those alone)
         # pages in her language: the language to show (empty = as published), and an optional translator for tests
         self.translate_to = ""
         self.translator = None
         self._tr_lock = asyncio.Lock()
 
-    async def start(self) -> "Browser":
+    async def start(self, state: dict | None = None) -> "Browser":
+        """state: her saved sign-ins (cookies and site storage) from an earlier session, so Google or a booking site
+        she signed into stays signed in."""
         self._pw = await async_playwright().start()
         args = ["--disable-notifications"]
         if os.environ.get("JAGORA_HOST_RULES"):  # the attack test suite serves its fake sites from this machine
@@ -367,7 +372,7 @@ class Browser:
         self._ctx = await self._browser.new_context(
             viewport=self.viewport, locale="en-NG", timezone_id="Africa/Lagos", accept_downloads=True, permissions=[],
             is_mobile=self.mobile, has_touch=self.mobile, device_scale_factor=2 if self.mobile else 1,
-            user_agent=MOBILE_UA if self.mobile else DESKTOP_UA)
+            user_agent=MOBILE_UA if self.mobile else DESKTOP_UA, **({"storage_state": state} if state else {}))
         await guardmod.install(self._ctx, self)
         await self._ctx.add_init_script(WATCH_JS)
         if self.mobile:
@@ -434,6 +439,8 @@ class Browser:
 
     async def _stray_download(self, d) -> None:
         # downloads only happen through the download tool; anything a page starts by itself is cancelled
+        if self._taking_download:
+            return  # the download tool pressed the button and is waiting for this file
         name = d.suggested_filename or ""
         try:
             await d.cancel()
@@ -441,6 +448,50 @@ class Browser:
             pass
         if guardmod.registrable(d.url) and not d.url.lower().split("?")[0].endswith(".pdf"):
             self.notice("download", SiteVerdict(registrable(d.url), "ads", reason=f"the page tried to download {name} by itself; Jagora stopped it"))
+
+    async def download_by_click(self, eid: int) -> tuple[bytes, str, str]:
+        """A "Download ticket / slip / receipt" button with no address behind it: press it and take the file it gives.
+        If it opens the ticket as a page instead, that page is saved as a PDF."""
+        loc = await self._locate(eid)
+        page = self.page
+        before = len(self.pages)
+        self._taking_download = True
+        try:
+            try:
+                async with page.expect_download(timeout=20000) as info:
+                    await loc.click(timeout=5000)
+                d = await info.value
+                path = await d.path()
+                if not path:
+                    raise ActionError("the file did not download")
+                data = Path(path).read_bytes()
+                if len(data) > 25_000_000:
+                    raise ActionError("the file is too big to download here")
+                name = d.suggested_filename or "download"
+                ctype = "application/pdf" if name.lower().endswith(".pdf") else mimetypes.guess_type(name)[0] or "application/octet-stream"
+                return data, ctype, name
+            except PlaywrightTimeout:
+                # no file came: the ticket opened as a page (a new tab or this one): keep that page as a PDF
+                await asyncio.sleep(1.5)
+                p = self.pages[-1] if len(self.pages) > before else page
+                await p.wait_for_load_state("load", timeout=15000)
+                title = re.sub(r"[^\w.\- ]+", "", (await p.title()) or "ticket").strip()[:60] or "ticket"
+                return await p.pdf(print_background=True), "application/pdf", title + ".pdf"
+        finally:
+            self._taking_download = False
+
+    async def page_as_pdf(self) -> tuple[bytes, str, str]:
+        """The open page (a ticket, a receipt, a confirmation) kept as a PDF."""
+        p = self._need_page()
+        title = re.sub(r"[^\w.\- ]+", "", (await p.title()) or "page").strip()[:60] or "page"
+        return await p.pdf(print_background=True), "application/pdf", title + ".pdf"
+
+    async def signins(self) -> dict | None:
+        """Her sign-ins right now (cookies and site storage), to keep for next time."""
+        try:
+            return await asyncio.wait_for(self._ctx.storage_state(), 5) if self._ctx else None
+        except Exception:  # noqa: BLE001
+            return None
 
     async def close(self) -> None:
         for closer in (self._ctx and self._ctx.close, self._browser and self._browser.close, self._pw and self._pw.stop):

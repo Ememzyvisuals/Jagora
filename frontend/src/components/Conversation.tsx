@@ -3,12 +3,12 @@
 import { CheckCircle, CircleNotch, Eye, EyeSlash, Hand, PencilSimpleLine, Image as ImageIcon, LinkSimple, Paperclip, ShieldCheck, WarningOctagon, XCircle } from "@phosphor-icons/react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { answer, giveSecret, live } from "@/lib/engine";
+import { answer, giveForm, giveSecret, live } from "@/lib/engine";
 import { celebrate } from "./Effects";
 import { DocCard } from "./DocView";
 import type { Lang } from "@/lib/i18n";
 import { t } from "@/lib/i18n";
-import { PLAIN_FIELDS, useApp, type Msg, type Task } from "@/lib/store";
+import { PLAIN_FIELDS, useApp, type FormField, type Msg, type Task } from "@/lib/store";
 import { IconLock, IconScam, IconShield } from "./icons";
 import { Evidence, FileCard, MediaCard, MomentCard, PicturesCard, PlanCard, PointAskCard, ReadingCard, RecordCard, ReminderCard, ScheduledCard, TermsCard, VoiceBubble } from "./ChatCards";
 import { remotePictures } from "@/lib/engine/remote";
@@ -134,6 +134,8 @@ function Item({ m, task }: { m: Msg; task: Task }) {
       return <Handoff m={m} task={task} />;
     case "secret":
       return <SecretAsk m={m} task={task} />;
+    case "form":
+      return <FormAsk m={m} task={task} />;
     case "verdict":
       return <Verdict m={m} />;
     case "explain":
@@ -285,11 +287,36 @@ const SECRET: Record<"why" | "fill" | "skip" | "filled" | "skipped" | "keep" | "
   skipped: { en: "Skipped", pcm: "Skipped", yo: "A fò ó", ha: "An tsallake", ig: "Agafere ya" },
 };
 const NUMERIC = new Set(["account", "nin", "bvn", "otp", "pin", "phone", "card"]);
+const SAVE_MINE: Record<Lang, string> = {
+  en: "Save to my details for next time",
+  pcm: "Save am for my details for next time",
+  yo: "Fi pamọ́ sí àlàyé mi fún ìgbà míì",
+  ha: "Adana a bayanaina don gaba",
+  ig: "Chekwaa ya na nkọwa m maka ọzọ",
+};
+const FORM: Record<"why" | "send" | "saveAll", Record<Lang, string>> = {
+  why: {
+    en: "Fill these here. Jagora puts each one into the website for you; private ones are never shown or said aloud.",
+    pcm: "Fill dem for here. Jagora go put each one for the website; the private ones nobody go see or hear am.",
+    yo: "Ẹ kọ wọ́n síbí. Jagora á fi ọ̀kọ̀ọ̀kan sínú ojú òpó náà; a ò ní fi àwọn àṣírí hàn tàbí pè wọ́n jáde.",
+    ha: "Cike su a nan. Jagora za ta saka kowanne a shafin; na sirri ba za a nuna ko a faɗe su ba.",
+    ig: "Dejupụta ha ebe a. Jagora ga-etinye nke ọ bụla na weebụsaịtị; a gaghị egosi ma ọ bụ kwupụta nke nzuzo.",
+  },
+  send: { en: "Fill them in", pcm: "Fill dem", yo: "Kọ wọ́n sí i", ha: "Cike su", ig: "Jupụta ha" },
+  saveAll: {
+    en: "Save these for next time (my name, phone, email and address to my details; the rest locked for this site only)",
+    pcm: "Save dem for next time (my name, phone, email and address for my details; the rest locked for this site only)",
+    yo: "Fi wọ́n pamọ́ fún ìgbà míì (orúkọ, fóònù, ímeèlì àti àdírẹ́sì mi sí àlàyé mi; ìyókù tìpa fún ojú òpó yìí nìkan)",
+    ha: "Adana su don gaba (sunana, waya, imel da adireshi a bayanaina; sauran a kulle don wannan shafin kawai)",
+    ig: "Chekwaa ha maka ọzọ (aha m, ekwentị, email na adreesị na nkọwa m; ndị ọzọ ekpochiri maka saịtị a naanị)",
+  },
+};
 
 /** A private field: she types it here (never aloud), Jagora puts it into the website. */
 function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Task }) {
   const lang = useApp((s) => s.lang);
-  const [v, setV] = useState("");
+  const saved = useApp((s) => (m.profile_field ? String(s.profile[m.profile_field] ?? "") : ""));
+  const [v, setV] = useState(saved); // her saved detail is there already: one tap to use it
   const [see, setSee] = useState(false);
   const [keep, setKeep] = useState(false);
   const box = useRef<HTMLInputElement>(null);
@@ -299,6 +326,7 @@ function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Tas
   // names, emails and addresses: she types them herself so they are spelled exactly; not private, so shown as typed
   const plain = PLAIN_FIELDS.has(m.field);
   const canKeep = live && !!site && m.field !== "otp" && !plain;
+  const canSaveMine = plain && !!m.profile_field; // her name, phone, email, address: into her details
   const isLast = task.messages.at(-1)?.id === m.id;
   useEffect(() => {
     if (waiting && isLast) {
@@ -311,7 +339,7 @@ function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Tas
   const ok = m.digits ? clean.length === m.digits : clean.trim().length > 0;
   const send = () => {
     if (!ok) return;
-    giveSecret(task.id, m.id, clean, keep && canKeep);
+    giveSecret(task.id, m.id, clean, keep && (canKeep || canSaveMine));
     setV("");
   };
 
@@ -356,6 +384,12 @@ function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Tas
           {see ? <EyeSlash size={17} /> : <Eye size={17} />}
         </button>}
       </div>
+      {canSaveMine && (
+        <label className="mt-3 flex cursor-pointer items-center gap-2.5 text-[13.5px] font-medium text-ink-2">
+          <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} className="h-4 w-4 shrink-0 accent-[var(--color-accent)]" />
+          {SAVE_MINE[lang]}
+        </label>
+      )}
       {canKeep && (
         <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-[13.5px] leading-snug text-ink-2">
           <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-accent)]" />
@@ -370,6 +404,117 @@ function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Tas
           {SECRET.fill[lang]}
         </button>
         <button type="button" onClick={() => giveSecret(task.id, m.id, null)} className="btn btn-glass h-11 px-5 text-[14.5px]">
+          {SECRET.skip[lang]}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Several boxes in one card (a booking's passenger details): she fills them here instead of on the live page. */
+function FormAsk({ m, task }: { m: Extract<Msg, { kind: "form" }>; task: Task }) {
+  const lang = useApp((s) => s.lang);
+  const profile = useApp((s) => s.profile);
+  const [vals, setVals] = useState<Record<string, string>>(() =>
+    Object.fromEntries(m.fields.map((f) => [f.key, f.profile_field ? String(profile[f.profile_field] ?? "") : ""])),
+  );
+  const [see, setSee] = useState(false);
+  const [keep, setKeep] = useState(false);
+  const first = useRef<HTMLInputElement>(null);
+  const waiting = m.status === "waiting";
+  const isLast = task.messages.at(-1)?.id === m.id;
+  useEffect(() => {
+    if (waiting && isLast) {
+      const id = setTimeout(() => first.current?.focus({ preventScroll: true }), 350);
+      return () => clearTimeout(id);
+    }
+  }, [waiting, isLast]);
+  const clean = (f: FormField, v: string) => (NUMERIC.has(f.field) ? v.replace(/\D/g, "") : v);
+  const okOne = (f: FormField) => {
+    const c = clean(f, vals[f.key] ?? "");
+    return f.digits ? c.length === f.digits : c.trim().length > 0;
+  };
+  const ok = m.fields.every(okOne);
+  const canSave = m.fields.some((f) => (f.profile_field && PLAIN_FIELDS.has(f.field)) || !["otp", "pin", "card", "password"].includes(f.field));
+  const anySecret = m.fields.some((f) => !PLAIN_FIELDS.has(f.field));
+  const send = () => ok && giveForm(task.id, m.id, Object.fromEntries(m.fields.map((f) => [f.key, clean(f, vals[f.key] ?? "")])), keep);
+
+  if (!waiting)
+    return (
+      <div className="glass-3 rounded-[20px] px-4 py-3">
+        <p className="flex items-center gap-2 text-[14.5px] font-semibold text-ink">
+          <PencilSimpleLine size={20} className="shrink-0 text-accent" />
+          <span className="min-w-0 flex-1 truncate">{m.title}</span>
+          <span className={`inline-flex items-center gap-1.5 text-[13.5px] font-medium ${m.status === "done" ? "text-ok" : "text-ink-3"}`}>
+            {m.status === "done" && <CheckCircle size={14} weight="fill" />}
+            {m.status === "done" ? SECRET.filled[lang] : SECRET.skipped[lang]}
+          </span>
+        </p>
+        {m.status === "done" && m.shown && (
+          <ul className="mt-2 space-y-0.5 text-[13.5px] text-ink-2">
+            {m.fields.map((f, i) => (
+              <li key={f.key} className="flex gap-2">
+                <span className="min-w-0 flex-1 truncate">{f.label}</span>
+                <span className="shrink-0 font-semibold text-ink">{m.shown?.[i] || "-"}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+
+  return (
+    <form onSubmit={(e) => (e.preventDefault(), send())} className="glass-3 rounded-[22px] p-4 ring-2 ring-accent/35">
+      <div className="flex gap-3">
+        <PencilSimpleLine size={30} className="mt-1 shrink-0 text-accent" />
+        <div className="min-w-0">
+          <p className="text-[15.5px] font-semibold leading-snug text-ink">{m.title}</p>
+          <p className="mt-0.5 text-[13px] leading-snug text-ink-2">{FORM.why[lang]}</p>
+        </div>
+      </div>
+      <div className="mt-3 space-y-2.5">
+        {m.fields.map((f, i) => {
+          const plain = PLAIN_FIELDS.has(f.field);
+          const numeric = NUMERIC.has(f.field);
+          const v = vals[f.key] ?? "";
+          return (
+            <label key={f.key} className="block">
+              <span className="mb-1 block text-[13.5px] font-semibold text-ink">{f.label}</span>
+              <span className="flex h-12 items-center gap-2 rounded-[16px] bg-white px-4 shadow-[inset_0_0_0_1.5px_rgba(29,99,237,.35)]">
+                <input
+                  ref={i === 0 ? first : undefined}
+                  value={v}
+                  onChange={(e) => setVals((x) => ({ ...x, [f.key]: f.digits ? e.target.value.replace(/\D/g, "").slice(0, f.digits) : e.target.value }))}
+                  type={plain ? (f.field === "email" ? "email" : f.field === "phone" ? "tel" : "text") : see ? "text" : "password"}
+                  inputMode={numeric ? "numeric" : f.field === "email" ? "email" : "text"}
+                  autoComplete={f.field === "otp" ? "one-time-code" : f.field === "name" ? "name" : f.field === "email" ? "email" : f.field === "phone" ? "tel" : f.field === "address" ? "street-address" : "off"}
+                  autoCapitalize={f.field === "name" || f.field === "address" ? "words" : "off"}
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className={`h-full min-w-0 flex-1 bg-transparent text-[17px] font-semibold text-ink outline-none ${plain ? "" : "tracking-[0.14em]"}`}
+                />
+                {f.digits && <span className="shrink-0 text-[12.5px] font-medium tabular-nums text-ink-3">{clean(f, v).length}/{f.digits}</span>}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      {anySecret && (
+        <button type="button" onClick={() => setSee((x) => !x)} className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-2">
+          {see ? <EyeSlash size={16} /> : <Eye size={16} />} {see ? "Hide" : "Show"}
+        </button>
+      )}
+      {canSave && (
+        <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-[13.5px] leading-snug text-ink-2">
+          <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-accent)]" />
+          <span>{FORM.saveAll[lang]}</span>
+        </label>
+      )}
+      <div className="mt-3 flex items-center gap-2">
+        <button type="submit" disabled={!ok} className="btn btn-ink h-11 flex-1 text-[15px] disabled:opacity-40">
+          {FORM.send[lang]}
+        </button>
+        <button type="button" onClick={() => giveForm(task.id, m.id, null)} className="btn btn-glass h-11 px-5 text-[14.5px]">
           {SECRET.skip[lang]}
         </button>
       </div>

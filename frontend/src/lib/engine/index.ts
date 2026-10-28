@@ -1,7 +1,7 @@
 "use client";
 
 /* What the screens call. Uses the real backend when NEXT_PUBLIC_BACKEND_WS is set, otherwise the demo engine. */
-import { PLAIN_FIELDS, useApp, uid, type Attachment, type Task } from "../store";
+import { PLAIN_FIELDS, useApp, uid, type Attachment, type Profile, type Task } from "../store";
 import * as demo from "./demo";
 import { BACKEND, remoteAnswer, remoteAudio, remoteSecret, remoteStart, remoteStop } from "./remote";
 
@@ -136,6 +136,32 @@ export function quick(kind: "scam" | "paper") {
 const pending = new Map<string, "scam" | "paper">();
 
 /** What she typed for a private field: show only a masked hint here, send the value on to the website. */
+/** a form card: every box she filled, at once. Her plain details (name, phone, email, address) are saved to her
+    details when she ticked "save"; private ones are only kept, locked, for that one site by the server. */
+export function giveForm(taskId: string, msgId: string, values: Record<string, string> | null, save = false) {
+  const s = useApp.getState();
+  const m = s.tasks.find((t) => t.id === taskId)?.messages.find((x) => x.id === msgId);
+  if (m?.kind !== "form") return;
+  if (values === null) {
+    s.update(taskId, msgId, { status: "skipped" } as never);
+    if (live) void remoteSecret(taskId, msgId, "", false, {});
+    return;
+  }
+  const shown = m.fields.map((f) => {
+    const v = (values[f.key] ?? "").trim();
+    if (!v) return "";
+    return PLAIN_FIELDS.has(f.field) ? v.slice(0, 40) : v.length > 6 ? `••••${v.slice(-4)}` : "••••";
+  });
+  if (save) {
+    const keep: Partial<Profile> = {};
+    for (const f of m.fields) if (f.profile_field && PLAIN_FIELDS.has(f.field) && values[f.key]?.trim()) (keep as Record<string, string>)[f.profile_field] = values[f.key].trim();
+    if (Object.keys(keep).length) s.setProfile(keep);
+  }
+  s.update(taskId, msgId, { status: "done", shown } as never);
+  s.setStatus(taskId, "working");
+  if (live) void remoteSecret(taskId, msgId, "", save, values);
+}
+
 export function giveSecret(taskId: string, msgId: string, value: string | null, save = false) {
   const s = useApp.getState();
   if (value === null) {
@@ -148,6 +174,7 @@ export function giveSecret(taskId: string, msgId: string, value: string | null, 
   const m = s.tasks.find((t) => t.id === taskId)?.messages.find((x) => x.id === msgId);
   const plain = m?.kind === "secret" && PLAIN_FIELDS.has(m.field);
   const shown = plain ? v.slice(0, 40) : v.length > 6 ? `••••${v.slice(-4)}` : "••••";
+  if (save && plain && m?.kind === "secret" && m.profile_field && v) s.setProfile({ [m.profile_field]: v } as Partial<Profile>);
   s.update(taskId, msgId, { status: "done", shown } as never);
   s.setStatus(taskId, "working");
   if (live) void remoteSecret(taskId, msgId, v, save);

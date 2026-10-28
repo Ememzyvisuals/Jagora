@@ -11,7 +11,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Lang } from "@/lib/i18n";
 import { remoteMediaDone } from "@/lib/engine/remote";
-import { forget, watchYouTube, youTubeInfo } from "@/lib/sound";
+import { forget, setYtLevel, watchYouTube, youTubeInfo, ytLevelNow } from "@/lib/sound";
+import { mediaClock } from "@/lib/appctl";
 import { useApp } from "@/lib/store";
 
 const L: Record<"which" | "watch" | "preview", Record<Lang, string>> = {
@@ -71,11 +72,55 @@ export function NowPlaying() {
     const v = value.trim();
     const { time, length } = where();
     const secs = (x: string) => x.split(":").reduce((n, p) => n * 60 + (parseFloat(p) || 0), 0);
-    let to = /^[+-]/.test(v) ? time + (v[0] === "-" ? -1 : 1) * secs(v.slice(1)) : secs(v);
+    let to = /%$/.test(v) && length ? (length * (parseFloat(v) || 0)) / 100 // "50%": half way
+      : /^[+-]/.test(v) ? time + (v[0] === "-" ? -1 : 1) * secs(v.slice(1)) : secs(v);
     to = Math.max(0, length ? Math.min(to, length - 1) : to);
     if (vid.current) vid.current.currentTime = to;
     yt("seekTo", [to, true]);
   };
+  // volume (0..100), speed, mute: the same for a YouTube player and a plain video
+  const level = useRef(ytLevelNow());
+  const rate = useRef(1);
+  const quiet = useRef(false);
+  const rel = (v: string, now: number) => (/^[+-]/.test(v.trim()) ? now + parseFloat(v) : parseFloat(v));
+  const volume = (v: string) => {
+    const to = Math.max(0, Math.min(100, Math.round(rel(v, level.current) || 0)));
+    level.current = to;
+    setYtLevel(to);
+    if (vid.current) vid.current.volume = to / 100;
+    yt("setVolume", [to]);
+    if (to > 0 && quiet.current) mute(false);
+  };
+  const speed = (v: string) => {
+    const allowed = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+    const want = rel(v, rate.current) || 1;
+    const to = allowed.reduce((a, b) => (Math.abs(b - want) < Math.abs(a - want) ? b : a)); // YouTube takes these steps
+    rate.current = to;
+    if (vid.current) vid.current.playbackRate = to;
+    yt("setPlaybackRate", [to]);
+  };
+  const mute = (on: boolean) => {
+    quiet.current = on;
+    if (vid.current) vid.current.muted = on;
+    yt(on ? "mute" : "unMute");
+  };
+  // "make it full screen" by voice: the browser allows real full screen only from a tap, so the video fills the
+  // whole window instead (the Full screen button still does the real one)
+  const [big, setBig] = useState(false);
+  // where it is, for Jagora ("how far am I", "louder")
+  useEffect(() => {
+    if (!cur) return;
+    const t = window.setInterval(() => {
+      const { time, length } = where();
+      Object.assign(mediaClock, { time, length, paused, volume: level.current, muted: quiet.current, speed: rate.current, big });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [cur?.url, paused, big]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!m) Object.assign(mediaClock, { time: 0, length: 0, paused: false, big: false });
+    setBig(false);
+  }, [m?.id]);
+
   /** keep her place in this chat so "Continue watching" plays on from here */
   const keep = () => {
     const task = st().activeId;
@@ -92,6 +137,14 @@ export function NowPlaying() {
     const on = (e: Event) => {
       const d = String((e as CustomEvent<string>).detail ?? "");
       if (d.startsWith("seek:")) return seek(d.slice(5));
+      const cut = d.indexOf(":");
+      const cmd = cut < 0 ? d : d.slice(0, cut);
+      const arg = cut < 0 ? "" : d.slice(cut + 1);
+      if (cmd === "volume") return volume(arg);
+      if (cmd === "speed") return speed(arg);
+      if (cmd === "mute" || cmd === "unmute") return mute(cmd === "mute");
+      if (cmd === "big") return setBig(!/^(off|no|false|small)$/i.test(arg.trim()));
+      if (cmd === "restart") return seek("0");
       if (d === "save") {
         control("pause");
         keepRef.current();
@@ -173,6 +226,7 @@ export function NowPlaying() {
   const box = useRef<HTMLDivElement>(null);
   const full = async () => {
     const el = (frame.current ?? vid.current ?? box.current) as HTMLElement | null;
+    if (big) return setBig(false); // filling the window by voice: the button brings it back
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
       else await el?.requestFullscreen?.();
@@ -196,9 +250,9 @@ export function NowPlaying() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[70] grid place-items-center bg-[rgba(8,12,20,.86)] px-2 backdrop-blur-[6px] sm:px-4"
+          className={`fixed inset-0 z-[70] grid place-items-center backdrop-blur-[6px] ${big ? "bg-black px-0" : "bg-[rgba(8,12,20,.86)] px-2 sm:px-4"}`}
         >
-          <div ref={box} className="w-full max-w-[1100px] bg-transparent">
+          <div ref={box} className={`w-full bg-transparent ${big ? "max-w-none" : "max-w-[1100px]"}`}>
             {/* phones: the title on its own line, the buttons under it; computers: one line */}
             <div className="mb-3 flex flex-wrap items-center gap-2 px-1 pt-[env(safe-area-inset-top)]">
               <p className="w-full min-w-0 truncate text-[15px] font-semibold text-white sm:w-auto sm:flex-1 sm:text-[16px]">
@@ -238,7 +292,7 @@ export function NowPlaying() {
                   allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
                   allowFullScreen
                   referrerPolicy="strict-origin-when-cross-origin"
-                  className="aspect-video w-full rounded-[14px] bg-black sm:rounded-[18px]"
+                  className={big ? "h-[calc(100dvh-72px)] w-full bg-black" : "aspect-video w-full rounded-[14px] bg-black sm:rounded-[18px]"}
                 />
               ) : isVideo ? (
                 <video
@@ -250,7 +304,7 @@ export function NowPlaying() {
                   }}
                   controls
                   autoPlay
-                  playsInline className="max-h-[72vh] w-full rounded-[14px] bg-black sm:rounded-[18px]" />
+                  playsInline className={big ? "h-[calc(100dvh-72px)] w-full bg-black object-contain" : "max-h-[72vh] w-full rounded-[14px] bg-black sm:rounded-[18px]"} />
               ) : (
                 <div className="rounded-[18px] bg-white p-4">
                   <audio key={cur.url} src={cur.url} controls autoPlay className="w-full" />

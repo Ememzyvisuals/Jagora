@@ -218,6 +218,14 @@ OFFICIAL: dict[str, str] = {
 }
 from jagora.services import EXTRA_OFFICIAL  # noqa: E402
 
+# Official services that live on a contractor's domain: only this exact address counts, not the whole domain.
+# NRC's own list of its booking sites (it warns that any other site or a personal bank account is a scam).
+OFFICIAL_HOSTS: dict[str, str] = {
+    "nrc.gsds.ng": "Nigerian Railway Corporation (Lagos-Ibadan train tickets)",
+    "nrc.tps.ng": "Nigerian Railway Corporation (Abuja-Kaduna train tickets)",
+    "nrc-fane.ng": "Nigerian Railway Corporation (Warri-Itakpe train tickets)",
+}
+
 OFFICIAL.update(EXTRA_OFFICIAL)
 # Words that, inside some other domain, suggest it is pretending to be one of the above.
 BRAND_WORDS = {"jamb": "jamb.gov.ng", "waec": "waec.org.ng", "neco": "neco.gov.ng", "nimc": "nimc.gov.ng", "nysc": "nysc.gov.ng",
@@ -337,6 +345,9 @@ class Guard:
             return SiteVerdict(site, "ok")
         if host.startswith("xn--") or ".xn--" in host:
             return SiteVerdict(site, "lookalike", reason="the address uses look-alike letters, a common phishing trick")
+        if host in OFFICIAL_HOSTS or host.removeprefix("www.") in OFFICIAL_HOSTS:
+            h = host.removeprefix("www.")
+            return SiteVerdict(h, "official", OFFICIAL_HOSTS[h], f"{h} is the official booking site of {OFFICIAL_HOSTS[h]}")
         if site in OFFICIAL:
             return SiteVerdict(site, "official", OFFICIAL[site], f"{site} is the official site of {OFFICIAL[site]}")
         if self._in("iplogger", host):

@@ -49,7 +49,11 @@ export function describeScreen(): string {
   }
   const saved = s.activeId ? s.resume?.[s.activeId] : undefined;
   if (saved && !s.playing) lines.push(`Saved in this chat to watch later: "${saved.name}", stopped at ${Math.floor(saved.at / 60)}:${String(Math.floor(saved.at % 60)).padStart(2, "0")}. media_resume plays it on from there.`);
-  if (s.playing) lines.push(`Playing on her screen now: "${s.playing.queue?.[s.mediaAt]?.name ?? s.playing.name}" (${s.playing.type === "youtube" ? "YouTube video" : s.playing.type}). Do not start it again; stop_media closes it.`);
+  if (s.playing) {
+    const c = mediaClock;
+    const pos = c.length ? ` At ${clock(c.time)} of ${clock(c.length)}${c.paused ? ", paused" : ""}, volume ${c.volume}${c.muted ? " (muted)" : ""}, speed ${c.speed}x${c.big ? ", filling the screen" : ""}.` : "";
+    lines.push(`Playing on her screen now: "${s.playing.queue?.[s.mediaAt]?.name ?? s.playing.name}" (${s.playing.type === "youtube" ? "YouTube video" : s.playing.type}).${pos} Do not start it again; stop_media closes it (her place is kept).`);
+  }
   if (s.live) lines.push(`Live voice: ${s.liveSmall || s.playing ? "folded to the small bar at the top" : "full screen"}.`);
   const chats = listed();
   if (chats.length)
@@ -72,6 +76,10 @@ function pickChat(value: string): string | null {
   if (n >= 1 && n <= chats.length) return chats[n - 1].id;
   return chats.find((c) => c.title.toLowerCase().includes(v))?.id ?? null;
 }
+
+/** where the player is (NowPlaying keeps this up to date), so "how far am I" or "louder" is understood */
+export const mediaClock = { time: 0, length: 0, paused: false, volume: 100, muted: false, speed: 1, big: false };
+const clock = (n: number) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, "0")}`;
 
 const tell = (action: string, value = "") => window.dispatchEvent(new CustomEvent("jagora:app", { detail: { action, value } }));
 
@@ -163,6 +171,13 @@ export function runApp(action: string, value = "") {
       return void window.dispatchEvent(new CustomEvent("jagora:media", { detail: action === "media_pause" ? "pause" : "play" }));
     case "media_seek": // "-10" back 10 s, "+30" forward, "1:20" or "80" to that point; it plays on after (not forgotten)
       return void window.dispatchEvent(new CustomEvent("jagora:media", { detail: `seek:${value}` }));
+    case "media_volume": // "+20" louder, "-20" softer, "50" exactly that (0 to 100)
+    case "media_speed": // 0.5 to 2, or "+0.25" / "-0.25"; "1" is normal
+    case "media_mute":
+    case "media_unmute":
+    case "media_big": // the video fills the whole screen (on), or back to the normal size (off)
+    case "media_restart":
+      return void window.dispatchEvent(new CustomEvent("jagora:media", { detail: `${action.slice(6)}:${value}` }));
     case "media_save": // pause it and keep her place in this chat, to watch later
       forget();
       return void window.dispatchEvent(new CustomEvent("jagora:media", { detail: "save" }));

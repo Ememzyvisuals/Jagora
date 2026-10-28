@@ -21,7 +21,9 @@ SERVICES: list[tuple[str, str, str, str]] = [
     ("Voter card (PVC), polling unit", "https://cvr.inecnigeria.org", "INEC", "main site inec.gov.ng"),
     ("NYSC registration, call-up letter, posting", "https://portal.nysc.org.ng", "NYSC", "main site nysc.gov.ng"),
     ("Postcode / postal code lookup", "https://www.nipost.gov.ng", "NIPOST", "postcode finder; also nigeriapostcode.com.ng is NOT official"),
-    ("Train tickets (Lagos-Ibadan, Abuja-Kaduna, Warri-Itakpe)", "https://nrc.gov.ng", "Nigerian Railway Corporation", "online ticketing link on the official site"),
+    ("Train tickets Lagos-Ibadan (book here: register with NIN, pay by card on Flutterwave)", "https://nrc.gsds.ng", "Nigerian Railway Corporation", "NRC's official Lagos-Ibadan booking site; NRC says never pay a personal bank account"),
+    ("Train tickets Abuja-Kaduna", "https://nrc.tps.ng", "Nigerian Railway Corporation", "NRC's official Abuja-Kaduna booking site"),
+    ("Train tickets Warri-Itakpe", "https://nrc-fane.ng", "Nigerian Railway Corporation", "NRC's official Warri-Itakpe booking site"),
     ("Flights", "https://www.flyairpeace.com", "Air Peace", "also arikair.com, ibomair.com, flyoverland.com, unitednigeriaairlines.com"),
     # business and tax
     ("Business name or company registration, annual returns", "https://www.cac.gov.ng", "CAC", "CAC registration portal"),

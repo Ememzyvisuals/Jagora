@@ -75,7 +75,7 @@ export function PageView({ compact = false, bar = true, full = false, onClose }:
   const host = url.startsWith("/practice/") ? "practice.jagora.app" : url.replace(/^https?:\/\//, "").split("/")[0];
   const needsHer = (() => {
     const last = task?.messages.at(-1);
-    return !!last && (last.kind === "handoff" || last.kind === "secret") && last.status === "waiting";
+    return !!last && (last.kind === "handoff" || last.kind === "secret" || last.kind === "form") && last.status === "waiting";
   })();
   const pointAsk = (() => {
     const m = task?.messages.findLast((x) => x.kind === "pointask");

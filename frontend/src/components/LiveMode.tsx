@@ -14,6 +14,7 @@ import type { Lang } from "@/lib/i18n";
 import { activeTask, useApp } from "@/lib/store";
 import { duckVoice, hush, remoteFocus, remoteStop } from "@/lib/engine/remote";
 import { Listener } from "@/lib/turns";
+import { runApp } from "@/lib/appctl";
 import { muteHandsFree, parkVoice, reconnectVoice, startHandsFree, stopHandsFree, throughLiveKit, useVoiceLost } from "@/lib/handsfree";
 import { blobToDataUrl, useSpeakingPulse, useVoice, watchForVoice } from "@/lib/voice";
 import { browserRecognizer } from "./Composer";
@@ -103,12 +104,28 @@ export function LiveMode() {
   const showPage = useApp((s) => s.showPage);
   const setShowPage = useApp((s) => s.setShowPage);
   const last = task?.messages.at(-1);
-  const mustType = (last?.kind === "handoff" || last?.kind === "secret") && last.status === "waiting";
+  const mustType = last?.kind === "handoff" && last.status === "waiting"; // she must do it on the page itself
+  // Jagora is waiting for her in the chat (a yes or no, a choice, a box to fill): the Live screen folds to the small
+  // bar and the chat comes up with that card, on the phone and on the computer; it opens again once she has answered
+  const waitingCard = (task?.messages ?? []).slice(-3).some((m) =>
+    (m.kind === "choice" && !m.picked) || ((m.kind === "confirm" || m.kind === "secret" || m.kind === "form" || m.kind === "pointask") && "status" in m && m.status === "waiting"));
   // folded down (her tap, "close this screen", or a video playing): the small bar at the top, the call goes on
   const small = useApp((s) => s.liveSmall);
   const setSmall = useApp((s) => s.setLiveSmall);
   const playing = useApp((s) => !!s.playing);
-  const island = small || playing || (!!task && task.kind === "browse" && !!task.url && (showPage || mustType));
+  const folded = useRef(false);
+  useEffect(() => {
+    if (!on) return;
+    if (waitingCard && !useApp.getState().liveSmall) {
+      folded.current = true;
+      useApp.getState().setLiveSmall(true);
+      runApp("show_chat");
+    } else if (!waitingCard && folded.current) {
+      folded.current = false;
+      if (!useApp.getState().playing) useApp.getState().setLiveSmall(false);
+    }
+  }, [on, waitingCard]);
+  const island = small || playing || waitingCard || (!!task && task.kind === "browse" && !!task.url && (showPage || mustType));
   // a film or song playing: the microphone stays on; when she talks, it goes quiet and pauses (lib/sound.ts)
 
   const listen = useCallback(async () => {

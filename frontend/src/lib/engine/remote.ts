@@ -490,8 +490,8 @@ export async function remoteStart(task: string, goal: string, attachment?: { kin
 export async function remoteAnswer(task: string, id: string, value: string) {
   (await connect()).send(JSON.stringify({ type: "answer", screen: describeScreen(), task, id, value }));
 }
-export async function remoteSecret(task: string, id: string, value: string, save = false) {
-  (await connect()).send(JSON.stringify({ type: "secret", task, id, value, save }));
+export async function remoteSecret(task: string, id: string, value: string, save = false, values?: Record<string, string>) {
+  (await connect()).send(JSON.stringify({ type: "secret", task, id, value, save, ...(values ? { values } : {}) }));
 }
 export async function remoteAudio(task: string, blob: Blob, id?: string) {
   const data = await new Promise<string>((r) => {

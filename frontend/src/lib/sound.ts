@@ -11,6 +11,10 @@
 type Held = { resume: () => void };
 
 const QUIET = 0.15;
+/** the YouTube volume she chose (0..100): ducking goes back to this, not to full */
+let ytLevel = 100;
+export const setYtLevel = (v: number) => (ytLevel = Math.max(0, Math.min(100, Math.round(v))));
+export const ytLevelNow = () => ytLevel;
 let held: Held[] = [];
 let ducked: { el: HTMLMediaElement; volume: number }[] = [];
 let duckedFrames: HTMLIFrameElement[] = [];
@@ -62,13 +66,13 @@ export function duck() {
   }
   for (const f of ytFrames()) {
     duckedFrames.push(f);
-    yt(f, "setVolume", [15]);
+    yt(f, "setVolume", [Math.min(15, ytLevel)]);
   }
 }
 
 export function unduck() {
-  for (const { el, volume } of ducked) el.volume = volume;
-  for (const f of duckedFrames) yt(f, "setVolume", [100]);
+  for (const { el, volume } of ducked) if (el.volume <= QUIET + 0.001) el.volume = volume; // unless the volume was changed meanwhile
+  for (const f of duckedFrames) yt(f, "setVolume", [ytLevel]);
   ducked = [];
   duckedFrames = [];
 }

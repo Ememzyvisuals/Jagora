@@ -15,6 +15,9 @@ import { EMPTY_PROFILE, useApp, type Profile } from "@/lib/store";
 
 const LABEL: Record<keyof Profile, Record<Lang, string>> = {
   full_name: { en: "Full name", pcm: "Full name", yo: "Orúkọ", ha: "Cikakken suna", ig: "Aha zuru ezu" },
+  first_name: { en: "First name", pcm: "First name", yo: "Orúkọ àkọ́kọ́", ha: "Sunan farko", ig: "Aha mbụ" },
+  last_name: { en: "Surname", pcm: "Surname", yo: "Orúkọ ìdílé", ha: "Sunan iyali", ig: "Aha nna" },
+  address: { en: "Home address", pcm: "Address", yo: "Àdírẹ́sì ilé", ha: "Adireshin gida", ig: "Adreesị ụlọ" },
   phone: { en: "Phone", pcm: "Phone", yo: "Fóònù", ha: "Waya", ig: "Ekwentị" },
   email: { en: "Email", pcm: "Email", yo: "Í-meèlì", ha: "Imel", ig: "Email" },
   date_of_birth: { en: "Date of birth", pcm: "Birthday", yo: "Ọjọ́ ìbí", ha: "Ranar haihuwa", ig: "Ụbọchị ọmụmụ" },
@@ -89,7 +92,7 @@ export default function Details() {
                     <Editor
                       k={k}
                       lang={lang}
-                      value={profile[k]}
+                      value={profile[k] ?? ""}
                       onSave={(v) => (setProfile({ [k]: v } as Partial<Profile>), setEditing(null))}
                       onCancel={() => setEditing(null)}
                     />

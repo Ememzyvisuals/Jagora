@@ -37,7 +37,7 @@ from jagora import auth, speech
 from jagora import lite, trace, video, voicefx
 from jagora.agent import Agent
 from jagora.browser import Browser
-from jagora.config import FILES_DIR, INGESTED, PORTALS_DIR, settings
+from jagora.config import DATA_DIR, FILES_DIR, INGESTED, PORTALS_DIR, settings
 from jagora.db import DB
 from jagora.guard import guard, registrable
 from jagora.push import Push
@@ -744,6 +744,7 @@ class Session:
             self._video_task.cancel()
         if self.browser:
             b, self.browser = self.browser, None
+            await keep_signins(self.user_id, b)
             try:
                 await asyncio.wait_for(b.close(), 8)  # a stuck browser must never hold anything up
             except Exception:  # noqa: BLE001
@@ -751,7 +752,7 @@ class Session:
 
     async def get_browser(self) -> Browser:
         if self.browser is None:
-            self.browser = await Browser(self.device).start()
+            self.browser = await Browser(self.device).start(load_signins(self.user_id))
             uid = self.user_id
             self.browser.on_log = lambda what, **d: trace.write(uid, "browser_" + what, **d)
             trace.write(uid, "browser_started", viewport=self.browser.viewport, mobile=self.browser.mobile,
@@ -1049,7 +1050,7 @@ class Session:
                         **{k: v for k, v in ev.items() if k not in ("type", "event")})
             return
         if kind not in ("input",) or (ev.get("input") or {}).get("action") != "scroll":
-            trace.write(self.user_id, "from_app", **{k: ("[hidden]" if kind == "secret" and k == "value" else v)
+            trace.write(self.user_id, "from_app", **{k: ("[hidden]" if kind == "secret" and k in ("value", "values") else v)
                                                      for k, v in ev.items() if k not in ("screen", "history", "profile")})
         if isinstance(ev.get("screen"), str):
             self.screen = ev["screen"][:2000]
@@ -1120,7 +1121,10 @@ class Session:
             self._resolve(task, str(ev.get("id")), v if isinstance(v, dict) else str(v or ""))
         elif kind == "secret":
             # straight to the waiting box; never logged. "save" asks to keep it, encrypted, for this one site
-            self._resolve(task, str(ev.get("id")), {"value": str(ev.get("value") or ""), "save": bool(ev.get("save"))})
+            vals = ev.get("values")
+            self._resolve(task, str(ev.get("id")), {"value": str(ev.get("value") or ""), "save": bool(ev.get("save")),
+                                                    **({"values": {str(k): str(v or "")[:300] for k, v in vals.items()}}
+                                                       if isinstance(vals, dict) else {})})
         elif kind == "translate":
             self.translate = bool(ev.get("on"))
             if self.browser:
@@ -1633,6 +1637,8 @@ class Session:
         finally:
             self.doing = ""
             asyncio.create_task(update_chat_note(self.user_id, task, self.lang))
+            if self.browser:
+                asyncio.create_task(keep_signins(self.user_id, self.browser))
             await io.close_step()
             await self.send({"type": "highlight", "task": task, "box": None})
             if self._speech_q.empty():
@@ -1742,6 +1748,16 @@ class WsIO:
             await self._ring(rect, "stop")
         self.s.speak(self.task, label)
         m = {"id": mid(), "kind": "secret", "label": label, "field": field, "status": "waiting", **({"digits": digits} if digits else {})}
+        value = await self._wait("secret", m)
+        await self._ring(None)
+        return value
+
+    async def ask_form(self, rect: dict | None, title: str, fields: list) -> dict:
+        """Several boxes in one card in the chat; the answer is {"values": {key: value}, "save": bool}."""
+        if rect:
+            await self._ring(rect, "stop")
+        self.s.speak(self.task, title)
+        m = {"id": mid(), "kind": "form", "title": title, "fields": fields, "status": "waiting"}
         value = await self._wait("secret", m)
         await self._ring(None)
         return value
@@ -2314,6 +2330,10 @@ class JobIO:
         self.needs = label
         return {"value": "", "save": False}
 
+    async def ask_form(self, rect, title: str, fields: list) -> dict:
+        self.needs = title
+        return {"values": {}, "save": False}
+
     async def event(self, kind: str, data: dict) -> None:
         if kind in ("evidence", "verdict", "reminder", "moment", "scheduled", "terms"):
             self._add({"kind": kind, **data})
@@ -2395,6 +2415,51 @@ async def fire_jobs() -> None:
             await db.exec("update jobs set status='waiting', tries=0, at=? where id=?", (j["at"] + REPEAT[j["repeat"]], j["id"]))
         else:
             await db.exec("update jobs set status='done' where id=?", (j["id"],))
+
+
+# ---- her sign-ins, kept between sessions -------------------------------------------------------------------------
+# Once she signs into Google or a booking site in Jagora's browser, she stays signed in next time, like her own
+# browser. Kept per person, encrypted (the vault's key), never for guests, and removed when she deletes all chats.
+SIGNINS_DIR = DATA_DIR / "signins"
+
+
+def _signins_path(uid: str) -> Path:
+    return SIGNINS_DIR / (re.sub(r"[^\w-]", "", uid)[:64] + ".bin")
+
+
+def load_signins(uid: str) -> dict | None:
+    if not uid or uid.startswith("guest-"):
+        return None
+    try:
+        from jagora.vault import unseal
+        nonce, ct = _signins_path(uid).read_text().split("\n", 1)
+        return json.loads(unseal(uid, "browser", "signins", nonce, ct))
+    except Exception:  # noqa: BLE001  (none yet, or unreadable: start signed out)
+        return None
+
+
+async def keep_signins(uid: str, b: Browser) -> None:
+    if not uid or uid.startswith("guest-"):
+        return
+    state = await b.signins()
+    if not state:
+        return
+    try:
+        from jagora.vault import seal
+        SIGNINS_DIR.mkdir(parents=True, exist_ok=True)
+        nonce, ct = seal(uid, "browser", "signins", json.dumps(state))
+        p = _signins_path(uid)
+        p.write_text(nonce + "\n" + ct)
+        p.chmod(0o600)
+    except Exception as e:  # noqa: BLE001
+        log.warning("could not keep sign-ins: %s", e)
+
+
+def forget_signins(uid: str) -> None:
+    try:
+        _signins_path(uid).unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 async def _job_loop():
