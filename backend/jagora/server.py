@@ -225,7 +225,7 @@ HELLO = {  # exactly the lines shown in the languages section of the landing pag
 }
 
 
-HELLO_VERSION = 3  # raise this to throw away every hello recording and make them all again
+HELLO_VERSION = 4  # raise this to throw away every hello recording and make them all again
 
 
 def _hello_file(lang: str) -> Path:
@@ -466,9 +466,10 @@ class Session:
                 utt = mid()
                 fx: voicefx.Stretcher | None = None
                 at, last_rate = -1, 24000
+                level = voicefx.Leveler()
 
                 async def out(i: int, rate: int, pcm: bytes) -> None:
-                    pcm = voicefx.louder(pcm)
+                    pcm = level(pcm)
                     if not pcm:
                         return
                     if self.lite:

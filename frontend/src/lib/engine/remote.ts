@@ -225,6 +225,8 @@ export function duckVoice(level: number) {
   master.gain.cancelScheduledValues(t);
   master.gain.setTargetAtTime(level, t, level < 1 ? 0.03 : 0.12);
 }
+let cushion = 0.3; // seconds of voice buffered before it starts playing
+let cushionUtt = "";
 let lastUtt = "";
 let hushedAt = 0;
 const hushed = new Set<string>();
@@ -257,7 +259,12 @@ function playPcm(b64: string, rate: number, utt = "", codec?: string) {
   src.buffer = buf;
   src.connect(out(c));
   if (!voices.size && master) master.gain.value = 1; // a new reply starts at full volume
-  const at = Math.max(c.currentTime + 0.04, nextAt);
+  // a cushion against late pieces on mobile data: speech starts a moment later, then never stutters. If a piece
+  // still arrives after the sound ran out (a gap was heard), the cushion grows for the rest of the session.
+  const dry = nextAt < c.currentTime + 0.01;
+  if (dry && utt === cushionUtt) cushion = Math.min(0.9, cushion + 0.2);
+  cushionUtt = utt;
+  const at = dry ? c.currentTime + cushion : nextAt;
   src.start(at);
   nextAt = at + buf.duration;
   voices.add(src);

@@ -88,14 +88,38 @@ class Stretcher:
         return np.clip(y, -32768, 32767).astype("<i2").tobytes()
 
 
+class Leveler:
+    """Jagora's voice a little louder, cleanly. The gain only ever changes smoothly (never sample by sample, which
+    is what made the voice sound harsh): if a piece would go over the top, the gain glides down before its loudest
+    point; afterwards it creeps back up slowly."""
+
+    def __init__(self, gain: float = GAIN, ceiling: float = 0.92) -> None:
+        self.target, self.ceiling, self.g = gain, ceiling, gain
+
+    def __call__(self, pcm: bytes) -> bytes:
+        if not pcm or self.target == 1.0:
+            return pcm
+        x = np.frombuffer(pcm, dtype="<i2").astype(np.float64) / 32768
+        peak = float(np.max(np.abs(x))) or 1e-6
+        want = min(self.target, self.ceiling / peak)
+        start = self.g
+        # down at once (gliding over the first 3 ms), up slowly (+4% a piece)
+        end = want if want < start else min(want, start * 1.04)
+        ramp = np.full(len(x), end)
+        if end < start:
+            # finish turning down just before the first sample that would be too loud (we have the whole piece)
+            hot = np.nonzero(np.abs(x) * start > self.ceiling)[0]
+            n = min(int(hot[0]) if len(hot) else 72, 72)
+        else:
+            n = min(len(x), 72)
+        if n > 1:
+            ramp[:n] = np.linspace(start, end, n)
+        y = x * ramp
+        self.g = end
+        np.clip(y, -1, 1, out=y)  # only if the 3 ms glide was not enough: very rare
+        return (y * 32767).astype("<i2").tobytes()
+
+
 def louder(pcm: bytes, gain: float = GAIN) -> bytes:
-    """Raise the level; above 70% of full scale the extra is rounded off smoothly instead of clipping."""
-    if gain == 1.0 or not pcm:
-        return pcm
-    x = np.frombuffer(pcm, dtype="<i2").astype(np.float64) / 32768 * gain
-    knee = 0.7
-    a = np.abs(x)
-    over = a > knee
-    a[over] = knee + (1 - knee) * np.tanh((a[over] - knee) / (1 - knee))
-    y = np.sign(x) * a
-    return (y * 32767).astype("<i2").tobytes()
+    """One-off version of Leveler, for a whole clip."""
+    return Leveler(gain)(pcm)

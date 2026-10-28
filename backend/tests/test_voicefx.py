@@ -38,3 +38,14 @@ def test_louder_never_clips():
     quiet = (np.sin(np.arange(24000) / 5) * 5000).astype("<i2").tobytes()
     q = np.frombuffer(voicefx.louder(quiet, 1.4), "<i2").astype(float)
     assert 1.35 < np.sqrt(np.mean(q ** 2)) / np.sqrt(np.mean(np.frombuffer(quiet, "<i2").astype(float) ** 2)) < 1.45
+
+
+def test_loud_voice_is_turned_down_smoothly_not_distorted():
+    """A voice already near full volume: the shape of the wave stays the same (no squashed peaks = no harshness)."""
+    x = np.sin(np.arange(24000) / 5) * 0.97
+    pcm = (x * 32767).astype("<i2").tobytes()
+    lv = voicefx.Leveler(1.4)
+    y = np.frombuffer(b"".join(lv(pcm[i:i + 9600]) for i in range(0, len(pcm), 9600)), "<i2").astype(float) / 32767
+    assert np.max(np.abs(y)) <= 0.93
+    ratio = y[200:] / np.where(np.abs(x[200:]) > 0.05, x[200:], np.nan)
+    assert np.nanmax(ratio) - np.nanmin(ratio) < 0.02  # one gain for all samples: an undistorted, quieter copy
