@@ -115,7 +115,6 @@ class Settings:
     # PlotWeaver STORM: speech to text and text to speech
     plotweaver_key: str = field(default_factory=lambda: env("PLOTWEAVER_API_KEY"))
     plotweaver_base: str = field(default_factory=lambda: env("PLOTWEAVER_BASE_URL", "https://api.plotweaver.app/v1"))
-    voice: str = field(default_factory=lambda: env("JAGORA_VOICE", ""))  # empty: one voice per language (speech.VOICES)
     # LiveKit (live voice rooms)
     livekit_url: str = field(default_factory=lambda: env("LIVEKIT_URL"))
     livekit_key: str = field(default_factory=lambda: env("LIVEKIT_API_KEY"))

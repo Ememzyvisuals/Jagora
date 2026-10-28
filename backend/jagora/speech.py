@@ -111,14 +111,12 @@ def pcm_to_wav(pcm: bytes, rate: int = 24000) -> bytes:
     return buf.getvalue()
 
 
-# Jagora's voice in each language (PlotWeaver STORM built-in voices). JAGORA_VOICE, if set, overrides all of them.
-VOICES = {"en": "john", "yo": "morenike", "ha": "john", "ig": "yemi", "pcm": "john"}
+# Jagora's voice in each language (PlotWeaver STORM built-in voices), chosen by the language picked in the app
+VOICES = {"en": "john", "yo": "morenike", "ha": "john", "ig": "adaeze", "pcm": "yemi"}
 
 
 def voice_for(lang: str) -> str:
-    import os
-
-    return os.environ.get("JAGORA_VOICE") or VOICES.get(lang, "john")
+    return VOICES.get(lang, "john")
 
 
 def speakable(text: str) -> str:
