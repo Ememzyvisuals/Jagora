@@ -52,3 +52,9 @@ export function t(key: keyof typeof T, lang: Lang, vars: Record<string, string> 
   for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, v);
   return s;
 }
+
+/** the language picker says plainly what it is */
+export const LANG_WORD: Record<Lang, string> = { en: "Language", pcm: "Language", yo: "Èdè", ha: "Harshe", ig: "Asụsụ" };
+export const CHOOSE_LANG: Record<Lang, string> = {
+  en: "Choose your language", pcm: "Choose your language", yo: "Yan èdè yín", ha: "Zaɓi harshenka", ig: "Họrọ asụsụ gị",
+};

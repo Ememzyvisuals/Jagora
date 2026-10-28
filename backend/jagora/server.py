@@ -363,6 +363,26 @@ async def delete_chat(chat_id: str, request: Request):
         raise HTTPException(401)
     await db.exec("delete from messages where user_id=? and chat_id=?", (uid, chat_id))
     await db.exec("delete from chats where user_id=? and chat_id=?", (uid, chat_id))
+    await db.exec("delete from chat_notes where user_id=? and chat_id=?", (uid, chat_id))  # its memory goes with it
+    return {"ok": True}
+
+
+@app.post("/chats/delete-all")
+async def delete_all_chats(request: Request):
+    """She typed DELETE to start afresh: every chat, its messages, its memory and her session log go, on every
+    device. What Jagora remembers about her (her facts) stays unless she asks for that too."""
+    uid = _user_from(request)
+    if not uid:
+        raise HTTPException(401)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    if str(body.get("confirm") or "") != "DELETE":
+        raise HTTPException(400, "type DELETE to confirm")
+    for table in ("messages", "chats", "chat_notes"):
+        await db.exec(f"delete from {table} where user_id=?", (uid,))
+    trace.clear(uid)
     return {"ok": True}
 
 
@@ -476,6 +496,7 @@ class Run:
         self.titled = False
         self.free = asyncio.Event()  # cleared while she has taken over the page
         self.free.set()
+        self.agent: Agent | None = None  # the agent at work, so a language change reaches it mid-task
 
     @property
     def busy(self) -> bool:
@@ -988,6 +1009,10 @@ class Session:
             lang = str(ev.get("lang") or "")
             if lang in ("en", "yo", "ha", "ig", "pcm") and lang != self.lang:
                 self.lang = lang
+                # the language is hers, not the chat's: a task already running answers in the new one from its next step
+                for run in self.runs.values():
+                    if run.busy and run.agent is not None:
+                        run.agent.lang = lang
             await self._to_voice({"type": "lang", "lang": self.lang})
             if ev.get("opening") and task:
                 asyncio.create_task(self._welcome_back(task))
@@ -1508,6 +1533,7 @@ class Session:
                           steering=r.steer, user_id=self.user_id, on_watch=io.watch, screen=lambda: self.screen,
                           memory=DbMemory(self.user_id, task, self.lang, self.mode, self.profile), pause_gate=r.free.wait,
                           vault=Vault(db, self.user_id) if not self.user_id.startswith("guest-") else None, files=self.files)
+            r.agent = agent
             result = await agent.run(goal)
             await db.add_spend(agent.model.usage.dollars)
             await db.log(self.user_id, "done" if result.success else "stopped",

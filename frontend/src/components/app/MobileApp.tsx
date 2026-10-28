@@ -18,6 +18,7 @@ import { Glass } from "../glass/Glass";
 import { Tour } from "../Tour";
 import { LiveMode } from "../LiveMode";
 import { NowPlaying } from "../NowPlaying";
+import { DeleteDialogs } from "../DeleteDialogs";
 import { InstallPrompt } from "../InstallPrompt";
 import { History } from "./History";
 
@@ -143,6 +144,7 @@ export function MobileApp() {
       {screen === "home" && !sheet && <Tour />}
       <LiveMode />
       <NowPlaying />
+      <DeleteDialogs />
       {screen === "home" && !sheet && <InstallPrompt />}
     </div>
   );

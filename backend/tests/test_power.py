@@ -191,7 +191,6 @@ class Checked(Model):
         self.pages.append(page)
         plan = [
             [("read_sources", {"urls": [self.base + "/article.html", self.base + "/login.html"]})],
-            [("finish", {"summary": "Done.", "success": True})],  # stopped: no evidence shown
             [("finish", {"summary": "Done.", "success": True})],  # stopped by the checker
             [("remember_about_her", {"fact": "She is interested in the Oyo Empire"})],
             [("finish", {"summary": "Done, and I will remember your interest.", "success": True})],

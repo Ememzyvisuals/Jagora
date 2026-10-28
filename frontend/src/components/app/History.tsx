@@ -64,11 +64,8 @@ export function History({ open, onClose, onOpen, onNew }: { open: boolean; onClo
   }, [tasks, q]);
   const groups = (["today", "yesterday", "earlier"] as const).map((g) => [g, list.filter((t) => group(t) === g)] as const).filter(([, l]) => l.length);
 
-  const del = (t: Task) => {
-    setGone({ task: t, at: tasks.findIndex((x) => x.id === t.id) });
-    remove(t.id);
-    deleteChats([t.id]);
-  };
+  // deleting asks first (components/DeleteDialogs.tsx)
+  const del = (t: Task) => useApp.getState().setAskDelete({ ids: [t.id] });
   const undo = () => {
     if (!gone) return;
     useApp.setState((s) => {
@@ -150,11 +147,7 @@ export function History({ open, onClose, onOpen, onNew }: { open: boolean; onClo
               {tasks.length > 0 && !q && <p className="px-3 pt-4 text-center text-[12.5px] text-ink-3">{W.swipe[lang]}</p>}
               {tasks.length > 1 && !q && (
                 <button
-                  onClick={() => {
-                    if (!confirm(W.clearAsk[lang])) return;
-                    deleteChats(useApp.getState().tasks.map((t) => t.id));
-                    useApp.setState({ tasks: [], activeId: null });
-                  }}
+                  onClick={() => useApp.getState().setAskDelete({ ids: [], all: true })}
                   className="mx-auto mt-3 block rounded-full px-4 py-2 text-[14px] font-bold text-[#c4361a] hover:bg-[#c4361a]/10"
                 >
                   {W.clear[lang]}

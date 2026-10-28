@@ -491,8 +491,8 @@ HOW YOU WORK
 - Signing in: use their saved login (use_saved_login) when there is one for that site; otherwise ask_private, and for a task the user may repeat or schedule, label it clearly (e.g. "JAMB password") so the user can choose to save it.
 - Time-based help: if a portal is busy or the user wants it done later ("try at midnight", "every morning check"), agree the time and what you may do, then schedule_task. Reminders are for them; scheduled tasks are for you.
 - Any website, by voice: sign in (their saved login, or ask_private once and let them save it), open dashboards and read the numbers to them, press buttons the user names (approve, play, create), fill forms, switch a site to dark or light (page_theme), play audio or video for them (play_media), save pages or whole sites as PDF (save_page). Ask before anything that changes their account (create, delete, approve, send, pay).
-- Think before acting: for anything with several steps, make a plan (update_plan) and keep it current. A checker reviews your work before the user hears "done", so only finish when the evidence shows it.
-- To compare or confirm, read several sources at once with read_sources, then show evidence from the best.
+- Think before acting: for anything with several steps, make a plan (update_plan) and keep it current. When you filled or submitted something for them, a checker reviews it before they hear "done", so only finish when the page shows it worked.
+- When they ask you to compare, or to confirm ("are you sure?"), read several sources at once with read_sources, then show evidence from the best.
 - Use what you know about them from before; when the user tells you lasting facts about themselves, offer to remember them.
 - If you cannot tell which thing the user means on a page, use ask_point so the user taps it. For things without a number (maps, charts, canvas, images), use click_at with screenshot pixels. Use hover for hover menus, drag for sliders and drop zones, upload_file for their files, set_date for date boxes.
 - One-time codes: ask them whether to read it from their email (open their mail in a new tab, then fetch_code) or whether the user will type it (ask_private). Captchas and "are you human" checks: hand_over so the user does it on the live page.
@@ -511,6 +511,7 @@ HOW YOU WORK
 - Learning (a course, a skill, an exam subject): ask their level if unknown, find good beginner playlists (find_video "<subject> full course for beginners playlist"), offer the best 3 channels as choices, then play the lessons in order with play_list and a course name, so their watching is tracked ("Her course ..." lines show minutes watched and lessons finished). Offer a short study guide (write_document: the plan, lesson by lesson, how long each day, what to practise). "Continue my course" means play_list from the next unfinished lesson. When a lesson ends you are told; offer a short practice sheet on that lesson (write_document with exercises, answers at the end), then the next lesson.
 - Series and lists: when what they want comes in parts (episodes, seasons, part 1/2/3, an album, a playlist, a course's lessons), find the parts in order and use play_list, so Next plays the next part. Say how many parts there are.
 - Never bring back an answer, card or page you already gave earlier in the chat unless they ask for it again; a new message is about something new.
+- Do not double-check by yourself: answer from the first good source you read (official when there is one) and say where it came from. Check again in another source only when they ask ("are you sure?", "check again", "confirm it").
 - Say the answer once. Either tell_user it and then finish with a one-line wrap-up, or put it only in finish. Never tell_user the answer and then repeat it in finish.
 - When done, call finish with a short summary in {lang}: the answer, where it was confirmed, what was not confirmed, and the best next step. Offer a document or download if it would help.
 
@@ -1085,7 +1086,7 @@ class Agent:
                 self._want_look = True
                 return "you will see the page as a picture now", True, None
             if name == "finish":
-                if a.get("success") and self.searched and not self.evidence and not self._nudged_evidence:
+                if False and a.get("success") and self.searched and not self.evidence and not self._nudged_evidence:
                     self._nudged_evidence = True
                     return ("not finished: you have not shown evidence for any fact. Open the official source and use "
                             "show_evidence for the key facts, or tell them plainly what you could not confirm."), True, None

@@ -138,6 +138,9 @@ type State = {
   liveSmall: boolean;
   /** a song or video Jagora found, playing big on her screen */
   playing: Extract<Msg, { kind: "media" }> | null;
+  /** a delete waiting for her yes: one or more chats, or everything (she must type DELETE) */
+  askDelete: { ids: string[]; all?: boolean } | null;
+  setAskDelete: (v: { ids: string[]; all?: boolean } | null) => void;
   /** which video of the list is playing */
   mediaAt: number;
   /** she tapped Talk on the player: the film pauses and the microphone is on */
@@ -242,6 +245,8 @@ export const useApp = create<State>()(
       liveSmall: false,
       playing: null,
       mediaAt: 0,
+      askDelete: null,
+      setAskDelete: (askDelete) => set({ askDelete }),
       talkOver: false,
       mediaListen: false,
       orb: "idle",

@@ -29,7 +29,7 @@ import {
   List,
   MagnifyingGlass,
   CellSignalFull,
-  CellSignalLow, DownloadSimple, Eraser } from "@phosphor-icons/react";
+  CellSignalLow, DownloadSimple, Eraser, Globe } from "@phosphor-icons/react";
 import { hush, remoteInput, remoteTakeover } from "@/lib/engine/remote";
 import { fly } from "../Effects";
 import { setAutoFullscreen, toggleFullscreen, useAutoFullscreen } from "../Pwa";
@@ -44,7 +44,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ask, live, quick } from "@/lib/engine";
 import { ago } from "@/lib/hooks";
-import { LANGS, type Lang } from "@/lib/i18n";
+import { CHOOSE_LANG, LANG_WORD, LANGS, type Lang } from "@/lib/i18n";
 import { clearSessionLog, downloadSessionLog } from "@/lib/sessionlog";
 import { activeTask, isTab, useApp, type Task } from "@/lib/store";
 import { useSpeakingPulse } from "@/lib/voice";
@@ -55,6 +55,7 @@ import { CloudWordmark } from "../glass/CloudWordmark";
 import { Backdrop } from "../glass/Backdrop";
 import { LiveButton, LiveMode } from "../LiveMode";
 import { NowPlaying } from "../NowPlaying";
+import { DeleteDialogs } from "../DeleteDialogs";
 import { Glass } from "../glass/Glass";
 import { PILL } from "@/lib/glassRegistry";
 import { Orb } from "../Orb";
@@ -252,6 +253,7 @@ export function DesktopApp() {
               <input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder={PLACEHOLDER[lang]} className="h-full min-w-0 flex-1 bg-transparent text-[14.5px] font-semibold text-ink outline-none placeholder:font-semibold placeholder:text-ink/70" />
             </form>
           )}
+          <DeskLang lang={lang} setLang={setLang} />
           <button className={`${tool} ${panel ? "bg-accent-soft" : ""}`} onClick={() => setPanel((v) => !v)} aria-label={panel ? "Hide Jagora" : "Show Jagora"} title={panel ? "Hide Jagora" : "Show Jagora"} aria-pressed={panel}>
             <Orb size={26} state={useApp.getState().orb} />
           </button>
@@ -317,7 +319,7 @@ export function DesktopApp() {
                       </span>
                     </span>
                     <StatusMark s={x.status} />
-                    <button onClick={(e) => (e.stopPropagation(), closeTask(x.id), deleteChats([x.id]))} className="hidden text-ink-3 hover:text-ink group-hover:block" aria-label={`Delete ${x.title}`} title="Delete chat">
+                    <button onClick={(e) => (e.stopPropagation(), useApp.getState().setAskDelete({ ids: [x.id] }))} className="hidden text-ink-3 hover:text-ink group-hover:block" aria-label={`Delete ${x.title}`} title="Delete chat">
                       <Trash size={14} />
                     </button>
                   </div>
@@ -341,6 +343,7 @@ export function DesktopApp() {
       </div>
       <LiveMode />
       <NowPlaying />
+      <DeleteDialogs />
     </div>
   );
 }
@@ -350,6 +353,47 @@ const NEW_CHAT: L = { en: "New chat", pcm: "New chat", yo: "Ìjíròrò tuntun",
 const CHATS_L: L = { en: "Your chats", pcm: "Your chats", yo: "Àwọn ìjíròrò yín", ha: "Hirarrakinku", ig: "Mkparịta ụka gị" };
 const TRY_L: L = { en: "Try Jagora", pcm: "Try Jagora", yo: "Ẹ dán Jagora wò", ha: "Gwada Jagora", ig: "Nwalee Jagora" };
 const siteOf = (u: string) => (u.startsWith("/practice/") ? "skillsfair.ng" : u.replace(/^https?:\/\//, "").split("/")[0]);
+
+const DEL_ALL: Record<Lang, string> = { en: "Delete all conversations", pcm: "Delete all chats", yo: "Pa gbogbo ìjíròrò rẹ́", ha: "Share dukkan hirarraki", ig: "Hichapụ mkparịta ụka niile" };
+
+/** The language picker, in plain sight: a globe, the word "Language" and the language now. */
+function DeskLang({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative mr-1">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-10 items-center gap-2 rounded-full bg-white/75 px-3 shadow-[inset_0_0_0_1px_rgba(0,0,0,.05)] transition hover:bg-white dark:bg-white/10"
+        aria-label={`${LANG_WORD[lang]}: ${LANGS.find((l) => l.id === lang)?.native}`}
+        aria-expanded={open}
+      >
+        <Globe size={18} weight="bold" className="text-ink" />
+        <span className="flex flex-col items-start leading-none">
+          <span className="text-[10px] font-bold uppercase tracking-[0.06em] text-ink-2">{LANG_WORD[lang]}</span>
+          <span className="mt-0.5 text-[13.5px] font-bold text-ink">{LANGS.find((l) => l.id === lang)?.native}</span>
+        </span>
+        <CaretDown size={12} weight="bold" className="text-ink-2" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-12 z-50 w-56 rounded-[20px] bg-white p-1.5 shadow-[0_24px_50px_-20px_rgba(10,25,60,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
+            <p className="px-3 pb-1 pt-2 text-[12.5px] font-bold text-ink-2">{CHOOSE_LANG[lang]}</p>
+            {LANGS.map((l) => (
+              <button
+                key={l.id}
+                onClick={() => (setLang(l.id), setOpen(false))}
+                className={`w-full rounded-[12px] px-3 py-2.5 text-left text-[14.5px] font-bold ${l.id === lang ? "bg-black/[.05] text-ink dark:bg-white/10" : "text-ink-2 hover:bg-black/[.04] dark:hover:bg-white/5"}`}
+              >
+                {l.native}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 /** Her profile: details, language, theme, Page Wars, About. */
 function DeskProfile({ lang, setLang, langOpen, setLangOpen, theme, initial }: { lang: Lang; setLang: (l: Lang) => void; langOpen: boolean; setLangOpen: (v: boolean) => void; theme: string; initial: string }) {
@@ -400,6 +444,9 @@ function DeskProfile({ lang, setLang, langOpen, setLangOpen, theme, initial }: {
             </button>
             <button onClick={() => (void clearSessionLog(), setOpen(false))} className={item}>
               <Eraser size={18} /> Start a fresh log
+            </button>
+            <button onClick={() => (useApp.getState().setAskDelete({ ids: [], all: true }), setOpen(false))} className={`${item} text-[#c4361a]`}>
+              <Trash size={18} /> {DEL_ALL[lang]}
             </button>
             <Link href="/about" className={item}>
               <Info size={18} /> About and credits

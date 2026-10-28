@@ -111,12 +111,10 @@ export function runApp(action: string, value = "") {
       s.setSheet(true);
       return tell("new_chat");
     case "close_chat": {
+      // deleting a chat always asks her first ("Delete this chat?"), by voice too
       const id = pickChat(value);
-      if (id) {
-        s.closeTask(id);
-        deleteChats([id]);
-      }
-      return tell("go_home");
+      if (id) s.setAskDelete({ ids: [id] });
+      return;
     }
     case "scroll_chat": {
       const box = [...document.querySelectorAll<HTMLElement>("[data-chat-scroll]")].find((e) => e.offsetParent !== null);

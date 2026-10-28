@@ -77,6 +77,20 @@ function forget(id: string) {
   );
 }
 
+/** Start afresh (she typed DELETE): every chat, its memory and her session log, here and on the server. */
+export async function deleteAllChats(): Promise<boolean> {
+  deleting.forEach((t) => clearTimeout(t));
+  deleting.clear();
+  useApp.setState({ tasks: [], activeId: null, playing: null });
+  if (!API || !getToken()) return true;
+  try {
+    const r = await fetch(`${API}/chats/delete-all`, { method: "POST", headers: { ...auth(), "Content-Type": "application/json" }, body: JSON.stringify({ confirm: "DELETE" }) });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Bring her account to this device, then keep it in step. Safe to call more than once. */
 export async function syncAccount() {
   if (!API || !getToken()) return;

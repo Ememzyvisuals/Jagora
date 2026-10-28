@@ -28,7 +28,7 @@ import {
   ChatCircleText,
   Play,
   SpeakerHigh,
-  LockSimple, DownloadSimple, Eraser } from "@phosphor-icons/react";
+  LockSimple, DownloadSimple, Eraser, Globe, Trash } from "@phosphor-icons/react";
 import { fly } from "../Effects";
 import { Starters, openSite, useTopSites } from "./NewTabBits";
 import { startPageWars } from "../PageWars";
@@ -38,7 +38,7 @@ import { Avatar, AvatarPicker } from "../Avatar";
 import { remoteInput } from "@/lib/engine/remote";
 import { useEffect, useState, type ComponentType } from "react";
 import { ask, live, quick } from "@/lib/engine";
-import { LANGS, type Lang } from "@/lib/i18n";
+import { CHOOSE_LANG, LANG_WORD, LANGS, type Lang } from "@/lib/i18n";
 import { clearSessionLog, downloadSessionLog } from "@/lib/sessionlog";
 import { activeTask, isTab, useApp } from "@/lib/store";
 import { ago } from "@/lib/hooks";
@@ -315,14 +315,19 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
               </span>
             </Glass>
             <Glass radius={22} bezel={12} refraction={30} pressable className="cursor-pointer" onClick={() => setLangOpen((v) => !v)} data-tour="lang">
-              <span className="flex h-11 items-center gap-2 px-3">
-                <Flag />
-                <span className="text-[15px] font-semibold text-ink">{LANGS.find((x) => x.id === lang)?.native}</span>
+              {/* plainly a language picker: a globe, the word "Language" and the language now */}
+              <span className="flex h-11 items-center gap-2 px-3" role="button" aria-label={`${LANG_WORD[lang]}: ${LANGS.find((x) => x.id === lang)?.native}`}>
+                <Globe size={19} weight="bold" className="shrink-0 text-ink" />
+                <span className="flex flex-col leading-none">
+                  <span className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-ink-2">{LANG_WORD[lang]}</span>
+                  <span className="mt-0.5 text-[14.5px] font-bold text-ink">{LANGS.find((x) => x.id === lang)?.native}</span>
+                </span>
                 <CaretDown size={13} weight="bold" className="text-ink-2" />
               </span>
             </Glass>
             {langOpen && (
-              <Glass radius={22} bezel={14} tint="rgba(255,255,255,.55)" className="absolute left-0 top-[52px] z-50 w-52 p-1.5">
+              <Glass radius={22} bezel={14} tint="rgba(255,255,255,.55)" className="absolute left-0 top-[52px] z-50 w-56 p-1.5">
+                <p className="px-3 pb-1 pt-2 text-[12.5px] font-bold text-ink-2">{CHOOSE_LANG[lang]}</p>
                 <ul>
                   {LANGS.map((x) => (
                     <li key={x.id}>
@@ -489,6 +494,8 @@ function FeedCard({ image, title, source, when, listen = false, onOpen }: { imag
   );
 }
 
+const DEL_ALL_M: Record<Lang, string> = { en: "Delete all conversations", pcm: "Delete all chats", yo: "Pa gbogbo ìjíròrò rẹ́", ha: "Share dukkan hirarraki", ig: "Hichapụ mkparịta ụka niile" };
+
 /** Her profile button; its menu holds what the old "more" button held. */
 function ProfileMenu({ canFull }: { canFull: boolean }) {
   const lang = useApp((s) => s.lang);
@@ -537,6 +544,9 @@ function ProfileMenu({ canFull }: { canFull: boolean }) {
             <button onClick={() => (void clearSessionLog(), setOpen(false))} className={item}>
               <Eraser size={19} /> Start a fresh log
             </button>
+            <button onClick={() => (useApp.getState().setAskDelete({ ids: [], all: true }), setOpen(false))} className={`${item} text-[#c4361a]`}>
+                <Trash size={19} /> {DEL_ALL_M[lang]}
+              </button>
             <Link href="/about" className={item}>
                 <Info size={19} /> About and credits
               </Link>
