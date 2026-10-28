@@ -226,6 +226,8 @@ function handle(ev: Record<string, unknown>) {
       if ((ev.msg as Msg).kind === "media") {
         forgetSound(); // a new video replaces what was paused: nothing old plays on
         s.setPlaying(ev.msg as Extract<Msg, { kind: "media" }>);
+        const start = (ev.msg as { start?: number }).start;
+        if (start) s.setMediaAt(start); // a list started further in (episode 3)
       }
       break;
     case "runs": {

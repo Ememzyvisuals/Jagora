@@ -133,3 +133,31 @@ async def test_words_showing_are_answered_when_the_voice_does_not_end_her_turn(m
     s._flush_later("t", 0)
     await asyncio.sleep(0.05)
     assert got == ["when is jamb registration"]
+
+
+async def test_words_not_meant_for_jagora_do_nothing_and_say_again_is_never_repeated(monkeypatch):
+    s = server.Session(WS(), "u1")
+    s.active_task = "t"
+    got = []
+
+    async def heard(task, msg_id, text, lang, history):
+        got.append(text)
+
+    verdicts = iter(["ignore", "unclear", "unclear"])
+
+    async def gate(task, text):
+        return next(verdicts)
+
+    said = []
+
+    async def says(task, text):
+        said.append(text)
+
+    monkeypatch.setattr(s, "heard", heard)
+    monkeypatch.setattr(s, "_gate", gate)
+    monkeypatch.setattr(s, "agent_says", says)
+    for words in ("ẹ ṣé o ti ń wo fíìmù", "kanye mi lo", "graph to nono so"):
+        await s.on_voice({"type": "words", "text": words})
+        await s._flush_turn("t", 0)
+    assert got == []
+    assert len(said) == 1  # asked to say it again once, not every time

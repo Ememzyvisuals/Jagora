@@ -508,6 +508,9 @@ CHECKIN = re.compile(r"\b(are you (there|still there|hearing me|with me)|(i'?m|i
                      r"hello\??$|can you hear me|where are you|you still dey|ṣé o wà|se o wa|kana nan|ị nọ ebe a)\b", re.I)
 HERE = {"en": "I'm here, still working on it.", "pcm": "I dey here, I still dey do am.",
         "yo": "Mo wà níbí, mo ṣì ń ṣe é.", "ha": "Ina nan, ina kan aikin.", "ig": "Anọ m ebe a, a ka m na-arụ ya."}
+AGAIN = {"en": "Sorry, I didn't catch that. Please say it again.", "pcm": "Sorry, I no catch am. Abeg talk am again.",
+         "yo": "Ẹ má bínú, mi ò gbọ́ ọ dáadáa. Ẹ jọ̀ọ́ ẹ tún sọ ọ́.", "ha": "Yi haƙuri, ban ji ba. Don Allah ka sake faɗa.",
+         "ig": "Ndo, anụghị m ya. Biko kwughachi ya."}
 HERE_IDLE = {"en": "I'm here. What would you like me to do?", "pcm": "I dey here. Wetin you want make I do?",
              "yo": "Mo wà níbí. Kí ni kí n ṣe fún ọ?", "ha": "Ina nan. Me kake so in yi?", "ig": "Anọ m ebe a. Gịnị ka ị chọrọ ka m mee?"}
 
@@ -1201,6 +1204,7 @@ class Session:
     voice_speaking = False
     _hearing_task = ""
     _partial = ""  # words showing now, not yet ended by the voice
+    _asked_again = 0.0  # when she was last asked to say it again (never twice in a row)
     _flush: asyncio.Task | None = None
 
     @property
@@ -1233,6 +1237,40 @@ class Session:
         self._wait_more()
         self._flush = asyncio.create_task(self._flush_turn(task, wait))
 
+    async def _gate(self, task: str, text: str) -> str:
+        """Before anything happens: was this really her, talking to Jagora? A quick check (the fast model, a second
+        or so) with what is on her screen and the last lines of the chat: ACT (a request or answer for Jagora),
+        IGNORE (silence the recogniser filled with made-up words, a film or TV, her talking to someone else, words
+        Jagora already answered), or UNCLEAR (for Jagora, but the words make no sense)."""
+        if is_stop(text) or CHECKIN.search(text) or (YES.search(text) or NO.search(text)) and len(text.split()) <= 4:
+            return "act"
+        r = self.runs.get(task)
+        if r and r.waiting:
+            return "act"  # she is answering a question
+        try:
+            convo = await db.history(self.user_id, task, 6)
+        except Exception:  # noqa: BLE001
+            convo = []
+        lines = "\n".join(f"{'Her' if m.get('role') == 'user' else 'Jagora'}: {str(m.get('text', ''))[:200]}" for m in convo)
+        prompt = (f"Jagora is a voice assistant. Her microphone is open in a room in Nigeria. This was just heard "
+                  f"(speech recognition, language {self.lang}): \"{text}\"\n\nThe chat so far:\n{lines or '(nothing yet)'}\n\n"
+                  f"Her screen now:\n{(self.screen or '')[:900]}\n\nJagora is {'working on a task' if r and r.busy else 'not busy'}.\n\n"
+                  "Is this her talking to Jagora? Reply with one word:\n"
+                  "ACT - a request, question or answer for Jagora (even short, even repeated on purpose)\n"
+                  "IGNORE - not for Jagora: words a speech recogniser makes up from silence or noise, a film or TV or song "
+                  "playing, her talking to someone else, or the same thing she already said and Jagora already answered\n"
+                  "UNCLEAR - meant for Jagora but the words make no sense")
+        try:
+            m = _model()
+            rep = await asyncio.wait_for(m.chat([{"role": "user", "content": prompt}], None, effort=settings.effort_fast,
+                                                max_tokens=10, kind="gate"), 5)
+            word = (rep.text or "").strip().upper()
+        except Exception:  # noqa: BLE001
+            return "act"  # when unsure, do not lose her request
+        verdict = "ignore" if word.startswith("IGNORE") else "unclear" if word.startswith("UNCLEAR") else "act"
+        trace.write(self.user_id, "voice_gate", text=text, verdict=verdict)
+        return verdict
+
     async def _flush_turn(self, task: str, wait: float) -> None:
         try:
             await asyncio.sleep(wait)
@@ -1259,6 +1297,22 @@ class Session:
         # she has said more: anything Jagora had not said yet is out of date, so it is dropped and the answer covers
         # everything she said. Whatever plays on her screen pauses while Jagora deals with it, and plays on after,
         # unless what she said was about it (Jagora then pauses, closes or changes it itself)
+        verdict = await self._gate(task, text)
+        if verdict == "ignore" or (verdict == "unclear" and time.time() - self._asked_again < 90):
+            # not her talking to Jagora (or she was already asked to say it again): nothing happens, nothing repeats
+            if msg_id:
+                await self.send({"type": "drop", "task": task, "id": msg_id})
+            await self.send({"type": "sound", "do": "unduck"})
+            await self.settle(task)
+            return
+        if verdict == "unclear":
+            self._asked_again = time.time()
+            if msg_id:
+                await self.send({"type": "update", "task": task, "id": msg_id, "patch": {"text": text}})
+            await self.agent_says(task, AGAIN.get(self.lang, AGAIN["en"]))
+            await self.send({"type": "sound", "do": "unduck"})
+            await self.settle(task)
+            return
         self.hush()
         await self.send({"type": "sound", "do": "hold"})
         await self.heard(task, msg_id, text, self.lang, None)

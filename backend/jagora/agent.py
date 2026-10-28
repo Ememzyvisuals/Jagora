@@ -365,6 +365,12 @@ COMMON = [
          {"videos": {"type": "array", "items": {"type": "object", "properties": {"url": {"type": "string"}, "name": {"type": "string"}},
                                                "required": ["url"]}},
           "seconds": {"type": "integer", "description": "seconds of each preview, 5 to 12 (default 8)"}}, ["videos"]),
+    tool("play_list", "Play several videos in order as one list, with Next and Previous on their screen: the episodes of a "
+         "series, parts 1, 2, 3 of a film, the songs of an album or a playlist, lessons of a course. Find the parts with "
+         "find_video (e.g. 'X episode 1', 'X part 2'), put them in the right order, then play_list from where they want.",
+         {"videos": {"type": "array", "items": {"type": "object", "properties": {"url": {"type": "string"}, "name": {"type": "string"}},
+                                               "required": ["url"]}},
+          "start": {"type": "integer", "description": "which one to start with, 1 = the first (default 1)"}}, ["videos"]),
     tool("look", "See the page as a picture on your next step. Only when the text and the list of elements are not enough "
          "(pictures, maps, colours, layout, a button you cannot find).", {}, []),
     tool("finish", "The task is done, or cannot be done. Tell them the result in their language: the answer, what you "
@@ -500,6 +506,8 @@ HOW YOU WORK
 - While a video plays on their screen ("Playing on her screen now"), the microphone may catch the film. Act only on words clearly meant for you (next, another one, I don't like it, pause, stop, louder); ignore anything that sounds like the film's dialogue and say nothing. When she talks, whatever plays is paused for you and plays on by itself when you are done; touch it (media_pause, stop_media, media_next) only if what she said is about it.
 - Choosing with them (videos, music, films, courses, tutorials, fonts, products, schools, jobs, anything with several good options): find the options fast (find_video for anything to watch or listen to, search for the rest), give them the best 3 as ask_user choices with short titles, and WAIT for their pick. Then play it (play_media) or open its page (go_to) so they see it. If they said "just play" or named one, skip the question. Stay with them after: "next", "another one", "not this one" means the next option, or search again for better ones.
 - Show what you read: when the answer comes from a website, open that page with go_to so it is on their screen while you tell them (read_sources is for comparing several in the background). When no website is needed (a quick fact, a chat), stay on their home screen.
+- Series and lists: when what they want comes in parts (episodes, seasons, part 1/2/3, an album, a playlist, a course's lessons), find the parts in order and use play_list, so Next plays the next part. Say how many parts there are.
+- Never bring back an answer, card or page you already gave earlier in the chat unless they ask for it again; a new message is about something new.
 - Say the answer once. Either tell_user it and then finish with a one-line wrap-up, or put it only in finish. Never tell_user the answer and then repeat it in finish.
 - When done, call finish with a short summary in {lang}: the answer, where it was confirmed, what was not confirmed, and the best next step. Offer a document or download if it would help.
 
@@ -766,7 +774,7 @@ class Agent:
         (("write_document",), r"doc|document|pdf|word|letter|cv|resume|write|summar|report|markdown|note"),
         (("picture_guide",), r"picture|draw|diagram|image|show me how|illustrat"),
         (("save_page", "page_theme"), r"save|pdf|print|download|dark|light|theme|night mode"),
-        (("play_media", "find_media", "find_video", "preview_videos"), r"play|song|music|video|movie|film|watch|listen|audio|sermon|podcast|clip"),
+        (("play_media", "find_media", "find_video", "preview_videos", "play_list"), r"episode|season|series|album|playlist|part \d|play|song|music|video|movie|film|watch|listen|audio|sermon|podcast|clip"),
         (("give_verdict", "check_link", "review_terms"), r"real|fake|scam|legit|genuine|official|safe|trust|link|terms|verify|check (this|if)"),
         (("remember_about_her",), r"remember|my name is|i am a|i live|call me|i work|i study"),
     ]
@@ -1035,6 +1043,19 @@ class Agent:
                         "next, another one, or that they do not like it:\n" + "\n".join(
                     f"{i + 1}. {v['title']} | {v['url']} | {v['channel']} {v['duration']} {v['date']}".rstrip()
                     for i, v in enumerate(vids))), False, None
+            if name == "play_list":
+                items = []
+                for v in list(a.get("videos") or [])[:30]:
+                    m = YT_ID.search(str(v.get("url", "")))
+                    if m:
+                        items.append({"name": str(v.get("name") or f"Part {len(items) + 1}")[:90], "url": yt_embed(m.group(1)),
+                                      "type": "youtube", "source": str(v.get("url"))})
+                if not items:
+                    return "give YouTube links from find_video", False, None
+                start = max(0, min(len(items) - 1, int(a.get("start") or 1) - 1))
+                await self.io.event("media", {**items[start], "size": 0, "queue": items, "start": start})
+                return (f"playing a list of {len(items)} on their screen from number {start + 1}; Next and Previous move "
+                        "through it (app_control media_next / media_previous when they ask)."), False, None
             if name == "preview_videos":
                 items = []
                 for v in list(a.get("videos") or [])[:6]:
