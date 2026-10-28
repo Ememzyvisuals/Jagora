@@ -2,9 +2,13 @@
 
 /* Registers the service worker (production only) so Jagora can be added to the home screen and open offline. */
 import { useEffect } from "react";
+import { watchErrors, watchVersion } from "@/lib/crash";
+import { useApp } from "@/lib/store";
 
 export function Pwa() {
   useEffect(() => {
+    watchErrors(); // crashes are reported (lib/crash.ts); an out-of-date app reloads itself
+    watchVersion(() => useApp.getState().live || useApp.getState().tasks.some((t) => t.status === "working"));
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
     navigator.serviceWorker.register("/sw.js").catch(() => undefined);
   }, []);

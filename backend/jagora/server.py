@@ -137,6 +137,22 @@ async def health():
     return {"ok": True, "speech": speech.enabled(), "model": bool(settings.meta_key), "sessions": len(SESSIONS)}
 
 
+@app.post("/client-error")
+async def client_error(request: Request):
+    """A crash in the app on someone's phone, so it shows up in these logs with its real message and where it
+    happened. Only the error itself is kept (no chat, no page content), and it is cut short."""
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return {"ok": False}
+    if not isinstance(body, dict):
+        return {"ok": False}
+    cut = lambda k, n: str(body.get(k, ""))[:n].replace("\n", " | ")  # noqa: E731
+    log.warning("app crash: %s | where: %s | page: %s | build: %s | device: %s",
+                cut("message", 300), cut("stack", 1200), cut("page", 80), cut("build", 40), cut("ua", 160))
+    return {"ok": True}
+
+
 @app.get("/altcha")
 async def altcha():
     return auth.altcha_challenge()
