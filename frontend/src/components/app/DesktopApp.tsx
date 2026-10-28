@@ -72,6 +72,14 @@ const TAGLINE: L = {
   ha: "Faɗa da harshenka. Jagora za ta yi sauran.",
   ig: "Kwuo ya n'asụsụ gị. Jagora ga-eme ndị ọzọ.",
 };
+// the big bar on the new tab is a search; the address bar above is for addresses and quick asks (no duplicate)
+const SEARCH: L = {
+  en: "Search anything, or tell Jagora what to do",
+  pcm: "Search anything, or tell Jagora wetin make e do",
+  yo: "Wá ohunkóhun, tàbí sọ ohun tí Jagora yóò ṣe",
+  ha: "Nemi komai, ko gaya wa Jagora abin da zai yi",
+  ig: "Chọọ ihe ọ bụla, ma ọ bụ gwa Jagora ihe ọ ga-eme",
+};
 const PLACEHOLDER: L = {
   en: "Ask Jagora or type a web address",
   pcm: "Ask Jagora or type web address",
@@ -155,7 +163,7 @@ export function DesktopApp() {
     setAddr("");
     setPanel(true);
   };
-  const tool = "grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-2 transition hover:bg-black/5 active:scale-90 disabled:opacity-30 dark:hover:bg-white/10";
+  const tool = "grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink transition hover:bg-black/5 active:scale-90 disabled:opacity-55 dark:hover:bg-white/10";
 
   return (
     <div className="relative h-dvh overflow-hidden">
@@ -192,7 +200,7 @@ export function DesktopApp() {
           >
             <Mark size={16} /> {NEW_TAB[lang]}
           </div>
-          <button onClick={() => (setActive(null), setPageHidden(true))} className="mb-1 grid h-7 w-7 shrink-0 place-items-center self-center rounded-full text-ink-2 hover:bg-black/5 dark:hover:bg-white/10" aria-label="New tab">
+          <button onClick={() => (setActive(null), setPageHidden(true))} className="mb-1 grid h-7 w-7 shrink-0 place-items-center self-center rounded-full text-ink hover:bg-black/5 dark:hover:bg-white/10" aria-label="New tab">
             <Plus size={15} weight="bold" />
           </button>
           <div className="mb-1 ml-auto flex shrink-0 items-center gap-1 self-center">
@@ -228,7 +236,7 @@ export function DesktopApp() {
             <House size={18} weight={onNewTab ? "fill" : "bold"} />
           </button>
           {showPage ? (
-            <div className="mx-2 flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full bg-black/[.045] px-4 text-[14px] font-medium text-ink dark:bg-white/[.06]">
+            <div className="mx-2 flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full bg-white/75 px-4 text-[14.5px] font-semibold text-ink shadow-[inset_0_0_0_1px_rgba(0,0,0,.05)] dark:bg-white/10">
               <LockSimple size={14} weight="bold" className="shrink-0 text-ok" />
               <span className="min-w-0 truncate">{url}</span>
               <span className="ml-auto shrink-0 text-[12.5px] font-semibold text-ink-3">{task?.status === "working" ? "Jagora is browsing" : ""}</span>
@@ -236,9 +244,9 @@ export function DesktopApp() {
               {live && task && <TakeOver taskId={task.id} />}
             </div>
           ) : (
-            <form onSubmit={(e) => (e.preventDefault(), go())} className="mx-2 flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full bg-black/[.045] px-4 dark:bg-white/[.06]">
-              <MagnifyingGlass size={15} weight="bold" className="shrink-0 text-ink-3" />
-              <input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder={PLACEHOLDER[lang]} className="h-full min-w-0 flex-1 bg-transparent text-[14px] font-medium text-ink outline-none placeholder:text-ink-3" />
+            <form onSubmit={(e) => (e.preventDefault(), go())} className="mx-2 flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full bg-white/75 px-4 shadow-[inset_0_0_0_1px_rgba(0,0,0,.05)] dark:bg-white/10">
+              <MagnifyingGlass size={16} weight="bold" className="shrink-0 text-ink" />
+              <input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder={PLACEHOLDER[lang]} className="h-full min-w-0 flex-1 bg-transparent text-[14.5px] font-semibold text-ink outline-none placeholder:font-semibold placeholder:text-ink/70" />
             </form>
           )}
           <button className={`${tool} ${side ? "bg-ink text-paper hover:bg-ink" : ""}`} onClick={() => (setPanel(true), setSide((v) => !(v && panel)))} aria-label="Your chats" title="Your chats" aria-pressed={side && panel}>
@@ -464,7 +472,7 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
                 <input
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder={PLACEHOLDER[lang]}
+                  placeholder={SEARCH[lang]}
                   className="h-full min-w-0 flex-1 bg-transparent text-[20px] font-semibold text-ink outline-none placeholder:font-medium placeholder:text-ink-2"
                 />
                 {text.trim() ? (
