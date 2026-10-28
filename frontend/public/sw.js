@@ -1,6 +1,6 @@
 /* Jagora's service worker: the app's look (code, fonts, sky, icons) is kept on the phone, so Jagora opens fast and
    still shows itself on a bad network. Pages are fetched fresh when possible and fall back to the saved copy. */
-const CACHE = "jagora-v6";
+const CACHE = "jagora-v7";
 const SHELL = ["/app", "/start", "/fonts/jagora-sans.woff2", "/fonts/vollkorn-400.woff2", "/sky/beach-phone.webp", "/brand/mark-64.png"];
 
 self.addEventListener("install", (e) => {
@@ -15,7 +15,8 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
   // build files, fonts, images: from the phone first
-  if (url.pathname.startsWith("/_next/static/") || /\.(woff2|webp|png|svg|jpg)$/.test(url.pathname)) {
+  // build files, fonts, images and the speech detector (/vad/, a few MB, downloaded once): from the phone first
+  if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/vad/") || /\.(woff2|webp|png|svg|jpg)$/.test(url.pathname)) {
     e.respondWith(
       caches.match(req).then((hit) => hit || fetch(req).then((res) => {
         const copy = res.clone();

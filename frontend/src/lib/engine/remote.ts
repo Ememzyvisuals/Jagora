@@ -205,6 +205,22 @@ if (typeof window !== "undefined") {
   window.addEventListener("pointerdown", wake, { once: true, capture: true });
   window.addEventListener("keydown", wake, { once: true, capture: true });
 }
+/* one volume control for Jagora's voice, so it can be lowered the moment she starts talking over it */
+let master: GainNode | null = null;
+function out(c: AudioContext): AudioNode {
+  if (!master || master.context !== c) {
+    master = c.createGain();
+    master.connect(c.destination);
+  }
+  return master;
+}
+/** Lower (0..1) or restore (1) Jagora's voice, smoothly. */
+export function duckVoice(level: number) {
+  if (!master) return;
+  const t = master.context.currentTime;
+  master.gain.cancelScheduledValues(t);
+  master.gain.setTargetAtTime(level, t, level < 1 ? 0.03 : 0.12);
+}
 let lastUtt = "";
 let hushedAt = 0;
 const hushed = new Set<string>();
@@ -235,7 +251,8 @@ function playPcm(b64: string, rate: number, utt = "", codec?: string) {
   }
   const src = c.createBufferSource();
   src.buffer = buf;
-  src.connect(c.destination);
+  src.connect(out(c));
+  if (!voices.size && master) master.gain.value = 1; // a new reply starts at full volume
   const at = Math.max(c.currentTime + 0.04, nextAt);
   src.start(at);
   nextAt = at + buf.duration;

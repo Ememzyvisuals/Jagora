@@ -6,16 +6,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "predev": "node scripts/vad-assets.mjs",
+    "prebuild": "node scripts/vad-assets.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
     "@phosphor-icons/react": "^2.1.10",
     "@pixiv/three-vrm": "^3.4.2",
+    "@ricky0123/vad-web": "0.0.31",
     "@types/three": "^0.180.0",
     "docx": "^9.14.0",
     "motion": "^14.6.0",
     "next": "15.5.28",
+    "onnxruntime-web": "1.22.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "simple-icons": "^16.36.0",

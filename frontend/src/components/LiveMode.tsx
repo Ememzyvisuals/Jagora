@@ -12,7 +12,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ask, live as backendLive, voiceNote } from "@/lib/engine";
 import type { Lang } from "@/lib/i18n";
 import { activeTask, useApp } from "@/lib/store";
-import { hush } from "@/lib/engine/remote";
+import { duckVoice, hush } from "@/lib/engine/remote";
+import { Listener } from "@/lib/turns";
 import { blobToDataUrl, useSpeakingPulse, useVoice, watchForVoice } from "@/lib/voice";
 import { browserRecognizer } from "./Composer";
 import { Glass } from "./glass/Glass";
@@ -34,8 +35,9 @@ const SAY: Record<"listen" | "think" | "speak" | "paused" | "hint" | "end" | "li
   live: { en: "Live", pcm: "Live", yo: "Láàyè", ha: "Kai tsaye", ig: "Ndụ" },
 };
 
+// used only when the speech detector cannot load (very old browsers): a loudness meter and a pause
 const SPEECH_ON = 0.09; // level that counts as talking
-const SILENCE_MS = 900; // pause that ends her turn
+const SILENCE_MS = 1600; // pause that ends her turn
 const MAX_TURN_MS = 20000;
 
 /** The black "Live" pill that starts a session. */
@@ -71,6 +73,9 @@ export function LiveMode() {
   const [heard, setHeard] = useState("");
   const [phase, setPhase] = useState<"listen" | "think" | "speak">("listen");
   const busy = useRef(false);
+  // the speech detector (lib/turns.ts); null while loading, false if it could not load (then the old way is used)
+  const listener = useRef<Listener | null>(null);
+  const [smart, setSmart] = useState<boolean | null>(null);
 
   // Jagora's latest reply, shown as a caption
   const reply = [...(task?.messages ?? [])].reverse().find((m) => m.kind === "agent" || m.kind === "confirm" || m.kind === "choice");
@@ -83,7 +88,7 @@ export function LiveMode() {
   const island = !!task && task.kind === "browse" && !!task.url && (showPage || mustType);
 
   const listen = useCallback(async () => {
-    if (busy.current) return;
+    if (busy.current || listener.current) return;
     busy.current = true;
     setPhase("listen");
     setOrb("listening");
@@ -140,7 +145,7 @@ export function LiveMode() {
     setOrb("idle");
   }, [setOrb]);
   useEffect(() => {
-    if (!on || muted || phase !== "speak") return;
+    if (!on || muted || phase !== "speak" || smart !== false) return;
     let stop = () => {};
     let gone = false;
     void watchForVoice(interrupt).then((s) => (gone ? s() : (stop = s)));
@@ -148,15 +153,55 @@ export function LiveMode() {
       gone = true;
       stop();
     };
-  }, [on, muted, phase, interrupt]);
+  }, [on, muted, phase, interrupt, smart]);
+
+  // the speech detector runs for the whole session (with the backend): it hears turns and barge-ins by itself
+  useEffect(() => {
+    if (!on || !backendLive) return;
+    let gone = false;
+    const l = new Listener({
+      onTurn: async (wav, secs) => {
+        if (!useApp.getState().live) return;
+        setPhase("think");
+        setOrb("thinking");
+        const chat = useApp.getState().activeId ?? undefined;
+        voiceNote(wav, await blobToDataUrl(wav), secs, { chat });
+      },
+      onBarge: (stop) => (stop ? interrupt() : duckVoice(0.2)),
+      onFalseAlarm: () => duckVoice(1),
+    });
+    void l.start().then((ok) => {
+      if (gone) return void l.destroy();
+      if (ok) listener.current = l;
+      setSmart(ok);
+    });
+    return () => {
+      gone = true;
+      listener.current = null;
+      setSmart(null);
+      void l.destroy();
+    };
+  }, [on, interrupt, setOrb]);
+  useEffect(() => {
+    const l = listener.current;
+    if (!l) return;
+    if (muted) l.pause();
+    else l.resume();
+  }, [muted, smart]);
 
   // start listening when live mode opens; listen again each time Jagora finishes speaking
   useEffect(() => {
     if (!on) return;
+    listener.current?.setAgentTalking(orb === "speaking");
     if (muted) return;
     if (orb === "speaking") return setPhase("speak");
+    if (smart) {
+      if (orb === "idle") setPhase("listen");
+      return;
+    }
+    if (smart === null && backendLive) return; // still loading the detector
     if (orb === "idle" && !busy.current) void listen();
-  }, [on, orb, muted, listen]);
+  }, [on, orb, muted, listen, smart]);
 
   useEffect(() => {
     if (!on) {
@@ -178,7 +223,7 @@ export function LiveMode() {
     });
   };
 
-  const level = phase === "speak" ? speaking : voice.level;
+  const level = phase === "speak" ? speaking : smart && listener.current ? listener.current.level : voice.level;
   const label = muted ? SAY.paused[lang] : phase === "speak" ? SAY.speak[lang] : phase === "think" ? SAY.think[lang] : SAY.listen[lang];
 
   return (
