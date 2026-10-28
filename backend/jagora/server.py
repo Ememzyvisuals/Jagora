@@ -808,6 +808,7 @@ class Session:
         """She said stop: Jagora goes quiet on her phone at once and the task stops."""
         self.hush()
         self._unsaid = None
+        self._hearing = ""
         r = self.runs.get(task)
         if r and r.busy and r.job:
             r.job.cancel()
@@ -1029,6 +1030,7 @@ class Session:
 
     def attach_voice(self, ws: WebSocket) -> None:
         self.voice_ws = ws
+        self._hearing = ""  # a new call: her words start a new bubble in the chat she has open now
         log.info("voice on LiveKit for %s", self.user_id[:8])
         asyncio.create_task(self._to_voice({"type": "lang", "lang": self.lang}))
         asyncio.create_task(self.send({"type": "voice", "on": True}))
@@ -1036,6 +1038,7 @@ class Session:
     def detach_voice(self, ws: WebSocket) -> None:
         if self.voice_ws is ws:
             self.voice_ws = None
+            self._hearing = ""
             asyncio.create_task(self.send({"type": "voice", "on": False}))
 
     async def _to_voice(self, msg: dict) -> bool:
@@ -1059,14 +1062,16 @@ class Session:
             if (self._speaking or self.voice_speaking) and is_stop(text):
                 await self.silence(task)  # "stop" while Jagora talks: quiet at once
                 return
-            if not self._hearing:
-                self._hearing = mid()
+            if not self._hearing or self._hearing_task != task:
+                # a new bubble (also when she has moved to another chat, or the last call ended mid-sentence)
+                self._hearing, self._hearing_task = mid(), task
                 await self.send({"type": "msg", "task": task, "msg": {"id": self._hearing, "kind": "user", "text": text, "voice": True}})
             else:
                 await self.send({"type": "update", "task": task, "id": self._hearing, "patch": {"text": text}})
         elif kind == "words":
             text = str(ev.get("text") or "").strip()
-            msg_id, self._hearing = self._hearing or None, ""
+            msg_id = self._hearing if self._hearing and self._hearing_task == task else None
+            self._hearing = ""
             if task and text and is_noise(text) and not is_stop(text):
                 # a scrap the room made (a word from the TV, a cough heard as a word): not her, so nothing happens
                 log.info("voice: ignored a scrap: %r", text[:40])
@@ -1091,6 +1096,7 @@ class Session:
             await self.send({"type": "orb", "state": "listening"})
 
     voice_speaking = False
+    _hearing_task = ""
 
     async def on_binary(self, data: bytes) -> None:
         """Binary messages from her app: none are used now (her live voice goes through LiveKit)."""
