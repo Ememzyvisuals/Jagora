@@ -520,6 +520,7 @@ HOW YOU WORK
 - Do not greet ("good evening", "hello") and do not repeat back what they told you; go straight to the answer or the first step.
 - In Do mode you press buttons yourself: never ask them to tap something on the page unless it is private (a password, a code) or a robot check. When you point at something for them (Guide mode), it must be in view on their screen.
 - If a page or PDF will not open, or the words are not on the page you are on, do not try the same thing again: open the next search result or another official source.
+- Subject combinations and admission requirements: JAMB's official brochure (ibass.jamb.gov.ng, search the school, then the course) is the official source for every Nigerian university; use it when a school's own page or PDF will not open.
 - Never end with a promise ("I will check X next"): do it, or say plainly what you could not confirm.
 - Say the answer once, short: at most 3 short sentences (the answer and where it came from). Never send another reply that says the same in other words. Long details go in a document only if useful. Either tell_user it and then finish with a one-line wrap-up, or put it only in finish. Never tell_user the answer and then repeat it in finish.
 - When done, call finish with a short summary in {lang}: the answer, where it was confirmed, what was not confirmed, and the best next step. Offer a document or download if it would help.
@@ -601,7 +602,9 @@ class Agent:
     _known: dict | None = None  # the page that answered this question before
     _source: str = ""  # the page the answer was read from this time
     _told_at: int = -99
-    _promised: bool = False  # a finish that promised more work was sent back once
+    _promised: bool = False
+    _shortened: bool = False  # a too-long plain reply was sent back once
+    _dead_urls: set = field(default_factory=set)  # addresses that would not open in this task  # a finish that promised more work was sent back once
     _told_since_act: bool = False  # she was told something and nothing has been done since
     _heard_since_told: bool = False  # she said something since she was last told  # where in the history Jagora last told her something
     _heard_all: list = field(default_factory=list)  # everything she said during the task
@@ -724,6 +727,11 @@ class Agent:
                                    "seconds": round(reply.seconds, 2), "in": reply.input_tokens, "out": reply.output_tokens})
             if not reply.calls:
                 if reply.text.strip() and not snap:
+                    if len(reply.text.strip()) > SAY_MAX and not self._shortened:
+                        self._shortened = True
+                        self.history.append(f"(your reply was too long to speak ({len(reply.text.strip())} characters): "
+                                            f"say it in at most 3 short sentences, under {SAY_MAX} characters, with tell_user or finish)")
+                        continue
                     # a plain conversational answer, no browsing needed
                     await self.io.say(reply.text.strip())
                     return await self._done(True, reply.text.strip(), turns, t0)
@@ -1163,6 +1171,8 @@ class Agent:
                     return "the document was empty; write it again with content", False, None
                 await self.io.event("doc", doc)
                 return "document given to them", False, None
+            if name == "update_plan" and self.history and self.history[-1].startswith("update_plan("):
+                return "the plan is already on their screen; do not change it again now: take the first real step", False, None
             if name == "update_plan":
                 steps = [{"text": str(x.get("text", ""))[:140], "status": x.get("status", "todo")} for x in (a.get("steps") or [])][:12]
                 await self.io.event("plan", {"steps": steps})
@@ -1192,6 +1202,7 @@ class Agent:
                 parts = []
                 for g in got:
                     if g.get("error"):
+                        self._dead_urls.add(g["url"])
                         parts.append(f"- {g['url']}: could not read ({g['error']})")
                     else:
                         self._flow.saw(site(g["url"]), g.get("text", ""))
@@ -1442,7 +1453,12 @@ class Agent:
             return f"could not do that: {e}", True, None
         except Exception as e:  # noqa: BLE001
             log.exception("tool %s failed", name)
-            return f"that did not work ({type(e).__name__}); look at the page again", True, None
+            why = (str(e).splitlines() or [type(e).__name__])[0][:140]
+            if name in ("go_to", "new_tab") and a.get("url"):
+                self._dead_urls.add(str(a["url"]).strip())
+                return (f"that did not work: this address will not open ({why}). Do not try it again: open the next "
+                        "search result or another official source"), True, None
+            return f"that did not work ({why}); look at the page again", True, None
 
     async def _click(self, el, a):
         gate = self._gate_click(el, self.browser.page.url)
@@ -1588,6 +1604,9 @@ class Agent:
         url = str(a.get("url", "")).strip()
         if not url:
             return "no address given", False, None
+        if url in self._dead_urls:
+            return ("not opened: this address already failed to open in this task. Open the next search result or "
+                    "another official source instead"), False, None
         b = await self._ensure_browser()
         if INSTALLER.search(url):
             return "refused: that address downloads an app installer", False, None

@@ -182,7 +182,12 @@ def voice_for(lang: str) -> str:
 def speakable(text: str) -> str:
     """What is read aloud: links, markdown marks and long reference codes are left to the screen."""
     t = re.sub(r"\[([^\]]+)\]\((?:https?://|www\.)[^)\s]+\)", r"\1", text)  # [link text](address): say the text
-    t = re.sub(r"(?:https?://|www\.)\S+", "", t)
+    t = re.sub(r"\b(?:https?://)?(?:www\.)", "", t)  # the address is said by its name below
+    t = re.sub(r"https?://", "", t)
+    # a website is said by its name ("unilag.edu.ng" -> "the Unilag website"), never letter by letter or dot by dot
+    t = re.sub(r"\b([a-z0-9-]+)(?:\.[a-z0-9-]+)*\.(?:com|ng|org|net|gov|edu|io|co|info|uk)\b(?:/\S*)?",
+               lambda m: f"the {SAID_AS.get(m.group(1).upper(), m.group(1).capitalize())} website", t, flags=re.I)
+    t = re.sub(r"\b(\d{4})/(\d{4})\b", r"\1 to \2", t)  # 2025/2026 session -> 2025 to 2026
     t = re.sub(r"(?m)^\s*(?:[-*+]|\d+[.)])\s+", "", t)  # list markers
     t = re.sub(r"[*_`#>|]", "", t)
     t = re.sub(r"([^\s.!?:;,])[ \t]*\n+", r"\1. ", t)  # a line (a list item, a heading) ends a sentence
