@@ -1160,6 +1160,13 @@ class Session:
                 if YES.search(text) or NO.search(text):
                     self._resolve(task, mid_, "yes" if YES.search(text) and not NO.search(text) else "no")
                     return
+                if not is_noise(text):
+                    # she said something else instead of yes or no: that is not a yes. The question closes and
+                    # Jagora goes by what she said (it never sits waiting on a question she has moved past)
+                    await self.send({"type": "update", "task": task, "id": mid_, "patch": {"status": "no"}})
+                    await r.steer.put(text)
+                    self._resolve(task, mid_, "no")
+                    return
             elif kind in ("choice", "handoff", "point"):
                 self._resolve(task, mid_, text)
                 return

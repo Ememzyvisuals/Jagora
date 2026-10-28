@@ -353,7 +353,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
 
         {/* the orb, big and alive, and the word */}
         <div className="flex flex-col items-center">
-          <button onClick={() => (setActive(null), setSheet(true), void startHandsFree())} aria-label="Talk to Jagora" data-tour="orb" className="-mt-1 transition active:scale-95">
+          <button onClick={() => (setActive(null), setSheet(true), useApp.getState().setLive(true))} aria-label="Talk to Jagora" data-tour="orb" className="-mt-1 transition active:scale-95">
             <Orb size={168} state={orb} levelRef={pulse} />
           </button>
           <CloudWordmark width={270} levelRef={pulse} className="-mt-7" />
@@ -587,12 +587,11 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
         {screen !== "home" || sheet ? (
           <button
             onClick={() => {
-              // the chat comes up and Jagora listens at once; with the chat already up, the tap turns listening on or off
-              if (!sheet) {
-                setSheet(true);
-                void startHandsFree();
-              } else if (handsFree) void stopHandsFree();
-              else void startHandsFree();
+              
+              // the chat comes up and Live mode opens: Jagora listens only there, with End and mute in view
+              if (!sheet) setSheet(true);
+              if (handsFree) void stopHandsFree();
+              useApp.getState().setLive(true);
             }}
             aria-label={handsFree ? "Stop listening" : "Talk to Jagora"}
             data-tour="orb"
