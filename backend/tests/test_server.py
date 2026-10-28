@@ -16,6 +16,15 @@ from jagora.llm import Model, Reply, ToolCall, Usage  # noqa: E402
 from tests.test_research import site  # noqa: E402,F401  (the local school site fixture)
 
 
+
+
+def recv(ws):
+    """The next JSON message; live-view pictures (binary) are skipped."""
+    while True:
+        m = ws.receive()
+        if m.get("text") is not None:
+            return json.loads(m["text"])
+
 def solve(ch: dict) -> str:
     for n in range(ch["maxnumber"] + 1):
         if hashlib.sha256(f"{ch['salt']}{n}".encode()).hexdigest() == ch["challenge"]:
@@ -79,7 +88,7 @@ def test_signup_and_research_run(client, site):  # noqa: F811
     with c.websocket_connect(f"/ws?token={token}") as ws:
         ws.send_text(json.dumps({"type": "start", "task": "t1", "goal": "UNILAG computer science subjects", "lang": "en", "mode": "do", "profile": {}}))
         while True:
-            ev = json.loads(ws.receive_text())
+            ev = recv(ws)
             got.append(ev)
             if ev["type"] == "status" and ev["status"] in ("done", "stopped"):
                 break
@@ -139,7 +148,7 @@ def test_phone_view_plan_reminders_moments_and_take_over(client, site):  # noqa:
         ws.send_text(json.dumps({"type": "start", "task": "t2", "goal": "plan it", "lang": "en", "mode": "do", "profile": {},
                                  "device": {"mobile": True, "w": 390, "h": 844}}))
         while True:
-            ev = json.loads(ws.receive_text())
+            ev = recv(ws)
             got.append(ev)
             if ev["type"] == "status" and ev["status"] in ("done", "stopped"):
                 break
@@ -153,15 +162,15 @@ def test_phone_view_plan_reminders_moments_and_take_over(client, site):  # noqa:
         assert "brochure-2026.pdf" in model.last and "UNILAG cut-off 270" in model.last and "#unilag #jamb" in model.last
         # take over: tap on the live page while nothing runs
         ws.send_text(json.dumps({"type": "input", "task": "t2", "action": "tap", "x": 100, "y": 100}))
-        ev = json.loads(ws.receive_text())
+        ev = recv(ws)
         while ev["type"] != "url":
-            ev = json.loads(ws.receive_text())
+            ev = recv(ws)
         assert "admissions" in ev["url"]
         _t.sleep(1.2)
         c.portal.call(server.fire_reminders)
-        ev = json.loads(ws.receive_text())
+        ev = recv(ws)
         while ev["type"] != "notify":
-            ev = json.loads(ws.receive_text())
+            ev = recv(ws)
         assert "Check the UNILAG cut-off" in ev["text"]
 
 
@@ -180,7 +189,7 @@ def test_admin_sees_who_used_it_and_tests_without_limits(client, site):  # noqa:
     with c.websocket_connect(f"/ws?token={judge['token']}") as ws:
         ws.send_text(json.dumps({"type": "start", "task": "j1", "goal": "UNILAG computer science subjects", "lang": "en", "mode": "do", "profile": {}}))
         while True:
-            ev = json.loads(ws.receive_text())
+            ev = recv(ws)
             if ev["type"] == "status" and ev["status"] in ("done", "stopped"):
                 break
         live = c.get("/admin/overview", headers=H).json()["live"]
@@ -197,7 +206,7 @@ def test_admin_sees_who_used_it_and_tests_without_limits(client, site):  # noqa:
     assert msgs[0]["text"] == "UNILAG computer science subjects"
     # the admin token is not an account
     with c.websocket_connect(f"/ws?token={admin}") as ws:
-        assert json.loads(ws.receive_text())["error"] == "signin"
+        assert recv(ws)["error"] == "signin"
     # the owner's own account: unlimited, never counts down
     me = c.post("/auth/signup", json={"email": "owner@plotweaver.app", "password": "longenough", "code": "JAGORA-ADMIN-TEST",
                                       "altcha": solve(c.get("/altcha").json())}).json()

@@ -29,18 +29,56 @@
                    {type:"account", credits}  {type:"notify", task, title, text, url}  {type:"error", error, message}
 */
 import { describeScreen, runApp } from "../appctl";
+import { canDecodeVideo, type LiveFrame } from "../liveview";
 import { getToken } from "../account";
 import { useApp, uid, type Msg, type Task } from "../store";
 
 const S = () => useApp.getState();
 let ws: WebSocket | null = null;
 /* the latest picture of Jagora's browser; any screen showing the page subscribes */
-let lastFrame = "";
-const frameListeners = new Set<(jpeg: string) => void>();
-export function onRemoteFrame(f: (jpeg: string) => void) {
+/* the live page: binary messages (1 = JPEG photo, 2 = H.264 keyframe, 3 = H.264 frame); lib/liveview.ts paints them */
+const frameListeners = new Set<(f: LiveFrame) => void>();
+let lastPhoto: LiveFrame | null = null;
+export function onRemoteFrame(f: (frame: LiveFrame) => void) {
   frameListeners.add(f);
-  if (lastFrame) f(lastFrame);
+  if (lastPhoto) f(lastPhoto);
+  if (videoOn) requestKeyframe(); // a new screen showing the video starts from a keyframe
   return () => void frameListeners.delete(f);
+}
+function gotFrame(data: ArrayBuffer) {
+  const b = new Uint8Array(data);
+  const kind = b[0] as 1 | 2 | 3;
+  if (kind !== 1 && kind !== 2 && kind !== 3) return;
+  const f: LiveFrame = { kind, data: b.subarray(1) };
+  if (kind === 1) lastPhoto = f;
+  frameListeners.forEach((l) => l(f));
+}
+/* video, when this browser can decode it; back to photos for good if the decoder ever fails */
+let videoOn = false;
+let videoBroken = false;
+let videoChecked: boolean | null = null;
+async function sendVideo() {
+  // ask for video only if this browser really decodes H.264 (constrained baseline, as video.py sends it)
+  if (videoChecked === null && canDecodeVideo()) {
+    try {
+      videoChecked = !!(await VideoDecoder.isConfigSupported({ codec: "avc1.42C028" })).supported;
+    } catch {
+      videoChecked = false;
+    }
+  }
+  videoOn = !!videoChecked && !videoBroken;
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "video", on: videoOn }));
+}
+let keyAsked = 0;
+export function requestKeyframe() {
+  if (!videoOn || performance.now() - keyAsked < 800) return;
+  keyAsked = performance.now();
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "video", on: true }));
+}
+export function videoFailed() {
+  if (videoBroken) return;
+  videoBroken = true;
+  void sendVideo();
 }
 
 export const BACKEND = process.env.NEXT_PUBLIC_BACKEND_WS || "";
@@ -50,13 +88,16 @@ function connect(): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const token = getToken();
     const sock = new WebSocket(token ? `${BACKEND}${BACKEND.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}` : BACKEND);
+    sock.binaryType = "arraybuffer";
     sock.onopen = () => {
       sock.send(JSON.stringify({ type: "net", lite: liteWanted() }));
+      ws = sock;
+      void sendVideo();
       resolve(sock);
     };
     sock.onerror = () => reject(new Error("backend unreachable"));
     sock.onclose = () => (ws = null);
-    sock.onmessage = (e) => handle(JSON.parse(e.data));
+    sock.onmessage = (e) => (typeof e.data === "string" ? handle(JSON.parse(e.data)) : gotFrame(e.data as ArrayBuffer));
     ws = sock;
   });
 }
@@ -148,10 +189,15 @@ function handle(ev: Record<string, unknown>) {
     case "url":
       s.setUrl(task, ev.url as string);
       break;
-    case "frame":
-      lastFrame = ev.jpeg as string;
-      frameListeners.forEach((f) => f(lastFrame));
+    case "frame": {
+      // an older server: photos as base64 text
+      const bin = atob(ev.jpeg as string);
+      const data = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) data[i] = bin.charCodeAt(i);
+      lastPhoto = { kind: 1, data };
+      frameListeners.forEach((f) => f(lastPhoto!));
       break;
+    }
     case "viewport":
       s.setPageSize({ w: ev.w as number, h: ev.h as number, mobile: !!ev.mobile });
       break;

@@ -24,8 +24,10 @@ from PIL import Image
 log = logging.getLogger("jagora.video")
 
 # bitrate caps, in kbit/s: full quality and data saver
-KBPS = {"full": 1400, "lite": 300}
-CRF = {"full": 24, "lite": 30}
+KBPS = {"full": 1200, "lite": 350}
+CRF = {"full": 24, "lite": 29}
+SHARPEN = 3  # once the page stops moving, the still picture is sent this many more times: each pass only adds the detail
+            # that motion cost, so the page settles crisp (a still page costs nothing after that)
 
 
 class Encoder:
@@ -36,7 +38,11 @@ class Encoder:
         c = av.CodecContext.create("libx264", "w")
         c.width, c.height = self.w, self.h
         c.pix_fmt = "yuv420p"
-        c.time_base = Fraction(1, 1000)
+        # the rate control works per frame from the frame rate: give it the real one (12, or 6 in data saver), not
+        # millisecond timestamps, or it budgets the bitrate for 1000 frames a second and every frame turns to mush
+        self.fps = 6 if lite else 12
+        c.framerate = Fraction(self.fps, 1)
+        c.time_base = Fraction(1, self.fps)
         kbps = KBPS[tier]
         c.options = {
             "preset": "veryfast",
@@ -44,12 +50,11 @@ class Encoder:
             "profile": "baseline",
             "crf": str(CRF[tier]),
             "maxrate": f"{kbps}k",
-            "bufsize": f"{kbps}k",  # one second of buffer: bursts stay short
+            "bufsize": f"{kbps}k",  # one second of buffer: short bursts allowed, floods not
             "x264-params": "keyint=120:min-keyint=30:scenecut=0:bframes=0:repeat-headers=1:aud=1:annexb=1:sliced-threads=0",
             "threads": "2",
         }
         self.ctx = c
-        self.t0: int | None = None
         self.last_pts = -1
 
     def encode(self, jpeg: bytes, t_ms: int, key: bool = False) -> list[tuple[bytes, bool]]:
@@ -58,11 +63,8 @@ class Encoder:
         if img.size != (self.w, self.h):
             img = img.resize((self.w, self.h), Image.BILINEAR)
         frame = av.VideoFrame.from_ndarray(np.asarray(img), format="rgb24").reformat(format="yuv420p")
-        if self.t0 is None:
-            self.t0 = t_ms
-        pts = max(self.last_pts + 1, t_ms - self.t0)
-        self.last_pts = pts
-        frame.pts = pts
+        self.last_pts += 1
+        frame.pts = self.last_pts
         frame.time_base = self.ctx.time_base
         if key:
             frame.pict_type = av.video.frame.PictureType.I

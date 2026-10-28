@@ -33,7 +33,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from jagora import auth, speech
-from jagora import lite, voicefx
+from jagora import lite, video, voicefx
 from jagora.agent import Agent
 from jagora.browser import Browser
 from jagora.config import FILES_DIR, INGESTED, PORTALS_DIR, settings
@@ -104,7 +104,10 @@ async def lifespan(app: FastAPI):
     for t in tasks:
         t.cancel()
     for s in list(SESSIONS.values()):
-        await s.close()
+        try:
+            await asyncio.wait_for(s.close(), 8)  # a stuck browser never holds up a restart
+        except Exception:  # noqa: BLE001
+            pass
     await db.close()
 
 
@@ -412,6 +415,27 @@ class Session:
         self._gen = 0  # speech generation: a hush makes everything older silent
         self._speaker = asyncio.create_task(self._speak_loop())
         self._last_frame = 0.0
+        # live view as video (video.py) when her app can decode it; photos otherwise
+        self.video = False
+        self._video_kick = asyncio.Event()
+        self._video_key = True
+        self._video_task: asyncio.Task | None = None
+        self._latest_jpeg = b""
+        self._frame_busy = False
+
+    def _cast_mode(self) -> str:
+        if self.video:
+            return "vlite" if self.lite else "signal"
+        return "lite" if self.lite else "full"
+
+    async def send_bytes(self, data: bytes, kind: str = "frame") -> None:
+        """Binary messages: the live view (1 = JPEG photo, 2 = video keyframe, 3 = video frame), no base64."""
+        async with self._send_lock:
+            try:
+                await self.ws.send_bytes(data)
+                self.sent[kind] += len(data)
+            except Exception:  # noqa: BLE001
+                pass
 
     async def send(self, msg: dict) -> None:
         async with self._send_lock:
@@ -428,6 +452,9 @@ class Session:
             if r.busy:
                 r.job.cancel()
         self._speaker.cancel()
+        self.video = False
+        if self._video_task:
+            self._video_task.cancel()
         if self.browser:
             await self.browser.close()
             self.browser = None
@@ -435,7 +462,7 @@ class Session:
     async def get_browser(self) -> Browser:
         if self.browser is None:
             self.browser = await Browser(self.device).start()
-            self.browser.lite = self.lite
+            self.browser.cast = self._cast_mode()
             self.browser.translate_to = self.lang if self.translate and self.lang != "en" else ""
             await self.browser.start_screencast(self._frame)
             await self.send({"type": "viewport", "w": self.browser.viewport["width"], "h": self.browser.viewport["height"],
@@ -443,14 +470,106 @@ class Session:
         return self.browser
 
     def _frame(self, jpeg: str) -> None:
+        """Chrome's screencast: the page changed. Video: wake the encoder (it takes a sharp frame itself). Photos:
+        send this one, unless the last is still on its way (then only the newest is sent later: no backlog)."""
+        if self.video:
+            if self.lite:
+                self._latest_jpeg = base64.b64decode(jpeg)
+            self._video_kick.set()
+            return
         if not self.viewing:
             self._held_frame = jpeg  # sent when she comes back
             return
+        self._latest_jpeg = base64.b64decode(jpeg)
         now = time.monotonic()
-        if now - self._last_frame < lite.FRAME_GAP["lite" if self.lite else "full"] or not self.active_task:
+        if self._frame_busy or now - self._last_frame < lite.FRAME_GAP["lite" if self.lite else "full"] or not self.active_task:
+            if not self._frame_busy:
+                asyncio.get_running_loop().call_later(lite.FRAME_GAP["full"], self._resend_latest)
             return
         self._last_frame = now
-        asyncio.ensure_future(self.send({"type": "frame", "task": self.active_task, "jpeg": jpeg}))
+        asyncio.ensure_future(self._send_photo(self._latest_jpeg))
+
+    def _resend_latest(self) -> None:
+        # the newest picture after a burst, so the view always ends on the page as it is now
+        if not self.video and self.viewing and self._latest_jpeg and not self._frame_busy and time.monotonic() - self._last_frame >= lite.FRAME_GAP["lite" if self.lite else "full"]:
+            self._last_frame = time.monotonic()
+            asyncio.ensure_future(self._send_photo(self._latest_jpeg))
+
+    async def _send_photo(self, jpeg: bytes) -> None:
+        self._frame_busy = True
+        try:
+            await self.send_bytes(b"\x01" + jpeg)
+        finally:
+            self._frame_busy = False
+
+    async def set_video(self, on: bool) -> None:
+        if on == self.video:
+            if on:
+                self._video_key = True
+                self._video_kick.set()
+            return
+        self.video = on
+        if self.browser:
+            await self.browser.set_cast(self._cast_mode())
+        if on and not self._video_task:
+            self._video_key = True
+            self._video_task = asyncio.create_task(self._video_loop())
+        self._video_kick.set()
+
+    async def _video_loop(self) -> None:
+        """While her app takes video: each time the page changes, take one sharp frame and send it as H.264."""
+        enc: video.Encoder | None = None
+        last = 0.0
+        try:
+            while self.video:
+                await self._video_kick.wait()
+                self._video_kick.clear()
+                b = self.browser
+                if not self.video or not self.viewing or not b or not b.page or not self.active_task:
+                    continue
+                wait = last + lite.VIDEO_GAP["lite" if self.lite else "full"] - time.monotonic()
+                if wait > 0:
+                    await asyncio.sleep(wait)
+                    self._video_kick.clear()  # this frame covers changes made while waiting
+                last = time.monotonic()
+                jpeg = self._latest_jpeg if self.lite else await b.full_frame()
+                if not jpeg:
+                    continue
+                w, h = video.jpeg_size(jpeg)
+                if enc is None or (enc.w, enc.h) != (w - w % 2, h - h % 2) or enc.lite != self.lite:
+                    if enc:
+                        enc.close()
+                    enc = video.Encoder(w, h, lite=self.lite)
+                    self._video_key = True
+                key, self._video_key = self._video_key, False
+                try:
+                    out = await asyncio.to_thread(enc.encode, jpeg, int(last * 1000), key)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("video encode failed: %s", e)
+                    enc = None
+                    continue
+                for data, is_key in out:
+                    await self.send_bytes((b"\x02" if is_key else b"\x03") + data)
+                # the page stopped moving: sharpen the still picture with a few more passes, unless it changes again
+                for _ in range(video.SHARPEN):
+                    try:
+                        await asyncio.wait_for(self._video_kick.wait(), 0.15)
+                        break  # it moved again: carry on as usual
+                    except asyncio.TimeoutError:
+                        pass
+                    if not self.video or not self.viewing:
+                        break
+                    last = time.monotonic()
+                    try:
+                        more = await asyncio.to_thread(enc.encode, jpeg, int(last * 1000), False)
+                    except Exception:  # noqa: BLE001
+                        break
+                    for data, is_key in more:
+                        await self.send_bytes((b"\x02" if is_key else b"\x03") + data)
+        finally:
+            if enc:
+                enc.close()
+            self._video_task = None
 
     # ---- speech: queued so sentences never overlap ----------------------------------------------------------------
 
@@ -535,9 +654,15 @@ class Session:
             return
         if kind == "view":
             self.viewing = bool(ev.get("on"))
-            if self.viewing and self._held_frame and self.active_task:
-                await self.send({"type": "frame", "task": self.active_task, "jpeg": self._held_frame})
+            if self.viewing and self.video:
+                self._video_key = True  # she came back: start again from a keyframe
+                self._video_kick.set()
+            elif self.viewing and self._held_frame and self.active_task:
+                await self.send_bytes(b"\x01" + base64.b64decode(self._held_frame))
                 self._held_frame = ""
+            return
+        if kind == "video":  # her app can (or no longer can) play the live view as video; "key": it needs a keyframe
+            await self.set_video(bool(ev.get("on")))
             return
         if kind == "start":
             if "lite" in ev:
@@ -585,7 +710,8 @@ class Session:
     async def set_lite(self, on: bool) -> None:
         self.lite = on
         if self.browser:
-            await self.browser.set_lite(on)
+            await self.browser.set_cast(self._cast_mode())
+        self._video_key = True
 
     def data_used(self) -> str:
         """How much data this session cost her phone, for the admin page."""

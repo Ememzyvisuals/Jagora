@@ -49,10 +49,13 @@ def test_data_saver_sends_compressed_voice_and_fewer_frames(monkeypatch):
 
     class WS:
         def __init__(self):
-            self.out = []
+            self.out, self.bin = [], []
 
         async def send_text(self, t):
             self.out.append(json.loads(t))
+
+        async def send_bytes(self, b):
+            self.bin.append(b)
 
     async def run():
         ws = WS()
@@ -68,9 +71,9 @@ def test_data_saver_sends_compressed_voice_and_fewer_frames(monkeypatch):
         await s.handle({"type": "view", "on": False})
         s._frame("AAAA")
         await asyncio.sleep(0.05)
-        assert not [m for m in ws.out if m["type"] == "frame"]
+        assert not ws.bin
         await s.handle({"type": "view", "on": True})
-        assert [m for m in ws.out if m["type"] == "frame"][-1]["jpeg"] == "AAAA"
+        assert ws.bin[-1] == b"\x01" + base64.b64decode("AAAA")  # the held picture, as a binary photo
         assert sum(s.sent.values()) > 0  # data counted for the admin page
         s._speaker.cancel()
 

@@ -18,10 +18,16 @@ import array
 import struct
 
 SCREENCAST = {
-    "full": {"format": "jpeg", "quality": 55, "maxWidth": 1280, "maxHeight": 1600, "everyNthFrame": 2},
-    "lite": {"format": "jpeg", "quality": 32, "maxWidth": 360, "maxHeight": 800, "everyNthFrame": 3},
+    # photos (old phones without a video decoder): sharp at the page's own width, sent as fast as her link allows
+    "full": {"format": "jpeg", "quality": 70, "maxWidth": 1440, "maxHeight": 1600},
+    "lite": {"format": "jpeg", "quality": 42, "maxWidth": 412, "maxHeight": 900},
+    # video (video.py): Chrome only signals that the page changed; the frame itself is a full-sharpness screenshot
+    "signal": {"format": "jpeg", "quality": 20, "maxWidth": 240, "maxHeight": 520},
+    # video in data saver: the screencast frame itself is the source, at the page's width
+    "vlite": {"format": "jpeg", "quality": 75, "maxWidth": 412, "maxHeight": 900},
 }
-FRAME_GAP = {"full": 0.2, "lite": 0.5}  # seconds between frames sent to her: at most 5 a second, or 2 in data saver
+FRAME_GAP = {"full": 0.08, "lite": 0.5}  # photos: at most ~12 a second, or 2 in data saver
+VIDEO_GAP = {"full": 1 / 12, "lite": 1 / 6}  # video frames: at most 12 a second, or 6 in data saver
 
 STEPS = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97,
          107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796,

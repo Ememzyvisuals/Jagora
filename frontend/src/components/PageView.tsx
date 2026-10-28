@@ -8,7 +8,8 @@ import { useEffect, useRef, useState } from "react";
 import { activeTask, useApp } from "@/lib/store";
 import { registerFrame } from "@/lib/engine/frame";
 import { live } from "@/lib/engine";
-import { onRemoteFrame, remoteInput, remotePoint, remoteTakeover, remoteTranslate } from "@/lib/engine/remote";
+import { onRemoteFrame, remoteInput, remotePoint, remoteTakeover, remoteTranslate, requestKeyframe, videoFailed } from "@/lib/engine/remote";
+import { Painter } from "@/lib/liveview";
 import { PAGE_PILL, PILL } from "@/lib/glassRegistry";
 import { Glass } from "./glass/Glass";
 
@@ -164,12 +165,23 @@ function TakeOverButton({ taskId, on }: { taskId: string; on: boolean }) {
 function LiveStage({ taskId, interactive, pointer, full, pointAsk }: { taskId: string; interactive: boolean; pointer: { x: number; y: number; visible: boolean; clicking: boolean }; full: boolean; pointAsk: { id: string; question: string } | null }) {
   const size = useApp((s) => s.pageSize);
   const box = useRef<HTMLDivElement>(null);
-  const img = useRef<HTMLImageElement>(null);
+  const img = useRef<HTMLCanvasElement>(null);
   const keys = useRef<HTMLInputElement>(null);
-  const [src, setSrc] = useState("");
+  const [src, setSrc] = useState(false); // a first picture has arrived
   const [fit, setFit] = useState({ s: 1, left: 0, w: 0, h: 0 });
 
-  useEffect(() => onRemoteFrame((jpeg) => setSrc(`data:image/jpeg;base64,${jpeg}`)), []);
+  // the live page is painted on a canvas: video frames or photos (lib/liveview.ts)
+  useEffect(() => {
+    const c = img.current;
+    if (!c) return;
+    const painter = new Painter(c, { needKey: requestKeyframe, videoBroken: videoFailed });
+    painter.onSize = () => setSrc(true);
+    const off = onRemoteFrame((f) => painter.push(f));
+    return () => {
+      off();
+      painter.reset();
+    };
+  }, []);
 
   // where the picture sits inside the box: scale it to the box width (phones) or to fit (desktop), from the top
   useEffect(() => {
@@ -195,30 +207,27 @@ function LiveStage({ taskId, interactive, pointer, full, pointAsk }: { taskId: s
 
   return (
     <div ref={box} className="relative h-full w-full bg-white" onWheel={(e) => interactive && void remoteInput(taskId, { action: "scroll", dy: e.deltaY })}>
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          ref={img}
-          src={src}
-          alt="The page Jagora is working on"
-          draggable={false}
-          onClick={(e) => {
-            if (pointAsk) {
-              // she shows Jagora what she means
-              const p = toPage(e);
-              if (p) void remotePoint(taskId, pointAsk.id, p.x, p.y);
-              return;
-            }
-            if (!interactive) return;
+      <canvas
+        ref={img}
+        role="img"
+        aria-label="The page Jagora is working on"
+        onClick={(e) => {
+          if (pointAsk) {
+            // she shows Jagora what she means
             const p = toPage(e);
-            if (p) void remoteInput(taskId, { action: "tap", ...p });
-            keys.current?.focus({ preventScroll: true });
-          }}
-          className={`absolute top-0 select-none ${pointAsk ? "cursor-crosshair" : interactive ? "cursor-pointer" : ""}`}
-          style={{ left: fit.left, width: fit.w, height: fit.h }}
-        />
-      ) : (
-        <div className="grid h-full place-items-center text-sm text-ink-3">
+            if (p) void remotePoint(taskId, pointAsk.id, p.x, p.y);
+            return;
+          }
+          if (!interactive) return;
+          const p = toPage(e);
+          if (p) void remoteInput(taskId, { action: "tap", ...p });
+          keys.current?.focus({ preventScroll: true });
+        }}
+        className={`absolute top-0 select-none ${pointAsk ? "cursor-crosshair" : interactive ? "cursor-pointer" : ""} ${src ? "" : "invisible"}`}
+        style={{ left: fit.left, width: fit.w, height: fit.h }}
+      />
+      {!src && (
+        <div className="absolute inset-0 grid place-items-center text-sm text-ink-3">
           <span className="flex items-center gap-2"><span className="h-2 w-2 animate-pulse rounded-full bg-accent" /> Opening the page</span>
         </div>
       )}

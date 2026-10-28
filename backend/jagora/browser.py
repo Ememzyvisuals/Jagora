@@ -184,7 +184,8 @@ class Browser:
         self.notices: list[Notice] = []
         self.on_frame: Callable[[str], None] | None = None
         self._cdp = None
-        self.lite = False  # data saver: a smaller, slower live view (lite.py)
+        self._ring_shown = False  # is a ring drawn on the page now (see ring())
+        self.cast = "full"  # how the live view is captured (lite.SCREENCAST): photos, data saver, or video
         self.opening = 0  # >0 while Jagora opens a tab itself (the guard leaves those alone)
         # pages in her language: the language to show (empty = as published), and an optional translator for tests
         self.translate_to = ""
@@ -275,10 +276,17 @@ class Browser:
         self.on_frame = on_frame
         await self._restart_screencast()
 
-    async def set_lite(self, on: bool) -> None:
-        if on != self.lite:
-            self.lite = on
+    async def set_cast(self, mode: str) -> None:
+        if mode != self.cast:
+            self.cast = mode
             await self._restart_screencast()
+
+    async def full_frame(self) -> bytes | None:
+        """The page as she would see it on her screen, at full sharpness (device pixels), for the video stream."""
+        try:
+            return await self._need_page().screenshot(type="jpeg", quality=88, caret="initial", timeout=4000)
+        except Exception:  # noqa: BLE001
+            return None
 
     async def _restart_screencast(self) -> None:
         if not self.on_frame or not self.page:
@@ -298,7 +306,7 @@ class Browser:
                 asyncio.ensure_future(cdp.send("Page.screencastFrameAck", {"sessionId": ev["sessionId"]}))
 
             cdp.on("Page.screencastFrame", frame)
-            await cdp.send("Page.startScreencast", lite.SCREENCAST["lite" if self.lite else "full"])
+            await cdp.send("Page.startScreencast", lite.SCREENCAST[self.cast])
             self._cdp = cdp
         except Exception as e:  # noqa: BLE001
             log.warning("screencast unavailable: %s", e)
@@ -725,12 +733,16 @@ class Browser:
         """Draw (or, with None, remove) the ring around something on the page, inside the page itself."""
         try:
             page = self._need_page()
+            # a ring is only a guide: never let a page that does not answer hold anything up
+            if not rect and not self._ring_shown:
+                return  # nothing to remove: no call to the page at all
+            self._ring_shown = bool(rect)
             if rect:
                 b = {"x": float(rect.get("x", 0)), "y": float(rect.get("y", 0)), "w": float(rect.get("width", rect.get("w", 0))),
                      "h": float(rect.get("height", rect.get("h", 0))), "tone": tone}
-                await page.evaluate(RING_JS, b)
+                await asyncio.wait_for(page.evaluate(RING_JS, b), 2)
             else:
-                await page.evaluate("() => document.getElementById('__jg_ring')?.remove()")
+                await asyncio.wait_for(page.evaluate("() => document.getElementById('__jg_ring')?.remove()"), 2)
         except Exception:  # noqa: BLE001
             pass
 
@@ -1181,23 +1193,34 @@ RING_JS = r"""
   const r0 = el && el !== document.body && el !== document.documentElement ? el.getBoundingClientRect() : null;
   const sx = scrollX, sy = scrollY;
   const c = tone === 'stop' ? '194,53,47' : '29,99,237';
+  if (!document.getElementById('__jg_ring_css')) {
+    const st = document.createElement('style'); st.id = '__jg_ring_css';
+    st.textContent = '@keyframes __jgpulse{0%,100%{opacity:1}50%{opacity:.55}}';
+    document.documentElement.appendChild(st);
+  }
   const ring = document.createElement('div');
   ring.id = '__jg_ring'; ring.setAttribute('aria-hidden', 'true');
-  ring.style.cssText = `position:fixed;z-index:2147483647;pointer-events:none;box-sizing:border-box;border:3px solid rgb(${c});`
-    + `border-radius:12px;box-shadow:0 0 0 5px rgba(${c},.18),0 0 22px rgba(${c},.55);animation:__jgpulse 1.4s ease-in-out infinite`;
-  const st = document.createElement('style'); st.id = '__jg_ring_css';
-  st.textContent = '@keyframes __jgpulse{0%,100%{opacity:1}50%{opacity:.55}}';
-  if (!document.getElementById('__jg_ring_css')) document.documentElement.appendChild(st);
+  // three pulses, then still (a page that keeps changing would keep the live view busy); like Stagehand's cursor,
+  // contained so the page's own layout is never touched
+  ring.style.cssText = `position:fixed;z-index:2147483647;pointer-events:none;box-sizing:border-box;contain:layout style paint;`
+    + `border:3px solid rgb(${c});border-radius:12px;box-shadow:0 0 0 5px rgba(${c},.18),0 0 22px rgba(${c},.55);`
+    + `animation:__jgpulse 1s ease-in-out 3;width:${w + 12}px;height:${h + 12}px`;
   document.documentElement.appendChild(ring);
+  let lx = NaN, ly = NaN, tick = 0;
+  const stop = () => { clearInterval(tick); removeEventListener('scroll', place, true); removeEventListener('resize', place); };
   const place = () => {
-    if (!ring.isConnected) return;
+    if (!ring.isConnected) return stop();
     let dx, dy;
     if (r0 && el.isConnected) { const r = el.getBoundingClientRect(); dx = r.left - r0.left; dy = r.top - r0.top; }
     else { dx = sx - scrollX; dy = sy - scrollY; }
-    ring.style.left = (x + dx - 6) + 'px'; ring.style.top = (y + dy - 6) + 'px';
-    ring.style.width = (w + 12) + 'px'; ring.style.height = (h + 12) + 'px';
-    requestAnimationFrame(place);
+    const nx = Math.round(x + dx - 6), ny = Math.round(y + dy - 6);
+    if (nx !== lx || ny !== ly) { ring.style.left = nx + 'px'; ring.style.top = ny + 'px'; lx = nx; ly = ny; }  // only when it moved
   };
+  // follow the element when something can have moved it (any scroll box, a resize), plus a slow check for pages
+  // that move things on their own; no frame-by-frame loop
+  tick = setInterval(place, 400);
+  addEventListener('scroll', place, {capture: true, passive: true});
+  addEventListener('resize', place, {passive: true});
   place();
 }
 """
