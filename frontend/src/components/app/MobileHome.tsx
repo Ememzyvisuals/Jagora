@@ -593,7 +593,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
   );
 }
 
-/** iOS-style soft blur where content slides under the top and bottom of the screen. */
+/** iOS-style soft blur where content slides under the bottom bar (none at the top: the sky stays sharp there). */
 export function EdgeBlur() {
   const layer = (side: "top" | "bottom", h: number, blur: number) => (
     <div
@@ -610,8 +610,6 @@ export function EdgeBlur() {
   );
   return (
     <>
-      {layer("top", 60, 6)}
-      {layer("top", 34, 14)}
       {layer("bottom", 130, 5)}
       {layer("bottom", 80, 12)}
     </>
