@@ -546,6 +546,13 @@ REPEAT_ASK = re.compile(r"\b(repeat( (that|it|yourself))?|say (that|it) again|co
 AGAIN = {"en": "Sorry, I didn't catch that. Please say it again.", "pcm": "Sorry, I no catch am. Abeg talk am again.",
          "yo": "Ẹ má bínú, mi ò gbọ́ ọ dáadáa. Ẹ jọ̀ọ́ ẹ tún sọ ọ́.", "ha": "Yi haƙuri, ban ji ba. Don Allah ka sake faɗa.",
          "ig": "Ndo, anụghị m ya. Biko kwughachi ya."}
+LIST_DONE = {
+    "en": "That was the last one. You have watched all {n}. Which one did you like best?",
+    "pcm": "Na the last one be that. You don watch all {n}. Which one you like pass?",
+    "yo": "Èyí ni èyí tó kẹ́yìn. Ẹ ti wo gbogbo {n}. Èwo ló wù yín jù?",
+    "ha": "Wannan ne na ƙarshe. Ka kalli duka {n}. Wanne ka fi so?",
+    "ig": "Nke ahụ bụ nke ikpeazụ. Ị kirila ha niile {n}. Kedu nke kacha masị gị?",
+}
 WELL_DONE = {
     "en": "Well done, you finished \"{x}\". That is {d} of {n} lessons, {m} minutes so far. Shall I give you a short practice sheet on it before the next one?",
     "pcm": "Well done, you don finish \"{x}\". Na {d} of {n} lessons, {m} minutes so far. Make I give you small practice on am before the next one?",
@@ -1193,6 +1200,15 @@ class Session:
             await self._to_voice({"type": "lang", "lang": self.lang})
             if ev.get("opening") and task:
                 asyncio.create_task(self._welcome_back(task))
+            return
+        if kind == "media_done" and ev.get("list_end"):
+            # the last video of a list ended (she watched them all, like episodes): which one did she like?
+            names = [str(x)[:80] for x in (ev.get("names") or [])][:8]
+            r = self.runs.get(task)
+            if not (r and r.busy):
+                line = LIST_DONE.get(self.lang, LIST_DONE["en"]).format(n=len(names) or "all")
+                await self.agent_says(task, line)
+                trace.write(self.user_id, "list_done", names=names)
             return
         if kind == "media_done":
             # she finished a lesson (or a video): well done, and practice on it if she wants

@@ -106,7 +106,8 @@ export function NowPlaying() {
   };
   // "make it full screen" by voice: the browser allows real full screen only from a tap, so the video fills the
   // whole window instead (the Full screen button still does the real one)
-  const [big, setBig] = useState(false);
+  const big = useApp((s) => s.mediaBig);
+  const setBig = useApp((s) => s.setMediaBig);
   // where it is, for Jagora ("how far am I", "louder")
   useEffect(() => {
     if (!cur) return;
@@ -118,7 +119,6 @@ export function NowPlaying() {
   }, [cur?.url, paused, big]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!m) Object.assign(mediaClock, { time: 0, length: 0, paused: false, big: false });
-    setBig(false);
   }, [m?.id]);
 
   /** keep her place in this chat so "Continue watching" plays on from here */
@@ -167,6 +167,25 @@ export function NowPlaying() {
     if (m && st().startAt) st().setStartAt(0);
   }, [m?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const srcOf = (url: string) => (startAt && at === 0 ? url + (url.includes("?") ? "&" : "?") + `start=${Math.floor(startAt)}` : url);
+  // a list plays like episodes: when one ends the next starts by itself; after the last, Jagora asks which she liked
+  const endedFor = useRef("");
+  useEffect(() => {
+    if (!cur || previewing || choosing || items.length < 2 || m?.course) return; // a course waits for her after each lesson
+    const t = window.setInterval(() => {
+      const v = vid.current;
+      const y = youTubeInfo(frame.current?.contentWindow);
+      const ended = v ? v.ended : !!y?.ended;
+      if (!ended || endedFor.current === cur.url) return;
+      endedFor.current = cur.url;
+      if (at + 1 < items.length) st().setMediaAt(at + 1);
+      else {
+        const task = st().activeId;
+        if (task) void remoteMediaDone(task, { name: cur.name, list_end: true, names: items.map((x) => x.name) });
+      }
+    }, 1500);
+    return () => clearInterval(t);
+  }, [cur?.url, previewing, choosing, items.length, at]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // she watched to the end: nothing left to continue
   useEffect(() => {
     if (!cur) return;

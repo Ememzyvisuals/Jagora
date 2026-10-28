@@ -561,7 +561,10 @@ export async function remoteWake() {
 
 /** The chat she has open: Jagora's voice (on LiveKit) talks into it. */
 /** She finished a lesson of a course (or a video): Jagora congratulates her and offers practice. */
-export async function remoteMediaDone(task: string, info: { name: string; course?: string; minutes: number; done: number; total: number; next?: string }) {
+export async function remoteMediaDone(
+  task: string,
+  info: { name: string; course?: string; minutes?: number; done?: number; total?: number; next?: string; list_end?: boolean; names?: string[] },
+) {
   try {
     (await connect()).send(JSON.stringify({ type: "media_done", task, ...info, screen: describeScreen() }));
   } catch {}

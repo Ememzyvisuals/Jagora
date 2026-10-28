@@ -190,6 +190,9 @@ type State = {
   setShowPage: (v: boolean) => void;
   setLiveSmall: (v: boolean) => void;
   setPlaying: (m: Extract<Msg, { kind: "media" }> | null) => void;
+  /** the player fills her screen (asked by voice); stays so for the next videos, until she says normal or closes it */
+  mediaBig: boolean;
+  setMediaBig: (v: boolean) => void;
   setMediaAt: (i: number) => void;
   setTalkOver: (v: boolean) => void;
   setMediaListen: (v: boolean) => void;
@@ -311,7 +314,9 @@ export const useApp = create<State>()(
       setSheet: (sheetOpen) => set({ sheetOpen }),
       setLive: (live) => set({ live, showPage: false, liveSmall: false }),
       setLiveSmall: (liveSmall) => set({ liveSmall }),
-      setPlaying: (playing) => set({ playing, mediaAt: 0, talkOver: false }),
+      setPlaying: (playing) => set((s) => ({ playing, mediaAt: 0, talkOver: false, mediaBig: playing ? s.mediaBig || !!(playing as { big?: boolean }).big : false })),
+      mediaBig: false,
+      setMediaBig: (mediaBig) => set({ mediaBig }),
       setMediaAt: (mediaAt) => set((s) => ({ mediaAt: Math.max(0, Math.min(mediaAt, (s.playing?.queue?.length ?? 1) - 1)), talkOver: false })),
       setTalkOver: (talkOver) => set({ talkOver }),
       setMediaListen: (mediaListen) => set({ mediaListen }),

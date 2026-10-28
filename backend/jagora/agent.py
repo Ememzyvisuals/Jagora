@@ -408,7 +408,8 @@ COMMON = [
                                                "required": ["url"]}},
           "start": {"type": "integer", "description": "which one to start with, 1 = the first (default 1)"},
           "course": {"type": "string", "description": "when they are learning from it: a short name for the course (e.g. "
-                     "'Python for beginners'); their minutes and finished lessons are then tracked"}}, ["videos"]),
+                     "'Python for beginners'); their minutes and finished lessons are then tracked"},
+          "big": {"type": "boolean", "description": "fill her screen (when she asked for full screen)"}}, ["videos"]),
     tool("look", "See the page as a picture on your next step. Only when the text and the list of elements are not enough "
          "(pictures, maps, colours, layout, a button you cannot find).", {}, []),
     tool("finish", "The task is done, or cannot be done. Tell them the result in their language: the answer, what you "
@@ -558,7 +559,7 @@ HOW YOU WORK
 - Do not ask "what do you want me to do?" when the request is already clear from the conversation; only ask when two real choices remain.
 - Be quick on simple questions (dates, news, prices, results): search once, open the best official or news result, read the answer, then say it. Do not visit page after page when one already answers it.
 - You also run the Jagora app on their screen: "On the user's screen" tells you what they see (the chat, the live page, their tabs). When they ask to close, open, show, hide, switch, scroll or change something there, use app_control right away, then carry on with the task.
-- While a video plays on their screen ("Playing on her screen now"), the microphone may catch the film. Act only on words clearly meant for you (next, another one, I don't like it, pause, stop, louder); ignore anything that sounds like the film's dialogue and say nothing. When she talks, whatever plays is paused for you and plays on by itself when you are done; touch it (media_pause, stop_media, media_next) only if what she said is about it. You have full control of the player: whatever she asks it to do (pause, play, forward, back, a time, half way, start again, louder, softer, mute, faster, slower, fill the screen, next, previous, close, save for later), do it at once with app_control, then at most a couple of words. "Forward it" with no number is +30; "a bit" is 10 seconds. "How far am I" or "how long is left": answer from the time on her screen. "I don't like this one, find another one": the next one in the list if there is a list (media_next); otherwise find_video again for the same thing, leaving out the one she rejected. "Saved in this chat to watch later" means she can continue it: "continue" or "play my video" is media_resume.
+- While a video plays on their screen ("Playing on her screen now"), the microphone may catch the film. Act only on words clearly meant for you (next, another one, I don't like it, pause, stop, louder); ignore anything that sounds like the film's dialogue and say nothing. When she talks, whatever plays is paused for you and plays on by itself when you are done; touch it (media_pause, stop_media, media_next) only if what she said is about it. Videos: "preview them" is preview_videos ONCE (they move on by themselves). "Play them all", "one after the other", "like episodes", "watch all 3 then I choose" is play_list ONCE (each plays to the end, the next starts by itself; when the last ends you are told, then ask which one she liked). "Full screen" is media_big on, or big: true in play_list. Everything after that you do by voice with app_control; never tell her to tap Next, Previous or anything else, and never send the same videos again (it restarts her player). You have full control of the player: whatever she asks it to do (pause, play, forward, back, a time, half way, start again, louder, softer, mute, faster, slower, fill the screen, next, previous, close, save for later), do it at once with app_control, then at most a couple of words. "Forward it" with no number is +30; "a bit" is 10 seconds. "How far am I" or "how long is left": answer from the time on her screen. "I don't like this one, find another one": the next one in the list if there is a list (media_next); otherwise find_video again for the same thing, leaving out the one she rejected. "Saved in this chat to watch later" means she can continue it: "continue" or "play my video" is media_resume.
 - Choosing with them (videos, music, films, courses, tutorials, fonts, products, schools, jobs, anything with several good options): find the options fast (find_video for anything to watch or listen to, search for the rest), give them the best 3 as ask_user choices with short titles, and WAIT for their pick. Then play it (play_media) or open its page (go_to) so they see it. If they said "just play" or named one, skip the question. Stay with them after: "next", "another one", "not this one" means the next option, or search again for better ones.
 - Show what you read: when the answer comes from a website, open that page with go_to so it is on their screen while you tell them (read_sources is for comparing several in the background). When no website is needed (a quick fact, a chat), stay on their home screen.
 - Learning (a course, a skill, an exam subject): ask their level if unknown, find good beginner playlists (find_video "<subject> full course for beginners playlist"), offer the best 3 channels as choices, then play the lessons in order with play_list and a course name, so their watching is tracked ("Her course ..." lines show minutes watched and lessons finished). Offer a short study guide (write_document: the plan, lesson by lesson, how long each day, what to practise). "Continue my course" means play_list from the next unfinished lesson. When a lesson ends you are told; offer a short practice sheet on that lesson (write_document with exercises, answers at the end), then the next lesson.
@@ -648,6 +649,9 @@ class Agent:
     _last_fp_same: bool = False  # the last action left the page exactly as it was
     _changed_any: bool = False
     _chat_note: str | None = None  # this chat's own memory
+    _last_app: tuple = ("", "")  # the last app_control done (the same one twice in a row is refused)
+    _video_searches: set = field(default_factory=set)  # video searches already made in this task
+    _media_sent: set = field(default_factory=set)  # lists and previews already put on her screen in this task
     _known: dict | None = None  # the page that answered this question before
     _source: str = ""  # the page the answer was read from this time
     _told_at: int = -99
@@ -1132,6 +1136,13 @@ class Agent:
                 act, val = str(a.get("action", "")), str(a.get("value", "") or "")
                 if act not in APP_ACTIONS:
                     return f"no such app action: {act}", True, None
+                key = (act, val)
+                one_shot = act in ("media_big", "media_mute", "media_unmute", "media_restart", "media_save", "stop_media",
+                                   "media_pause", "media_play", "fullscreen", "show_page", "hide_page", "show_chat", "hide_chat")
+                if one_shot and key == self._last_app:
+                    return (f"already done: {act} {val} is on her screen now. Do not repeat it; finish with one short "
+                            "line or wait for her."), True, None
+                self._last_app = key
                 await self.io.event("app", {"action": act, "value": val})
                 return f"done on their screen: {act} {val}".strip(), True, None
             if name == "ask_user":
@@ -1141,6 +1152,11 @@ class Agent:
             if name == "find_video":
                 if not settings.serper_keys:
                     return "video search is not set up; search the web instead", False, None
+                q = str(a.get("query", "")).strip().lower()
+                if q in self._video_searches:
+                    return ("you already searched this in this task: use the links you have. Do not search again; play, "
+                            "preview or ask now."), False, None
+                self._video_searches.add(q)
                 vids = await research.videos(str(a.get("query", "")))
                 if not vids:
                     return "no videos found; try other words", False, None
@@ -1161,10 +1177,16 @@ class Agent:
                     return "give YouTube links from find_video", False, None
                 start = max(0, min(len(items) - 1, int(a.get("start") or 1) - 1))
                 course = str(a.get("course") or "")[:60]
+                same = self._already_playing("list", items)
+                if same:
+                    return same, False, None
                 await self.io.event("media", {**items[start], "size": 0, "queue": items, "start": start,
-                                              **({"course": course} if course else {})})
-                return (f"playing a list of {len(items)} on their screen from number {start + 1}; Next and Previous move "
-                        "through it (app_control media_next / media_previous when they ask)."), False, None
+                                              **({"course": course} if course else {}), **({"big": True} if a.get("big") else {})})
+                return (f"PLAYING NOW on her screen: a list of {len(items)} from number {start + 1}. Each one plays to the end "
+                        "and the next starts by itself; after the last one her app tells you, and then you ask her which she "
+                        "liked. You control it by voice with app_control (media_next, media_previous, media_pause, "
+                        "media_seek, media_big...). Never tell her to tap anything. Now finish with ONE short line. Do not "
+                        "call play_list, preview_videos or find_video again."), False, None
             if name == "preview_videos":
                 items = []
                 for v in list(a.get("videos") or [])[:6]:
@@ -1176,9 +1198,14 @@ class Agent:
                     return "give YouTube links from find_video", False, None
                 secs = max(5, min(12, int(a.get("seconds") or 8)))
                 first = items[0]
+                same = self._already_playing("preview", items)
+                if same:
+                    return same, False, None
                 await self.io.event("media", {**first, "size": 0, "queue": items, "preview": secs})
-                return (f"previewing {len(items)} videos, {secs} seconds each, on their screen; their app then asks which "
-                        "one to watch. Do not play another until they choose."), False, None
+                return (f"PREVIEWING NOW on her screen: {len(items)} videos, {secs} seconds each, moving on by themselves; "
+                        "after the last one her app shows the list and asks which one. Never tell her to tap Next. Now "
+                        "finish with ONE short line and wait for her choice. Do not call preview_videos, play_list or "
+                        "find_video again."), False, None
             if name == "look":
                 self._want_look = True
                 return "you will see the page as a picture now", True, None
@@ -1665,6 +1692,16 @@ class Agent:
         value = ""  # noqa: F841  (dropped: never logged, spoken or sent to the model)
         self._trail_add("private", f'the user filled "{str(a.get("label") or field)[:50]}" on {self._here()} privately')
         return f"filled by them ({n} characters in the box){saved}", False, None
+
+    def _already_playing(self, how: str, items: list[dict]) -> str:
+        """The same videos sent again in this task restart her player from the beginning: refused, with what to do."""
+        key = (how, tuple(i["url"] for i in items))
+        if key in self._media_sent:
+            return (f"already {'previewing' if how == 'preview' else 'playing'} these on her screen. Sending them again would "
+                    "restart her player. Do nothing more with them: finish with one short line, or use app_control "
+                    "(media_restart, media_next...) if she asked for that.")
+        self._media_sent.add(key)
+        return ""
 
     async def _keep_payment(self, a):
         """Her money trail: one record per payment in this chat, updated as it moves on."""
