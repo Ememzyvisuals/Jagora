@@ -78,7 +78,7 @@ export function CloudWordmark({
     const gl = cv.getContext("webgl", { premultipliedAlpha: true, alpha: true, antialias: false });
     if (!gl) return;
     let raf = 0, alive = true;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     const W = Math.round(width * dpr), H = Math.round(height * dpr);
     cv.width = W;
     cv.height = H;

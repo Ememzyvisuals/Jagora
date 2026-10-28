@@ -55,7 +55,7 @@ export function Orb({
     if (!cv) return;
     const gl = cv.getContext("webgl", { premultipliedAlpha: true, alpha: true, antialias: true });
     if (!gl) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     cv.width = cv.height = Math.round(size * dpr);
     const sh = (type: number, src: string) => {
       const s = gl.createShader(type)!;
@@ -93,7 +93,7 @@ export function Orb({
     gl.uniform1f(u("uRes"), cv.width);
     const uT = u("uTime"), uF = u("uFlow"), uR = u("uRing"), uS = u("uState"), uI = u("uIn"), uO = u("uOut");
 
-    let raf = 0, visible = true, last = 0, flow = 0, ring = 0, lin = 0, lout = 0;
+    let raf = 0, visible = true, last = 0, flow = 0, ring = 0, lin = 0, lout = 0, drawn = 0;
     const t0 = performance.now();
     const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting), { rootMargin: "120px" });
     io.observe(cv);
@@ -109,6 +109,10 @@ export function Orb({
       flow += dt * (1 + lout * 3.2 + (st === "working" ? 0.9 : st === "thinking" ? 0.4 : 0));
       ring += dt * (0.42 + lin * 0.5);
       if (!visible) return;
+      // at rest the orb only drifts slowly: 24 frames a second is plenty and much lighter (several orbs share a screen)
+      const calmNow = (st === "idle" || st === "working") && lin < 0.02 && lout < 0.02;
+      if (calmNow && now - drawn < 41) return;
+      drawn = now;
       gl.viewport(0, 0, cv.width, cv.height);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);

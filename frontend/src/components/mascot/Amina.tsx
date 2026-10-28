@@ -496,6 +496,9 @@ function Stage({ app }: { app: boolean }) {
       } else {
         el.style.display = "none";
         bub.style.opacity = "0";
+        // off screen: no drawing, just a quiet check a few times a second whether it is time to visit
+        raf = window.setTimeout(() => (raf = requestAnimationFrame((n) => loop(n, now))), 350) as unknown as number;
+        return;
       }
       raf = requestAnimationFrame((n) => loop(n, now));
     };
@@ -622,6 +625,7 @@ function Stage({ app }: { app: boolean }) {
     return () => {
       dead = true;
       cancelAnimationFrame(raf);
+      clearTimeout(raf);
       points.forEach((p) => p.removeEventListener("pointerenter", onPointAt));
       seat?.removeEventListener("click", onSeatClick);
       removeEventListener("pointermove", onMove);
