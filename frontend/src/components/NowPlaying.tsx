@@ -6,7 +6,7 @@
    - Several videos: previews play one after another (a few seconds each), then she picks one to watch; Next and
      Previous move through the list (Jagora can do the same when she asks by voice).
    X closes it. */
-import { Microphone, Play, SkipBack, SkipForward, X } from "@phosphor-icons/react";
+import { CornersOut, Microphone, Play, SkipBack, SkipForward, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Lang } from "@/lib/i18n";
@@ -93,7 +93,21 @@ export function NowPlaying() {
     return () => (clearTimeout(t), clearTimeout(quiet), st().setMediaListen(false));
   }, [cur?.url]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const close = () => st().setPlaying(null);
+  // full screen (phones turn sideways for it where they can)
+  const box = useRef<HTMLDivElement>(null);
+  const full = async () => {
+    const el = (frame.current ?? vid.current ?? box.current) as HTMLElement | null;
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await el?.requestFullscreen?.();
+      const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+      await o?.lock?.("landscape").catch(() => undefined);
+    } catch {}
+  };
+  const close = () => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    st().setPlaying(null);
+  };
   const pick = (i: number) => (setChoosing(false), setPreviewing(false), st().setMediaAt(i));
   const isVideo = !!cur && (cur.type === "youtube" || cur.type.startsWith("video") || /\.(mp4|webm|mov)$/i.test(cur.name));
   const btn = "grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/15 text-white transition hover:bg-white/25 active:scale-95 disabled:opacity-30";
@@ -105,11 +119,12 @@ export function NowPlaying() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[70] grid place-items-center bg-[rgba(8,12,20,.72)] px-4 backdrop-blur-[6px]"
+          className="fixed inset-0 z-[70] grid place-items-center bg-[rgba(8,12,20,.86)] px-2 backdrop-blur-[6px] sm:px-4"
         >
-          <div className="w-full max-w-[1100px]">
-            <div className="mb-3 flex items-center gap-2">
-              <p className="min-w-0 flex-1 truncate text-[16px] font-semibold text-white">
+          <div ref={box} className="w-full max-w-[1100px] bg-transparent">
+            {/* phones: the title on its own line, the buttons under it; computers: one line */}
+            <div className="mb-3 flex flex-wrap items-center gap-2 px-1 pt-[env(safe-area-inset-top)]">
+              <p className="w-full min-w-0 truncate text-[15px] font-semibold text-white sm:w-auto sm:flex-1 sm:text-[16px]">
                 {previewing && <span className="mr-2 rounded-full bg-white/20 px-2 py-0.5 text-[12px]">{L.preview[lang]} {at + 1}/{items.length}</span>}
                 {cur.name}
               </p>
@@ -132,6 +147,9 @@ export function NowPlaying() {
                   <Microphone size={16} weight="fill" /> {L.talk[lang]}
                 </button>
               )}
+              <button onClick={full} className={btn} aria-label="Full screen">
+                <CornersOut size={18} weight="bold" />
+              </button>
               <button onClick={close} aria-label="Close the player" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-ink transition active:scale-95">
                 <X size={18} weight="bold" />
               </button>
@@ -146,10 +164,10 @@ export function NowPlaying() {
                   allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
                   allowFullScreen
                   referrerPolicy="strict-origin-when-cross-origin"
-                  className="aspect-video w-full rounded-[18px] bg-black"
+                  className="aspect-video w-full rounded-[14px] bg-black sm:rounded-[18px]"
                 />
               ) : isVideo ? (
-                <video key={cur.url} ref={vid} src={cur.url} controls autoPlay playsInline className="max-h-[72vh] w-full rounded-[18px] bg-black" />
+                <video key={cur.url} ref={vid} src={cur.url} controls autoPlay playsInline className="max-h-[72vh] w-full rounded-[14px] bg-black sm:rounded-[18px]" />
               ) : (
                 <div className="rounded-[18px] bg-white p-4">
                   <audio key={cur.url} src={cur.url} controls autoPlay className="w-full" />

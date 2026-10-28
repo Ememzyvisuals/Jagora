@@ -208,6 +208,12 @@ def wrap_soon(turns: int, max_turns: int) -> bool:
 CHANGE_TOOLS = {"click", "type_text", "choose", "set_checkbox", "press_key", "hover", "double_click", "right_click", "drag",
                 "click_at", "upload_file", "set_date", "go_back", "fill_form"}
 
+def _same_news(a: str, b: str) -> bool:
+    """Does the summary mostly repeat what she was just told? (shared words, any order)"""
+    wa, wb = set(re.findall(r"\w{3,}", (a or "").lower())), set(re.findall(r"\w{3,}", (b or "").lower()))
+    return bool(wa and wb) and len(wa & wb) / max(1, min(len(wa), len(wb))) >= 0.45
+
+
 def yt_embed(video_id: str) -> str:
     """YouTube's privacy-enhanced player, controllable from her app (pause while she talks, next, previous)."""
     return f"https://www.youtube-nocookie.com/embed/{video_id}?autoplay=1&rel=0&modestbranding=1&enablejsapi=1&playsinline=1"
@@ -492,6 +498,8 @@ HOW YOU WORK
 - Be quick on simple questions (dates, news, prices, results): search once, open the best official or news result, read the answer, then say it. Do not visit page after page when one already answers it.
 - You also run the Jagora app on their screen: "On the user's screen" tells you what they see (the chat, the live page, their tabs). When they ask to close, open, show, hide, switch, scroll or change something there, use app_control right away, then carry on with the task.
 - While a video plays on their screen ("Playing on her screen now"), the microphone may catch the film. Act only on words clearly meant for you (next, another one, I don't like it, pause, stop, louder); ignore anything that sounds like the film's dialogue and say nothing.
+- Choosing with them (videos, music, films, courses, tutorials, fonts, products, schools, jobs, anything with several good options): find the options fast (find_video for anything to watch or listen to, search for the rest), give them the best 3 as ask_user choices with short titles, and WAIT for their pick. Then play it (play_media) or open its page (go_to) so they see it. If they said "just play" or named one, skip the question. Stay with them after: "next", "another one", "not this one" means the next option, or search again for better ones.
+- Show what you read: when the answer comes from a website, open that page with go_to so it is on their screen while you tell them (read_sources is for comparing several in the background). When no website is needed (a quick fact, a chat), stay on their home screen.
 - Say the answer once. Either tell_user it and then finish with a one-line wrap-up, or put it only in finish. Never tell_user the answer and then repeat it in finish.
 - When done, call finish with a short summary in {lang}: the answer, where it was confirmed, what was not confirmed, and the best next step. Offer a document or download if it would help.
 
@@ -1060,7 +1068,7 @@ class Agent:
                         return f"the checker does not agree it is done: {verdict}. Fix this, then finish.", True, None
                 # she was just told the answer (tell_user in the step before): the summary is not said again, so
                 # she hears it once
-                if len(self.history) - self._told_at > 2 or not self._said_last:
+                if not (len(self.history) - self._told_at <= 2 and _same_news(self._said_last, str(a.get("summary", "")))):
                     await self.io.say(a.get("summary", ""))
                 return "finished", False, (bool(a.get("success")), a.get("summary", ""))
             if name == "give_verdict":
