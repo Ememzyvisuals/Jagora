@@ -420,7 +420,7 @@ ACT_TOOLS = [
 ]
 APP_ACTIONS = ["show_page", "hide_page", "show_chat", "hide_chat", "show_tabs", "hide_tabs", "open_chat", "new_chat",
                "close_chat", "scroll_chat", "set_language", "set_mode", "voice", "data_saver", "theme", "fullscreen",
-               "end_live", "hide_live", "show_live", "stop_media", "media_next", "media_previous", "media_pause", "media_play", "amina", "my_details", "go_home", "show_history", "hide_history"]
+               "end_live", "hide_live", "show_live", "stop_media", "media_next", "media_previous", "media_pause", "media_play", "media_seek", "media_save", "media_resume", "amina", "my_details", "go_home", "show_history", "hide_history"]
 APP_TOOL = tool(
     "app_control",
     "Control the Jagora app itself on the user's screen (not the website): show or hide the live web page, show or hide "
@@ -429,14 +429,18 @@ APP_TOOL = tool(
     "voice, data saver, dark or light theme or full screen on or off, end live voice (end_live), fold the Live voice screen "
     "down while the call goes on (hide_live: 'close this live screen', 'remove this screen'), bring it back (show_live), "
     "close the song or video playing on their screen (stop_media), next or previous in the list playing (media_next, "
-    "media_previous), pause or play it (media_pause, media_play), show or hide Amina, open their "
+    "media_previous), pause or play it (media_pause, media_play), move it back or forward (media_seek: 'go back 10 "
+    "seconds' is value -10, 'skip 30 seconds' +30, 'go to 2 minutes' 2:00), pause it and keep her place in this chat to "
+    "watch later (media_save: 'save it for later', 'I will continue later'), play the saved one on from where she stopped "
+    "(media_resume: 'continue my video'), show or hide Amina, open their "
     "saved details, go to the start screen. Use it whenever they ask for something on the screen ('close this', 'show me "
     "the browser', 'go back to my last chat', 'make it dark', 'scroll up'). 'This' and 'that' mean what is on their "
     "screen now (see 'On the user's screen'). Do it at once, no need to ask.",
     {"action": {"type": "string", "enum": APP_ACTIONS},
      "value": {"type": "string", "description": "for open_chat/close_chat: the chat's number or title from the screen, "
                "or 'last'/'previous'; scroll_chat: up, down, top, bottom; set_language: yo, ha, ig, pcm, en; set_mode: "
-               "do or guide; voice, data_saver, fullscreen, amina: on or off (data_saver also auto); theme: dark or light"}},
+               "do or guide; voice, data_saver, fullscreen, amina: on or off (data_saver also auto); theme: dark or light; "
+               "media_seek: -10, +30 or 1:20"}},
     ["action"])
 
 DO_TOOLS = COMMON + ACT_TOOLS
@@ -509,7 +513,7 @@ HOW YOU WORK
 - Do not ask "what do you want me to do?" when the request is already clear from the conversation; only ask when two real choices remain.
 - Be quick on simple questions (dates, news, prices, results): search once, open the best official or news result, read the answer, then say it. Do not visit page after page when one already answers it.
 - You also run the Jagora app on their screen: "On the user's screen" tells you what they see (the chat, the live page, their tabs). When they ask to close, open, show, hide, switch, scroll or change something there, use app_control right away, then carry on with the task.
-- While a video plays on their screen ("Playing on her screen now"), the microphone may catch the film. Act only on words clearly meant for you (next, another one, I don't like it, pause, stop, louder); ignore anything that sounds like the film's dialogue and say nothing. When she talks, whatever plays is paused for you and plays on by itself when you are done; touch it (media_pause, stop_media, media_next) only if what she said is about it.
+- While a video plays on their screen ("Playing on her screen now"), the microphone may catch the film. Act only on words clearly meant for you (next, another one, I don't like it, pause, stop, louder); ignore anything that sounds like the film's dialogue and say nothing. When she talks, whatever plays is paused for you and plays on by itself when you are done; touch it (media_pause, stop_media, media_next) only if what she said is about it. "Pause", "go back 10 seconds", "rewind 2 seconds", "save it for later": app_control at once (media_pause, media_seek, media_save), then at most a couple of words. "I don't like this one, find another one": the next one in the list if there is a list (media_next); otherwise find_video again for the same thing, leaving out the one she rejected. "Saved in this chat to watch later" means she can continue it: "continue" or "play my video" is media_resume.
 - Choosing with them (videos, music, films, courses, tutorials, fonts, products, schools, jobs, anything with several good options): find the options fast (find_video for anything to watch or listen to, search for the rest), give them the best 3 as ask_user choices with short titles, and WAIT for their pick. Then play it (play_media) or open its page (go_to) so they see it. If they said "just play" or named one, skip the question. Stay with them after: "next", "another one", "not this one" means the next option, or search again for better ones.
 - Show what you read: when the answer comes from a website, open that page with go_to so it is on their screen while you tell them (read_sources is for comparing several in the background). When no website is needed (a quick fact, a chat), stay on their home screen.
 - Learning (a course, a skill, an exam subject): ask their level if unknown, find good beginner playlists (find_video "<subject> full course for beginners playlist"), offer the best 3 channels as choices, then play the lessons in order with play_list and a course name, so their watching is tracked ("Her course ..." lines show minutes watched and lessons finished). Offer a short study guide (write_document: the plan, lesson by lesson, how long each day, what to practise). "Continue my course" means play_list from the next unfinished lesson. When a lesson ends you are told; offer a short practice sheet on that lesson (write_document with exercises, answers at the end), then the next lesson.

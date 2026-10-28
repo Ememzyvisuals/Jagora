@@ -14,13 +14,13 @@ import type { Lang } from "@/lib/i18n";
 import { activeTask, useApp } from "@/lib/store";
 import { duckVoice, hush, remoteFocus, remoteStop } from "@/lib/engine/remote";
 import { Listener } from "@/lib/turns";
-import { muteHandsFree, reconnectVoice, startHandsFree, stopHandsFree, throughLiveKit, useVoiceLost } from "@/lib/handsfree";
+import { muteHandsFree, parkVoice, reconnectVoice, startHandsFree, stopHandsFree, throughLiveKit, useVoiceLost } from "@/lib/handsfree";
 import { blobToDataUrl, useSpeakingPulse, useVoice, watchForVoice } from "@/lib/voice";
 import { browserRecognizer } from "./Composer";
 import { Glass } from "./glass/Glass";
 import { Orb } from "./Orb";
 
-const SAY: Record<"listen" | "think" | "work" | "speak" | "paused" | "hint" | "end" | "live" | "hide" | "lost" | "again", Record<Lang, string>> = {
+const SAY: Record<"listen" | "think" | "work" | "speak" | "paused" | "hint" | "end" | "live" | "hide" | "lost" | "again" | "parked", Record<Lang, string>> = {
   listen: { en: "Listening…", pcm: "I dey hear you…", yo: "Mo ń gbọ́ yín…", ha: "Ina sauraro…", ig: "Ana m ege ntị…" },
   work: { en: "Working on the page…", pcm: "I dey work for the page…", yo: "Mo ń ṣiṣẹ́ lórí ojú-ìwé náà…", ha: "Ina aiki a shafin…", ig: "Ana m arụ ọrụ na peeji ahụ…" },
   think: { en: "Thinking…", pcm: "I dey think…", yo: "Mo ń ronú…", ha: "Ina tunani…", ig: "Ana m eche echiche…" },
@@ -34,6 +34,7 @@ const SAY: Record<"listen" | "think" | "work" | "speak" | "paused" | "hint" | "e
     ig: "Kwuo ihe ị chọrọ. Jagora ga-aza, wee gee ntị ọzọ.",
   },
   end: { en: "End", pcm: "Stop", yo: "Parí", ha: "Gama", ig: "Kwụsị" },
+  parked: { en: "Tap the mic to talk", pcm: "Tap the mic to talk", yo: "Tẹ mic láti sọ̀rọ̀", ha: "Taɓa mic don magana", ig: "Pịa mic ka ị kwuo okwu" },
   lost: { en: "Voice disconnected", pcm: "Voice don cut", yo: "Ohùn ti já", ha: "Murya ta katse", ig: "Olu akwụsịla" },
   again: { en: "Reconnect", pcm: "Connect am again", yo: "Tún so pọ̀", ha: "Sake haɗawa", ig: "Jikọọ ọzọ" },
   hide: { en: "Hide this screen", pcm: "Comot this screen", yo: "Pa ojú-iboju yìí mọ́", ha: "Ɓoye wannan allo", ig: "Zoo ihuenyo a" },
@@ -268,11 +269,40 @@ export function LiveMode() {
     setOrb("idle");
   };
   const toggleMute = () => {
+    if (parked) {
+      // back from watching: join the voice room again, same chat, and Jagora is told what is on her screen
+      setParked(false);
+      setMuted(false);
+      void rejoin();
+      return;
+    }
     setMuted((m) => {
       if (!m) void voice.stop();
       return !m;
     });
   };
+
+  // watching a video and nobody has spoken for 30 s: the voice room is left (it costs minutes and holds a worker);
+  // the microphone shows off, and turning it on joins again
+  const [parked, setParked] = useState(false);
+  const quietSince = useRef(Date.now());
+  useEffect(() => {
+    quietSince.current = Date.now();
+  }, [heard, phase, playing, orb]);
+  useEffect(() => {
+    if (!on || !playing || muted || parked) return;
+    const t = window.setInterval(() => {
+      if (phase !== "listen" || useApp.getState().orb === "speaking" || !throughLiveKit()) return;
+      if (Date.now() - quietSince.current < 30_000) return;
+      setParked(true);
+      setMuted(true);
+      void parkVoice();
+    }, 5000);
+    return () => clearInterval(t);
+  }, [on, playing, muted, parked, phase]);
+  useEffect(() => {
+    if (!on) setParked(false);
+  }, [on]);
 
   // the big orb fits the phone: smaller on short screens so the reply and buttons stay in view
   const orbBig = typeof window !== "undefined" ? (window.innerHeight < 760 ? 180 : window.innerHeight < 880 ? 220 : 260) : 220;
@@ -280,7 +310,7 @@ export function LiveMode() {
   // while Jagora works, the caption says what it is doing right now (its latest step)
   const lastStep = [...(task?.messages ?? [])].reverse().find((m) => m.kind === "step");
   const doing = lastStep && "text" in lastStep ? lastStep.text : "";
-  const label = lost ? SAY.lost[lang] : muted ? SAY.paused[lang] : phase === "speak" ? SAY.speak[lang] : phase === "work" ? doing || SAY.work[lang] : phase === "think" ? SAY.think[lang] : SAY.listen[lang];
+  const label = lost ? SAY.lost[lang] : parked ? SAY.parked[lang] : muted ? SAY.paused[lang] : phase === "speak" ? SAY.speak[lang] : phase === "work" ? doing || SAY.work[lang] : phase === "think" ? SAY.think[lang] : SAY.listen[lang];
   const orbState = phase === "speak" ? "speaking" : phase === "work" ? "working" : phase === "think" ? "thinking" : muted ? "idle" : "listening";
 
   return (
@@ -298,7 +328,7 @@ export function LiveMode() {
             <Glass flat radius={28} bezel={14} refraction={30} blur={14} tint="rgba(14,15,18,.82)">
               <div className="flex h-14 items-center gap-2.5 pl-2 pr-2 text-snow">
                 <Orb size={44} state={orbState} levelRef={level} />
-                <button onClick={() => (setShowPage(false), setSmall(false))} className="min-w-0 max-w-[48vw] truncate text-left text-[14px] font-medium" aria-label="Back to live view">
+                <button onClick={() => (parked ? toggleMute() : (setShowPage(false), setSmall(false)))} className="min-w-0 max-w-[48vw] truncate text-left text-[14px] font-medium" aria-label="Back to live view">
                   {label}
                 </button>
                 {lost && (

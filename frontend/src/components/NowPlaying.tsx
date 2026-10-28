@@ -54,16 +54,76 @@ export function NowPlaying() {
     return () => clearTimeout(t);
   }, [previewing, at, m?.preview, items.length, paused]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const yt = (func: string, args: unknown = "") => frame.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), "*");
   const control = useCallback((what: "pause" | "play") => {
     if (vid.current) void (what === "pause" ? vid.current.pause() : vid.current.play().catch(() => undefined));
-    frame.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func: what === "pause" ? "pauseVideo" : "playVideo", args: "" }), "*");
-  }, []);
-  // Jagora pauses or plays it when she asks
+    yt(what === "pause" ? "pauseVideo" : "playVideo");
+    setPaused(what === "pause");
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  /** where the video is now and how long it is (seconds) */
+  const where = () => {
+    const v = vid.current;
+    const y = youTubeInfo(frame.current?.contentWindow);
+    return { time: v ? v.currentTime : y?.time ?? 0, length: v ? v.duration || 0 : y?.length ?? 0 };
+  };
+  /** "-10" back ten seconds, "+30" forward, "1:20" or "80" to that point */
+  const seek = (value: string) => {
+    const v = value.trim();
+    const { time, length } = where();
+    const secs = (x: string) => x.split(":").reduce((n, p) => n * 60 + (parseFloat(p) || 0), 0);
+    let to = /^[+-]/.test(v) ? time + (v[0] === "-" ? -1 : 1) * secs(v.slice(1)) : secs(v);
+    to = Math.max(0, length ? Math.min(to, length - 1) : to);
+    if (vid.current) vid.current.currentTime = to;
+    yt("seekTo", [to, true]);
+  };
+  /** keep her place in this chat so "Continue watching" plays on from here */
+  const keep = () => {
+    const task = st().activeId;
+    if (!task || !cur || choosing || previewing) return false;
+    const { time, length } = where();
+    if (time < 5 || (length > 0 && time > length - 15)) return false;
+    st().setResume(task, { name: cur.name, url: cur.url, type: cur.type, source: cur.source, at: time, length });
+    return true;
+  };
+  const keepRef = useRef(keep);
+  keepRef.current = keep;
+  // Jagora pauses, plays, moves or saves it when she asks
   useEffect(() => {
-    const on = (e: Event) => control((e as CustomEvent<string>).detail === "pause" ? "pause" : "play");
+    const on = (e: Event) => {
+      const d = String((e as CustomEvent<string>).detail ?? "");
+      if (d.startsWith("seek:")) return seek(d.slice(5));
+      if (d === "save") {
+        control("pause");
+        keepRef.current();
+        return void window.setTimeout(() => st().setPlaying(null), 300);
+      }
+      control(d === "pause" ? "pause" : "play");
+    };
     window.addEventListener("jagora:media", on);
     return () => window.removeEventListener("jagora:media", on);
-  }, [control]);
+  }, [control]); // eslint-disable-line react-hooks/exhaustive-deps
+  // continuing a saved video: start where she stopped (taken once for this video, then cleared)
+  const startFor = useRef<string | undefined>(undefined);
+  const startRef = useRef(0);
+  if (startFor.current !== m?.id) {
+    startFor.current = m?.id;
+    startRef.current = m ? st().startAt : 0;
+  }
+  const startAt = startRef.current;
+  useEffect(() => {
+    if (m && st().startAt) st().setStartAt(0);
+  }, [m?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const srcOf = (url: string) => (startAt && at === 0 ? url + (url.includes("?") ? "&" : "?") + `start=${Math.floor(startAt)}` : url);
+  // she watched to the end: nothing left to continue
+  useEffect(() => {
+    if (!cur) return;
+    const t = window.setInterval(() => {
+      const { time, length } = where();
+      const task = st().activeId;
+      if (task && length > 0 && time > length - 15 && st().resume[task]?.url === cur.url) st().setResume(task, null);
+    }, 5000);
+    return () => clearInterval(t);
+  }, [cur?.url]); // eslint-disable-line react-hooks/exhaustive-deps
   // a course: all its lessons are listed in her progress from the start
   useEffect(() => {
     if (!m?.course) return;
@@ -106,7 +166,6 @@ export function NowPlaying() {
   const toggle = () => {
     forget();
     control(paused ? "play" : "pause");
-    setPaused(!paused);
   };
   useEffect(() => setPaused(false), [cur?.url]);
 
@@ -123,6 +182,7 @@ export function NowPlaying() {
   };
   const close = () => {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    keep(); // closed in the middle: she can continue it later in this chat
     st().setPlaying(null);
   };
   const pick = (i: number) => (setChoosing(false), setPreviewing(false), st().setMediaAt(i));
@@ -173,7 +233,7 @@ export function NowPlaying() {
                     frame.current = f;
                     watchYouTube(f);
                   }}
-                  src={cur.url}
+                  src={srcOf(cur.url)}
                   title={cur.name}
                   allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
                   allowFullScreen
@@ -181,7 +241,16 @@ export function NowPlaying() {
                   className="aspect-video w-full rounded-[14px] bg-black sm:rounded-[18px]"
                 />
               ) : isVideo ? (
-                <video key={cur.url} ref={vid} src={cur.url} controls autoPlay playsInline className="max-h-[72vh] w-full rounded-[14px] bg-black sm:rounded-[18px]" />
+                <video
+                  key={cur.url}
+                  ref={vid}
+                  src={cur.url}
+                  onLoadedMetadata={(e) => {
+                    if (startAt && at === 0) e.currentTarget.currentTime = startAt;
+                  }}
+                  controls
+                  autoPlay
+                  playsInline className="max-h-[72vh] w-full rounded-[14px] bg-black sm:rounded-[18px]" />
               ) : (
                 <div className="rounded-[18px] bg-white p-4">
                   <audio key={cur.url} src={cur.url} controls autoPlay className="w-full" />

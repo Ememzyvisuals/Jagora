@@ -111,6 +111,12 @@ type State = {
   activeId: string | null;
   /** how often she opened each shortcut or site, so the new tab shows her own top sites first */
   visits: Record<string, { n: number; last: number; title?: string }>;
+  /** a video she paused to watch later, per chat: where she stopped, so "continue" plays on from there */
+  resume: Record<string, { name: string; url: string; type: string; source?: string; at: number; length: number; saved: number }>;
+  setResume: (task: string, v: { name: string; url: string; type: string; source?: string; at: number; length: number } | null) => void;
+  /** where a video should start (seconds), for continuing it */
+  startAt: number;
+  setStartAt: (n: number) => void;
   /** what she is learning: per course, each lesson's seconds watched, length and whether she finished it */
   courses: Record<string, Course>;
   learnTick: (course: string, lesson: { name: string; url: string }, seconds: number, length: number) => void;
@@ -212,6 +218,16 @@ export const useApp = create<State>()(
       activeId: null,
       visits: {},
       courses: {},
+      resume: {},
+      setResume: (task, v) =>
+        set((s) => {
+          const next = { ...s.resume };
+          if (v) next[task] = { ...v, saved: Date.now() };
+          else delete next[task];
+          return { resume: next };
+        }),
+      startAt: 0,
+      setStartAt: (startAt) => set({ startAt }),
       learnTick: (course, lesson, seconds, length) =>
         set((s) => {
           const c: Course = s.courses[course] ?? { name: course, lessons: [], updated: 0 };
@@ -315,7 +331,7 @@ export const useApp = create<State>()(
           return sessionStorage;
         }
       }),
-      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, avatar: s.avatar, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, courses: s.courses, starters: s.starters, muted: s.muted, translatePages: s.translatePages, dataSaver: s.dataSaver }),
+      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, avatar: s.avatar, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, courses: s.courses, resume: s.resume, starters: s.starters, muted: s.muted, translatePages: s.translatePages, dataSaver: s.dataSaver }),
     },
   ),
 );

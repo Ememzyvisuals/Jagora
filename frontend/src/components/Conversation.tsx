@@ -33,8 +33,42 @@ export function Conversation({ task }: { task: Task }) {
           )}
         </motion.div>
       ))}
+      <ContinueWatching task={task} />
       <div ref={end} />
     </div>
+  );
+}
+
+const CONTINUE: Record<Lang, string> = { en: "Continue watching", pcm: "Continue dey watch", yo: "Máa wò ó lọ", ha: "Ci gaba da kallo", ig: "Gaa n'ihu na-ekiri" };
+const clock = (n: number) => `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, "0")}`;
+
+/** a video she paused to watch later in this chat: one tap plays it on from where she stopped */
+function ContinueWatching({ task }: { task: Task }) {
+  const r = useApp((s) => s.resume?.[task.id]);
+  const playing = useApp((s) => !!s.playing);
+  const lang = useApp((s) => s.lang);
+  if (!r || playing) return null;
+  const go = () => {
+    const s = useApp.getState();
+    s.setStartAt(Math.max(0, r.at - 3));
+    s.setPlaying({ id: `resume-${Date.now()}`, kind: "media", name: r.name, url: r.url, type: r.type, size: 0, source: r.source });
+  };
+  const pct = r.length ? Math.min(100, Math.round((r.at / r.length) * 100)) : 0;
+  return (
+    <motion.div {...enter} className="flex items-center gap-2">
+      <button onClick={go} className="glass min-w-0 flex-1 rounded-[18px] px-4 py-3 text-left transition active:scale-[.99]">
+        <span className="block text-[14px] font-bold text-ink">{CONTINUE[lang]} · {clock(r.at)}{r.length ? ` / ${clock(r.length)}` : ""}</span>
+        <span className="mt-0.5 block truncate text-[13px] font-semibold text-ink/70">{r.name}</span>
+        {pct > 0 && (
+          <span className="mt-2 block h-1 overflow-hidden rounded-full bg-ink/10">
+            <span className="block h-full rounded-full bg-ink/70" style={{ width: `${pct}%` }} />
+          </span>
+        )}
+      </button>
+      <button onClick={() => useApp.getState().setResume(task.id, null)} aria-label="Remove" className="glass grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink/70">
+        <XCircle size={18} weight="bold" />
+      </button>
+    </motion.div>
   );
 }
 

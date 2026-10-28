@@ -145,6 +145,15 @@ if (typeof window !== "undefined") {
   });
 }
 
+/** Watching a video and quiet for a while: leave the voice room so it is free for others (LiveKit minutes and
+    worker slots). Live mode stays open with the microphone off; unmuting or tapping it joins again. */
+export async function parkVoice() {
+  if (!liveVoiceOn()) return;
+  clientLog("voice_parked", { why: "watching, quiet 30 s" });
+  await stopLiveVoice();
+  tell();
+}
+
 /** The live call dropped by itself; null when all is well. */
 export function useVoiceLost() {
   const [lost, setLost] = useState(liveVoiceLost());

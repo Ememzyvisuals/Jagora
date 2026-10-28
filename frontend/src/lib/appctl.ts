@@ -47,6 +47,8 @@ export function describeScreen(): string {
     const next = c.lessons.find((l) => !l.done);
     lines.push(`Her course "${c.name}": ${done} of ${c.lessons.length} lessons finished, ${mins} min watched${next ? `, next: "${next.name}" (${Math.round(next.watched / 60)} of ${Math.round(next.length / 60) || "?"} min watched)` : ""}.`);
   }
+  const saved = s.activeId ? s.resume?.[s.activeId] : undefined;
+  if (saved && !s.playing) lines.push(`Saved in this chat to watch later: "${saved.name}", stopped at ${Math.floor(saved.at / 60)}:${String(Math.floor(saved.at % 60)).padStart(2, "0")}. media_resume plays it on from there.`);
   if (s.playing) lines.push(`Playing on her screen now: "${s.playing.queue?.[s.mediaAt]?.name ?? s.playing.name}" (${s.playing.type === "youtube" ? "YouTube video" : s.playing.type}). Do not start it again; stop_media closes it.`);
   if (s.live) lines.push(`Live voice: ${s.liveSmall || s.playing ? "folded to the small bar at the top" : "full screen"}.`);
   const chats = listed();
@@ -145,9 +147,10 @@ export function runApp(action: string, value = "") {
     case "show_live":
       if (!s.live) return s.setLive(true);
       return s.setLiveSmall(false);
-    case "stop_media":
+    case "stop_media": // closing it in the middle keeps her place, like media_save
       forget();
-      return s.setPlaying(null);
+      if (!s.playing) return;
+      return void window.dispatchEvent(new CustomEvent("jagora:media", { detail: "save" }));
     case "media_next":
       forget();
       return s.setMediaAt(s.mediaAt + 1);
@@ -158,6 +161,18 @@ export function runApp(action: string, value = "") {
     case "media_play":
       forget();
       return void window.dispatchEvent(new CustomEvent("jagora:media", { detail: action === "media_pause" ? "pause" : "play" }));
+    case "media_seek": // "-10" back 10 s, "+30" forward, "1:20" or "80" to that point; it plays on after (not forgotten)
+      return void window.dispatchEvent(new CustomEvent("jagora:media", { detail: `seek:${value}` }));
+    case "media_save": // pause it and keep her place in this chat, to watch later
+      forget();
+      return void window.dispatchEvent(new CustomEvent("jagora:media", { detail: "save" }));
+    case "media_resume": {
+      // the video she saved in this chat, from where she stopped
+      const r = s.activeId ? s.resume[s.activeId] : undefined;
+      if (!r) return;
+      s.setStartAt(Math.max(0, r.at - 3));
+      return s.setPlaying({ id: `resume-${Date.now()}`, kind: "media", name: r.name, url: r.url, type: r.type, size: 0, source: r.source });
+    }
     case "amina":
       return setAminaHidden(!on);
     case "my_details":
