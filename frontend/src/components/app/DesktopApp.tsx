@@ -137,7 +137,7 @@ export function DesktopApp() {
       const { action } = (e as CustomEvent<{ action: string }>).detail;
       if (action === "show_page") setPageHidden(false);
       else if (action === "hide_page" || action === "go_home") setPageHidden(true);
-      else if (action === "show_tabs" || action === "show_history") setSide(true);
+      else if (action === "show_tabs" || action === "show_history") (setSide(true), setPanel(true));
       else if (action === "hide_tabs" || action === "hide_history") setSide(false);
     };
     window.addEventListener("jagora:app", on);
@@ -241,7 +241,7 @@ export function DesktopApp() {
               <input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder={PLACEHOLDER[lang]} className="h-full min-w-0 flex-1 bg-transparent text-[14px] font-medium text-ink outline-none placeholder:text-ink-3" />
             </form>
           )}
-          <button className={`${tool} ${side ? "bg-ink text-paper hover:bg-ink" : ""}`} onClick={() => setSide((v) => !v)} aria-label="Your chats" title="Your chats" aria-pressed={side}>
+          <button className={`${tool} ${side ? "bg-ink text-paper hover:bg-ink" : ""}`} onClick={() => (setPanel(true), setSide((v) => !(v && panel)))} aria-label="Your chats" title="Your chats" aria-pressed={side && panel}>
             <List size={18} weight="bold" />
           </button>
           <button className={`${tool} ${panel ? "bg-accent-soft" : ""}`} onClick={() => setPanel((v) => !v)} aria-label={panel ? "Hide Jagora" : "Show Jagora"} title={panel ? "Hide Jagora" : "Show Jagora"} aria-pressed={panel}>
@@ -251,17 +251,41 @@ export function DesktopApp() {
         </div>
 
         <div className="flex min-h-0 flex-1">
-          {/* her chats, from the menu button */}
-          <motion.aside
+
+          {/* the page: the new tab or the live website */}
+          <main data-page-area className="relative min-w-0 flex-1 overflow-hidden">{showPage ? <PageView bar={false} /> : <StartPage onAsk={() => setPanel(true)} />}</main>
+
+          {/* Jagora, beside the page */}
+          <motion.section
             initial={false}
-            animate={{ width: side ? 268 : 0, opacity: side ? 1 : 0 }}
-            transition={{ type: "spring", stiffness: 320, damping: 34 }}
-            className="desk-glass-strong flex shrink-0 flex-col overflow-hidden border-r border-white/30 dark:border-white/5"
-            aria-hidden={!side}
+            animate={{ width: panel ? 384 : 0, opacity: panel ? 1 : 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 34 }}
+            className="desk-glass-strong flex shrink-0 flex-col overflow-hidden border-l border-white/30 dark:border-white/5"
+            aria-hidden={!panel}
           >
-            <div className="flex h-full w-[268px] flex-col p-3">
+            <div className="flex h-full w-[384px] flex-col">
+              <div className="flex items-center justify-end gap-1 px-3 pt-3 text-ink-2">
+                <button
+                  onClick={() => setSide((v) => !v)}
+                  className={`mr-auto grid h-8 w-8 place-items-center rounded-full ${side ? "bg-ink text-paper" : "hover:bg-black/5 dark:hover:bg-white/10"}`}
+                  aria-label="Your chats"
+                  title="Your chats"
+                  aria-pressed={side}
+                >
+                  <List size={16} weight="bold" />
+                </button>
+                <AminaToggle />
+                <DataSaverToggle />
+                <VoiceToggle />
+                <button onClick={() => setPanel(false)} className="grid h-8 w-8 place-items-center rounded-full hover:bg-black/5 dark:hover:bg-white/10" aria-label="Hide Jagora">
+                  <X size={15} weight="bold" />
+                </button>
+              </div>
+              {side ? (
+                /* her chats, in Jagora's own space: pick one and it opens here (like ChatGPT's menu) */
+            <div className="flex min-h-0 flex-1 flex-col px-3 pb-3">
               <button
-                onClick={() => (setActive(null), setPageHidden(true), setPanel(true))}
+                onClick={() => (setActive(null), setPageHidden(true), setSide(false))}
                 className="flex h-11 items-center gap-2 rounded-full bg-ink px-4 text-[15px] font-semibold text-paper transition active:scale-[.97]"
               >
                 <Plus size={17} weight="bold" /> {NEW_CHAT[lang]}
@@ -274,7 +298,7 @@ export function DesktopApp() {
                     key={x.id}
                     role="button"
                     tabIndex={0}
-                    onClick={() => (setActive(x.id), setPageHidden(false), setPanel(true))}
+                    onClick={() => (setActive(x.id), setPageHidden(false), setSide(false))}
                     className={`group flex items-center gap-2.5 rounded-[16px] p-2 transition ${x.id === task?.id ? "bg-white shadow-[0_1px_3px_rgba(0,0,0,.06)] dark:bg-white/10" : "hover:bg-black/[.04] dark:hover:bg-white/5"}`}
                   >
                     <TaskGlyph task={x} />
@@ -292,35 +316,17 @@ export function DesktopApp() {
                 ))}
               </div>
             </div>
-          </motion.aside>
-
-          {/* the page: the new tab or the live website */}
-          <main data-page-area className="relative min-w-0 flex-1 overflow-hidden">{showPage ? <PageView bar={false} /> : <StartPage onAsk={() => setPanel(true)} />}</main>
-
-          {/* Jagora, beside the page */}
-          <motion.section
-            initial={false}
-            animate={{ width: panel ? 384 : 0, opacity: panel ? 1 : 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 34 }}
-            className="desk-glass-strong flex shrink-0 flex-col overflow-hidden border-l border-white/30 dark:border-white/5"
-            aria-hidden={!panel}
-          >
-            <div className="flex h-full w-[384px] flex-col">
-              <div className="flex items-center justify-end gap-1 px-3 pt-3 text-ink-2">
-                <AminaToggle />
-                <DataSaverToggle />
-                <VoiceToggle />
-                <button onClick={() => setPanel(false)} className="grid h-8 w-8 place-items-center rounded-full hover:bg-black/5 dark:hover:bg-white/10" aria-label="Hide Jagora">
-                  <X size={15} weight="bold" />
-                </button>
-              </div>
-              <div className="-mt-6 flex flex-col items-center">
-                <TalkOrb size={showPage ? 104 : 140} />
-              </div>
-              <div data-chat-scroll className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pt-2">{task ? <Conversation task={task} /> : <Hello lang={lang} />}</div>
-              <div className="p-3">
-                <Composer />
-              </div>
+              ) : (
+                <>
+                  <div className="-mt-6 flex flex-col items-center">
+                    <TalkOrb size={showPage ? 104 : 140} />
+                  </div>
+                  <div data-chat-scroll className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pt-2">{task ? <Conversation task={task} /> : <Hello lang={lang} />}</div>
+                  <div className="p-3">
+                    <Composer />
+                  </div>
+                </>
+              )}
             </div>
           </motion.section>
         </div>
