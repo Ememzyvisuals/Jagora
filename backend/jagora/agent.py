@@ -183,8 +183,40 @@ class UserIO(Protocol):
     async def event(self, kind: str, data: dict) -> None: ...
 
 
-SECRET_FIELDS = ["account", "nin", "bvn", "otp", "pin", "password", "phone", "card", "other", "name", "email", "address", "text"]
-PLAIN_FIELDS = {"name", "email", "address", "text", "phone"}
+SECRET_FIELDS = ["account", "nin", "bvn", "otp", "pin", "password", "phone", "card", "other", "name", "email", "address", "text", "date"]
+PLAIN_FIELDS = {"name", "email", "address", "text", "phone", "date"}
+
+
+def to_iso(v: str) -> str:
+    """Her date as YYYY-MM-DD: the card's date box gives that already; typed dates (12/05/1995, 12-May-1995) too."""
+    v = v.strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+        return v
+    digits = re.sub(r"\D", "", v)
+    if len(digits) == 8 and digits == v.replace(" ", ""):  # typed with no slashes: 12051995 is 12 May 1995
+        d, mo, y = int(digits[:2]), int(digits[2:4]), digits[4:]
+        if 1 <= mo <= 12 and 1 <= d <= 31 and y[:2] in ("19", "20"):
+            return f"{y}-{mo:02d}-{d:02d}"
+        if digits[:2] in ("19", "20"):  # 19950512
+            return f"{digits[:4]}-{digits[4:6]}-{digits[6:]}"
+    months = {m: i + 1 for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"])}
+    m = re.fullmatch(r"(\d{1,2})[\s/.-]+([A-Za-z]{3,}|\d{1,2})[\s/.,-]+(\d{4})", v)
+    if not m:
+        return ""
+    d, mo, y = m.groups()
+    mo = months.get(mo[:3].lower(), 0) if mo.isalpha() else int(mo)
+    return f"{y}-{int(mo):02d}-{int(d):02d}" if 1 <= mo <= 12 and 1 <= int(d) <= 31 else ""
+
+
+def local_phone(v: str, el) -> str:
+    """A phone box that already shows +234 in front: her number without 234 or the first 0 (the page adds it)."""
+    hint = f"{getattr(el, 'label', '')} {getattr(el, 'placeholder', '')} {getattr(el, 'value', '')}"
+    digits = re.sub(r"\D", "", v)
+    if "234" in hint or "+234" in hint:
+        if digits.startswith("234"):
+            digits = digits[3:]
+        return digits.lstrip("0") if len(digits) == 11 else digits
+    return v
 NEVER_KEEP = {"otp", "pin", "card", "cvv", "password"}  # never saved anywhere from a form card
 PROFILE_FIELDS = ["full_name", "first_name", "last_name", "phone", "email", "date_of_birth", "gender", "state", "address"]
 EL = {"type": "integer", "description": "the element's number on the latest page"}
@@ -545,7 +577,7 @@ HOW YOU WORK
 - If you cannot tell which thing the user means on a page, use ask_point so the user taps it. For things without a number (maps, charts, canvas, images), use click_at with screenshot pixels. Use hover for hover menus, drag for sliders and drop zones, upload_file for their files, set_date for date boxes.
 - One-time codes: ask them whether to read it from their email (open their mail in a new tab, then fetch_code) or whether the user will type it (ask_private). Captchas and "are you human" checks: hand_over so the user does it on the live page.
 - Exact spellings: a name, email address, home address or username you do not already have from their saved details is never typed from what you heard (voice gets spellings wrong). Use ask_private with field name, email, address or text, and a label that guides them ("Type your full name as it is on your WAEC certificate").
-- She never has to type on the live page: whatever only she knows goes in a box in the chat. Two or more at once (passenger details, a sign-up form): ONE ask_form card; one thing: ask_private. Give profile_field for her details so the card can fill them from what she saved and offer to save new ones. Her saved details you already have go straight in with fill_form (profile_field). The page itself is only for things she must do there (a captcha, a picture check).
+- She never has to type on the live page: whatever only she knows goes in a box in the chat. Never ask her HOW she wants to fill a form: send the card. Dates (date of birth, travel date) are field "date" (profile_field date_of_birth for her birthday): the card shows a calendar and the date goes into the page's date box properly. Two or more at once (passenger details, a sign-up form): ONE ask_form card; one thing: ask_private. Give profile_field for her details so the card can fill them from what she saved and offer to save new ones. Her saved details you already have go straight in with fill_form (profile_field). The page itself is only for things she must do there (a captcha, a picture check).
 - Sign-ins: if the site already shows her signed in (her sign-ins are kept between sessions), carry on. If it asks her to sign in, use use_saved_login when she saved one; otherwise email or phone and password in ONE ask_form card, and any code or "verify it's you" number with ask_private (fetch_code when it went to her email). Never make her type on the live page.
 - Money: the moment a page shows what to pay, call keep_payment (waiting) and show_evidence of it, BEFORE she leaves to pay. She may leave Jagora for her bank app; the session and this page are kept for her while she pays. When she says she has paid: keep_payment (paid_by_her), press the page's "I have paid" or check the booking, then keep_payment again with confirmed (and the reference) or failed. If "Open payments in this chat" are listed, check those first: open the site, find the booking or payment status, and tell her.
 - After a booking, payment or registration, always get the proof for her: the ticket, slip, receipt or confirmation, with download (its Download button, or page_as_pdf for a confirmation page), and say what she must bring or show.
@@ -832,12 +864,19 @@ class Agent:
                     break
                 if self.steering and not self.steering.empty():
                     break  # the user said something: listen before the next action
-            if talk_only >= 2:
+            if talk_only >= 2 and (self._changed_any or self._doing_task()) and talk_only < 4:
+                # in the middle of a task (a form, a booking): talking is not doing. Never end here, on a "I will fix
+                # it now": do that next step
+                self.history.append("(STOP TALKING. You are in the middle of her task. Do the next real step on the page "
+                                    "now: the thing you just said you would do. Only finish when the task is done or you "
+                                    "truly need her.)")
+            elif talk_only >= 2:
                 log.info("talk loop: ending the task after %d talking turns", talk_only)
                 self._record("talk_loop", {"turn": turns})
                 return await self._done(True, self._said_last or "told them", turns, t0)
             if talk_only == 1:
-                self.history.append("(you have told them. Do not say it again: finish now, or take the next real step)")
+                self.history.append("(you have told them. Do not say it again: take the next real step now"
+                                    + (")" if (self._changed_any or self._doing_task()) else ", or finish)"))
         await self.io.say(_turns_out(self.lang))
         return await self._done(False, "stopped: too many steps", turns, t0)
 
@@ -1117,6 +1156,8 @@ class Agent:
                 if self._said_last and _same_news(self._said_last, msg) and not self._heard_since_told:
                     return ("not said: you told them nearly this already. Say only what is new, in one short sentence, "
                             "or finish"), False, None
+                if not msg.strip():
+                    return "not said: the message was empty. Do the next real step instead.", False, None
                 if self._told_since_act and not self._heard_since_told:
                     # one reply per thing found: nothing new happened since she was told, so nothing new is said
                     return ("not said: you already told them and nothing new happened since. Do not say it again in other "
@@ -1649,7 +1690,7 @@ class Agent:
         s = self._here()
         if not s or s in self._share_ok:
             return True
-        if guard.check(s).official or self._she_named(s) or s in {v.get("site") for v in (self._vault_names or []) if isinstance(v, dict)}:
+        if self._official_here() or guard.check(s).official or self._she_named(s) or s in {v.get("site") for v in (self._vault_names or []) if isinstance(v, dict)}:
             self._share_ok.add(s)
             return True
         yes = await self.io.confirm(SAY["share"].get(self.lang, SAY["share"]["en"]).format(w=what, s=s), f"their {what} would go to {s}")
@@ -1678,7 +1719,7 @@ class Agent:
         value, save = (got.get("value", ""), bool(got.get("save"))) if isinstance(got, dict) else (got, False)
         if not value:
             return "the user skipped it; ask what the user wants to do", True, None
-        n = await self.browser.fill_secret(el.id, value)
+        n = await self._put(el, field, value)
         saved = ""
         pf = str(a.get("profile_field") or "")
         if save and field in PLAIN_FIELDS and pf in PROFILE_FIELDS:
@@ -1691,7 +1732,25 @@ class Agent:
             self._vault_names = None
         value = ""  # noqa: F841  (dropped: never logged, spoken or sent to the model)
         self._trail_add("private", f'the user filled "{str(a.get("label") or field)[:50]}" on {self._here()} privately')
-        return f"filled by them ({n} characters in the box){saved}", False, None
+        return f"filled by them (the box now holds {n}){saved}" if field == "date" else f"filled by them ({n} in the box){saved}", False, None
+
+    async def _put(self, el, field: str, value: str) -> str:
+        """One value she gave into its box on the page: dates through the date setter (pickers), phones without a
+        +234 the page already shows, the rest typed as given. Returns what the box holds now (for her check)."""
+        if field == "date" or fields.field_kind(el) == "date" or re.search(r"date|birth|dob", f"{el.label} {getattr(el, 'placeholder', '')}", re.I):
+            iso = to_iso(value)
+            if iso:
+                return await self.browser.set_date(el.id, iso)
+        if field == "phone":
+            value = local_phone(value, el)
+        n = await self.browser.fill_secret(el.id, value)
+        return f"{n} characters"
+
+    def _official_here(self) -> bool:
+        """The page she is on is an official one (the whole address, not only its domain: nrc.gsds.ng is NRC's)."""
+        b = self.browser
+        url = (b.pdf.url if b and b.pdf else (b.page.url if b and b.page else "")) or ""
+        return bool(url) and guard.check(url).official
 
     def _already_playing(self, how: str, items: list[dict]) -> str:
         """The same videos sent again in this task restart her player from the beginning: refused, with what to do."""
@@ -1736,7 +1795,7 @@ class Agent:
         s = self._here()
         for el, f in found:
             field = str(f.get("field", "other")).lower()
-            if (field in ("card", "cvv") or fields.field_kind(el) in ("card", "cvv")) and s and not guard.check(s).official \
+            if (field in ("card", "cvv") or fields.field_kind(el) in ("card", "cvv")) and s and not self._official_here() \
                     and s not in PAYMENT_SITES and not self._she_named(s):
                 return await self._private(el, f)  # the card guard says why it stops
         if not await self._may_share(str(a.get("title") or "details")):
@@ -1762,12 +1821,12 @@ class Agent:
             if not value:
                 report.append(f'"{label}": left empty by them')
                 continue
+            field = str(f.get("field", "other")).lower()
             try:
-                n = await self.browser.fill_secret(el.id, value)
+                n = await self._put(el, field, value)
             except Exception as e:  # noqa: BLE001
                 report.append(f'"{label}": could not be filled ({str(e)[:80]})')
                 continue
-            field = str(f.get("field", "other")).lower()
             pf = str(f.get("profile_field") or "")
             if save and field in PLAIN_FIELDS and pf in PROFILE_FIELDS:
                 self.profile[pf] = value
@@ -1776,7 +1835,7 @@ class Agent:
                 await self.vault.save(label, url, field, value)
                 vaulted.append(label)
                 self._vault_names = None
-            report.append(f'"{label}": filled ({n} characters)')
+            report.append(f'"{label}": the box now shows {n}' if field == "date" else f'"{label}": filled ({n})')
         values = {}  # noqa: F841  (dropped: never logged, spoken or sent to the model)
         self._trail_add("private", f'the user filled {len(found)} boxes on {self._here()} in one card')
         extra = (f"; saved to her details: {', '.join(kept)}" if kept else "") + \

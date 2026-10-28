@@ -315,6 +315,16 @@ DESKTOP_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like G
               "Chrome/129.0.0.0 Safari/537.36")
 
 
+# set a box's value through the browser's own setter and tell the page (React, Vue and date pickers listen for these)
+SET_VALUE_JS = """(e, v) => {
+  const proto = e instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const set = Object.getOwnPropertyDescriptor(proto, 'value').set;
+  set.call(e, v);
+  e.dispatchEvent(new Event('input', {bubbles: true}));
+  e.dispatchEvent(new Event('change', {bubbles: true}));
+  e.dispatchEvent(new Event('blur', {bubbles: true}));
+}"""
+
 class Browser:
     """One browser (several tabs) per user session. `device` makes pages look the way they would on her screen:
     {"mobile": true, "w": 390, "h": 844} gives the site's phone layout, otherwise a desktop window."""
@@ -841,14 +851,35 @@ class Browser:
             await loc.fill(iso, timeout=5000)
             return iso
         ph = info["ph"].lower()
-        text = f"{d}/{m}/{y}" if ph.startswith("dd") else f"{m}/{d}/{y}" if ph.startswith("mm") else f"{d}/{m}/{y}" if "/" in ph else iso
-        if info["ro"]:
-            raise ActionError("this date box only opens a calendar; pick the day in the calendar with click")
-        await loc.click(timeout=5000)
-        await loc.fill("", timeout=5000)
-        await loc.press_sequentially(text, delay=30)
-        await self._need_page().keyboard.press("Escape")
-        return text
+        mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][int(m) - 1]
+        sep = "-" if "-" in ph else "." if "." in ph else "/"
+        first = (f"{d}{sep}{mon}{sep}{y}" if "mmm" in ph else f"{d}{sep}{m}{sep}{y}" if ph.startswith("dd")
+                 else f"{m}{sep}{d}{sep}{y}" if ph.startswith("mm") else f"{y}-{m}-{d}" if ph.startswith("yy") else f"{d}/{m}/{y}")
+        # date pickers differ: try the hinted way first, then the other usual ones, and keep the one the box really
+        # shows with the right year and day (a picker that read "12051995" as 1020 must never be left like that)
+        tries = list(dict.fromkeys([first, f"{d}/{m}/{y}", f"{d}-{mon}-{y}", f"{y}-{m}-{d}", f"{m}/{d}/{y}", f"{d}.{m}.{y}"]))
+
+        def good(v: str) -> bool:
+            v = v or ""
+            return y in v and (str(int(d)) in v)
+
+        for text in tries:
+            if not info["ro"]:
+                await loc.click(timeout=5000)
+                await loc.fill("", timeout=5000)
+                await loc.press_sequentially(text, delay=30)
+                await self._need_page().keyboard.press("Escape")
+            else:
+                # a box that only opens a calendar: set its value the way the page's own code would see it
+                await loc.evaluate(SET_VALUE_JS, text)
+            got = await loc.evaluate("e => e.value || ''")
+            if good(got):
+                return got
+            await loc.evaluate(SET_VALUE_JS, text)
+            got = await loc.evaluate("e => e.value || ''")
+            if good(got):
+                return got
+        raise ActionError("this date box would not take the date; open its calendar and pick the year, month and day with click")
 
     async def element_at(self, x: float, y: float) -> dict:
         """What is at this spot of the page (page pixels): the nearest thing she can use, its number if it has one,

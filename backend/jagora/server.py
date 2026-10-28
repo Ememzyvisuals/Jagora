@@ -546,6 +546,13 @@ REPEAT_ASK = re.compile(r"\b(repeat( (that|it|yourself))?|say (that|it) again|co
 AGAIN = {"en": "Sorry, I didn't catch that. Please say it again.", "pcm": "Sorry, I no catch am. Abeg talk am again.",
          "yo": "Ẹ má bínú, mi ò gbọ́ ọ dáadáa. Ẹ jọ̀ọ́ ẹ tún sọ ọ́.", "ha": "Yi haƙuri, ban ji ba. Don Allah ka sake faɗa.",
          "ig": "Ndo, anụghị m ya. Biko kwughachi ya."}
+AGAIN_YES = {
+    "en": "Sorry, I did not catch a yes or no. Should I go ahead? You can also tap Yes or No.",
+    "pcm": "Sorry, I no hear yes or no. Make I continue? You fit also tap Yes or No.",
+    "yo": "Ẹ má bínú, mi ò gbọ́ bẹ́ẹ̀ ni tàbí bẹ́ẹ̀ kọ́. Ṣé kí n tẹ̀síwájú? Ẹ tún lè tẹ Bẹ́ẹ̀ ni tàbí Bẹ́ẹ̀ kọ́.",
+    "ha": "Yi haƙuri, ban ji e ko a'a ba. In ci gaba? Kana iya taɓa E ko A'a.",
+    "ig": "Ndo, anụghị m ee ma ọ bụ mba. Ka m gaa n'ihu? Ị nwekwara ike ịpị Ee ma ọ bụ Mba.",
+}
 LIST_DONE = {
     "en": "That was the last one. You have watched all {n}. Which one did you like best?",
     "pcm": "Na the last one be that. You don watch all {n}. Which one you like pass?",
@@ -662,6 +669,8 @@ class Session:
         self.translate = False
         self.runs: dict[str, Run] = {}
         self.money: dict[str, bool] = {}  # chat -> a payment is in progress there (the session is held for her)
+        self._yes_no_again: set[str] = set()  # yes/no questions already asked a second time
+        self._she_spoke_at = 0.0  # when she last started talking (her LiveKit voice)
         self.browser: Browser | None = None
         self.active_task = ""
         self.since = time.time()
@@ -1044,12 +1053,16 @@ class Session:
                         continue  # it queues after what it is saying now
                     # Jagora's voice on LiveKit says it. If it has not started within a few seconds (it failed on
                     # this text, or the voice is stuck), the reply is spoken the other way, so she always hears it
+                    sent_at = time.time()
                     try:
                         await asyncio.wait_for(self._voice_spoke.wait(), VOICE_START_WAIT)
                         continue
                     except asyncio.TimeoutError:
-                        if gen != self._gen:
-                            continue  # she spoke meanwhile: this reply is out of date
+                        if gen != self._gen or self._she_spoke_at > sent_at:
+                            # she started talking meanwhile (that is why the voice held it back): this reply is out
+                            # of date, so it stays written in the chat and is not read out late over her
+                            trace.write(self.user_id, "late_reply_not_spoken", text=text[:120])
+                            continue
                         trace.write(self.user_id, "voice_did_not_speak", note="spoken through the app instead", text=text[:200])
                         await self._to_voice({"type": "hush"})
             self._speaking = (task, text, lang)
@@ -1435,6 +1448,7 @@ class Session:
             # it, so nothing is said (an "I'm here" here talked over her and over real answers)
             pass
         elif kind == "user" and ev.get("state") == "speaking":
+            self._she_spoke_at = time.time()
             self._wait_more()  # she started again: her next words join this message
             await self.send({"type": "orb", "state": "listening"})
             await self.send({"type": "sound", "do": "duck"})  # anything playing on her screen goes quiet at once
@@ -1676,6 +1690,12 @@ class Session:
                     return
                 if YES.search(text) or NO.search(text):
                     self._resolve(task, mid_, "yes" if YES.search(text) and not NO.search(text) else "no")
+                    return
+                if not is_noise(text) and mid_ not in self._yes_no_again and len(text.split()) < 12:
+                    # words that are neither yes nor no (often the room, the TV, or a misheard word): asked once more
+                    # instead of being taken as a no, which would stop her task for nothing
+                    self._yes_no_again.add(mid_)
+                    await self.agent_says(task, AGAIN_YES.get(self.lang, AGAIN_YES["en"]))
                     return
                 if not is_noise(text):
                     # she said something else instead of yes or no: that is not a yes. The question closes and

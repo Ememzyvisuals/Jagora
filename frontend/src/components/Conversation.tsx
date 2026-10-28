@@ -390,7 +390,7 @@ function SecretAsk({ m, task }: { m: Extract<Msg, { kind: "secret" }>; task: Tas
           ref={box}
           value={v}
           onChange={(e) => setV(m.digits ? e.target.value.replace(/\D/g, "").slice(0, m.digits) : e.target.value)}
-          type={plain ? (m.field === "email" ? "email" : "text") : see ? "text" : "password"}
+          type={m.field === "date" ? "date" : plain ? (m.field === "email" ? "email" : "text") : see ? "text" : "password"}
           inputMode={numeric ? "numeric" : m.field === "email" ? "email" : "text"}
           autoComplete={m.field === "otp" ? "one-time-code" : m.field === "name" ? "name" : m.field === "email" ? "email" : m.field === "address" ? "street-address" : "off"}
           autoCapitalize={m.field === "name" || m.field === "address" ? "words" : "off"}
@@ -506,7 +506,7 @@ function FormAsk({ m, task }: { m: Extract<Msg, { kind: "form" }>; task: Task })
                   ref={i === 0 ? first : undefined}
                   value={v}
                   onChange={(e) => setVals((x) => ({ ...x, [f.key]: f.digits ? e.target.value.replace(/\D/g, "").slice(0, f.digits) : e.target.value }))}
-                  type={plain ? (f.field === "email" ? "email" : f.field === "phone" ? "tel" : "text") : see ? "text" : "password"}
+                  type={f.field === "date" ? "date" : plain ? (f.field === "email" ? "email" : f.field === "phone" ? "tel" : "text") : see ? "text" : "password"}
                   inputMode={numeric ? "numeric" : f.field === "email" ? "email" : "text"}
                   autoComplete={f.field === "otp" ? "one-time-code" : f.field === "name" ? "name" : f.field === "email" ? "email" : f.field === "phone" ? "tel" : f.field === "address" ? "street-address" : "off"}
                   autoCapitalize={f.field === "name" || f.field === "address" ? "words" : "off"}

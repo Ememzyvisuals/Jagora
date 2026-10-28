@@ -32,9 +32,9 @@ export type DocBlock =
 export type JDoc = { title: string; subtitle?: string; kind: string; summary: string[]; blocks: DocBlock[]; sources: { title: string; url: string }[]; created: number; lang: string };
 /** one box in a form card: she fills several at once in the chat, each goes into its own box on the page */
 export type FormField = { key: string; label: string; field: SecretField; digits?: number; profile_field?: keyof Profile };
-export type SecretField = "account" | "nin" | "bvn" | "otp" | "pin" | "password" | "phone" | "card" | "other" | "name" | "email" | "address" | "text";
+export type SecretField = "account" | "nin" | "bvn" | "otp" | "pin" | "password" | "phone" | "card" | "other" | "name" | "email" | "address" | "text" | "date";
 /** what she types herself because it must be spelled exactly (not private: shown as she types) */
-export const PLAIN_FIELDS = new Set<SecretField>(["name", "email", "address", "text", "phone"]);
+export const PLAIN_FIELDS = new Set<SecretField>(["name", "email", "address", "text", "phone", "date"]);
 export type Attachment = { kind: "image" | "doc" | "link"; name: string; url?: string };
 
 export type Msg =
