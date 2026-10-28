@@ -129,7 +129,7 @@ body {
 }
 @media (orientation: landscape) and (min-width: 700px) {
   :root {
-    --sky: url(/sky/beach-desktop.webp);
+    --sky: url(/sky/sky-phone.webp);
   }
 }
 [data-theme="dark"] {
@@ -138,7 +138,7 @@ body {
 }
 @media (orientation: landscape) and (min-width: 700px) {
   [data-theme="dark"] {
-    --sky: url(/sky/dusk-desktop.webp);
+    --sky: url(/sky/night-phone.webp);
   }
 }
 .sky-bg {
