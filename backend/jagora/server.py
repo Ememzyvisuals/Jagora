@@ -189,7 +189,7 @@ async def me(request: Request):
 
 
 # ---- her settings follow her account: saved details, language and mode, sealed like her saved logins ----------------
-SETTING_KEYS = {"lang", "mode", "profile"}
+SETTING_KEYS = {"lang", "mode", "profile", "avatar"}
 
 
 @app.get("/me/settings")
@@ -221,8 +221,8 @@ async def put_settings(request: Request):
     clean: dict = {k: v for k, v in body.items() if k in SETTING_KEYS}
     if isinstance(clean.get("profile"), dict):
         clean["profile"] = {str(k)[:40]: str(v)[:300] for k, v in clean["profile"].items() if isinstance(v, (str, int, float))}
-    for k in ("lang", "mode"):
-        if k in clean and not isinstance(clean[k], str):
+    for k in ("lang", "mode", "avatar"):
+        if k in clean and (not isinstance(clean[k], str) or len(clean[k]) > 16):
             clean.pop(k)
     text = json.dumps({**clean, "updated": time.time()}, ensure_ascii=False)
     if len(text) > 8000:

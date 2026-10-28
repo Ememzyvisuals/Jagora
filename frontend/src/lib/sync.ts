@@ -17,14 +17,14 @@ function pushSettings() {
   void fetch(`${API}/me/settings`, {
     method: "PUT",
     headers: { ...auth(), "Content-Type": "application/json" },
-    body: JSON.stringify({ profile: s.profile, lang: s.lang, mode: s.mode }),
+    body: JSON.stringify({ profile: s.profile, lang: s.lang, mode: s.mode, avatar: s.avatar }),
   }).catch(() => {});
 }
 
 async function pullSettings() {
   const r = await fetch(`${API}/me/settings`, { headers: auth() });
   if (!r.ok) return;
-  const { settings } = (await r.json()) as { settings: { profile?: Record<string, string>; lang?: string; mode?: string } | null };
+  const { settings } = (await r.json()) as { settings: { profile?: Record<string, string>; lang?: string; mode?: string; avatar?: string } | null };
   if (!settings) return pushSettings(); // first device for this account: this one's settings become hers everywhere
   const s = useApp.getState();
   applying = true;
@@ -32,6 +32,7 @@ async function pullSettings() {
     if (settings.profile) s.setProfile(settings.profile as never);
     if (settings.lang) s.setLang(settings.lang as never);
     if (settings.mode) s.setMode(settings.mode as never);
+    if (typeof settings.avatar === "string") s.setAvatar(settings.avatar);
   } finally {
     applying = false;
   }
@@ -66,7 +67,7 @@ export async function syncAccount() {
     listening = true;
     useApp.subscribe((st, prev) => {
       if (applying) return;
-      if (st.profile !== prev.profile || st.lang !== prev.lang || st.mode !== prev.mode) {
+      if (st.profile !== prev.profile || st.lang !== prev.lang || st.mode !== prev.mode || st.avatar !== prev.avatar) {
         clearTimeout(timer);
         timer = setTimeout(pushSettings, 1500);
       }

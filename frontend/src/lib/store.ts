@@ -94,6 +94,9 @@ type State = {
   mode: Mode;
   profile: Profile;
   onboarded: boolean;
+  /** her avatar (lib/avatar.ts): "" until she picks one herself */
+  avatar: string;
+  setAvatar: (id: string) => void;
   tasks: Task[];
   activeId: string | null;
   /** how often she opened each shortcut or site, so the new tab shows her own top sites first */
@@ -171,6 +174,8 @@ export const useApp = create<State>()(
       mode: "do",
       profile: EMPTY_PROFILE,
       onboarded: false,
+      avatar: "",
+      setAvatar: (avatar) => set({ avatar }),
       tasks: [],
       activeId: null,
       visits: {},
@@ -248,7 +253,7 @@ export const useApp = create<State>()(
           return sessionStorage;
         }
       }),
-      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, starters: s.starters, muted: s.muted, translatePages: s.translatePages, dataSaver: s.dataSaver }),
+      partialize: (s) => ({ lang: s.lang, mode: s.mode, profile: s.profile, onboarded: s.onboarded, avatar: s.avatar, tasks: s.tasks.slice(0, 12).map(lean), visits: s.visits, starters: s.starters, muted: s.muted, translatePages: s.translatePages, dataSaver: s.dataSaver }),
     },
   ),
 );

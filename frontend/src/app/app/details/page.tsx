@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { IconLock } from "@/components/icons";
+import { Avatar, AvatarPicker } from "@/components/Avatar";
 import { LanguagePicker } from "@/components/app/Shared";
 import { NG_STATES, isEmail, isPhone, phoneProblem, readablePhone, spokenPhone } from "@/lib/fields";
 import { useHydrated } from "@/lib/hooks";
@@ -28,6 +28,7 @@ const TITLE: Record<Lang, [string, string]> = {
   ha: ["Bayanaina", "Jagora tana amfani da su don cike fom, sai bayan ka ce eh. Ba sa barin wannan wayar sai fom ya bukace su."],
   ig: ["Nkọwa m", "Jagora na-eji ha ejuputa fọm, naanị mgbe ị kwere. Ha anaghị ahapụ ekwentị a ma ọ bụghị na fọm chọrọ ha."],
 };
+const CHANGE: Record<Lang, string> = { en: "Change avatar", pcm: "Change avatar", yo: "Yí àwòrán padà", ha: "Canza hoto", ig: "Gbanwee onyinyo" };
 const NOTSET: Record<Lang, string> = { en: "Not added", pcm: "Never add", yo: "Kò sí", ha: "Ba a saka ba", ig: "Etinyeghị" };
 const SAVE: Record<Lang, string> = { en: "Save", pcm: "Save", yo: "Fi pamọ́", ha: "Ajiye", ig: "Chekwaa" };
 
@@ -39,6 +40,7 @@ export default function Details() {
   const setProfile = useApp((s) => s.setProfile);
   const setOnboarded = useApp((s) => s.setOnboarded);
   const [editing, setEditing] = useState<keyof Profile | null>(null);
+  const [picking, setPicking] = useState(false);
 
   if (!ready) return <div className="h-dvh bg-mist" />;
 
@@ -64,7 +66,14 @@ export default function Details() {
         </div>
 
         <div className="mt-8 flex items-start gap-4 px-1">
-          <IconLock size={52} className="shrink-0" />
+          <button onClick={() => setPicking(true)} className="group relative shrink-0 rounded-full transition active:scale-95" aria-label={CHANGE[lang]}>
+            <span className="grid h-[76px] w-[76px] place-items-center rounded-full bg-white/80 shadow-[0_10px_24px_-14px_rgba(10,30,80,.55)] dark:bg-white/10">
+              <Avatar size={62} />
+            </span>
+            <span className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full bg-ink text-paper shadow">
+              <PencilSimple size={13} weight="bold" />
+            </span>
+          </button>
           <div>
             <h1 className="text-[32px] font-semibold leading-tight text-ink">{TITLE[lang][0]}</h1>
             <p className="mt-1.5 text-[15.5px] leading-snug text-ink-2">{TITLE[lang][1]}</p>
@@ -118,6 +127,7 @@ export default function Details() {
           <Trash size={17} /> Remove my details from this phone
         </button>
       </div>
+      <AvatarPicker open={picking} onClose={() => setPicking(false)} />
     </div>
   );
 }

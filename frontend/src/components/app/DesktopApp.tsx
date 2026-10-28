@@ -60,7 +60,8 @@ import { Mark } from "../Brand";
 import { toggleTheme, useTheme } from "@/lib/theme";
 import { PageView } from "../PageView";
 import { CLOSE_L } from "./DiscoverStack";
-import { AppIcon, CARDS, DISCOVER, THEME_L, VoiceBars, useNews } from "./MobileHome";
+import { AppIcon, CARDS, CHOOSE_AV, DISCOVER, THEME_L, VoiceBars, useNews } from "./MobileHome";
+import { Avatar, AvatarPicker } from "../Avatar";
 
 type L = Record<Lang, string>;
 const TAGLINE: L = {
@@ -342,11 +343,12 @@ const siteOf = (u: string) => (u.startsWith("/practice/") ? "skillsfair.ng" : u.
 /** Her profile: details, language, theme, Page Wars, About. */
 function DeskProfile({ lang, setLang, langOpen, setLangOpen, theme, initial }: { lang: Lang; setLang: (l: Lang) => void; langOpen: boolean; setLangOpen: (v: boolean) => void; theme: string; initial: string }) {
   const [open, setOpen] = useState(false);
+  const [pick, setPick] = useState(false);
   const item = "flex w-full items-center gap-2.5 rounded-[14px] px-3 py-2.5 text-left text-[14.5px] font-semibold text-ink hover:bg-black/5 dark:hover:bg-white/10";
   return (
     <div className="relative ml-1">
-      <button onClick={() => setOpen((v) => !v)} className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-[#7fb2ff] to-[#1d63ed] text-[14px] font-bold text-snow" aria-label="My details and settings" aria-expanded={open}>
-        {initial}
+      <button onClick={() => setOpen((v) => !v)} className="grid h-10 w-10 place-items-center rounded-full bg-black/[.04] transition hover:bg-black/[.08] active:scale-95 dark:bg-white/10" aria-label="My details and settings" aria-expanded={open} title={initial}>
+        <Avatar size={32} />
       </button>
       {open && (
         <>
@@ -355,6 +357,9 @@ function DeskProfile({ lang, setLang, langOpen, setLangOpen, theme, initial }: {
             <Link href="/app/details" className={item}>
               <PersonSimple size={18} /> My details
             </Link>
+            <button onClick={() => (setPick(true), setOpen(false))} className={item}>
+              <Avatar size={20} /> {CHOOSE_AV[lang]}
+            </button>
             <button onClick={() => setLangOpen(!langOpen)} className={item}>
               <svg viewBox="0 0 30 30" width="18" height="18" className="rounded-full" aria-hidden="true">
                 <rect width="10" height="30" fill="#0a8a4f" />
@@ -385,6 +390,7 @@ function DeskProfile({ lang, setLang, langOpen, setLangOpen, theme, initial }: {
           </div>
         </>
       )}
+      <AvatarPicker open={pick} onClose={() => setPick(false)} />
     </div>
   );
 }

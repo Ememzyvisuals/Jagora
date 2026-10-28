@@ -35,6 +35,7 @@ import { Starters, openSite, useTopSites } from "./NewTabBits";
 import { startPageWars } from "../PageWars";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
+import { Avatar, AvatarPicker } from "../Avatar";
 import { remoteInput } from "@/lib/engine/remote";
 import { useEffect, useState, type ComponentType } from "react";
 import { ask, live, quick } from "@/lib/engine";
@@ -457,6 +458,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
 }
 
 const TRY: L = { en: "Try Jagora", pcm: "Try Jagora", yo: "Ẹ dán Jagora wò", ha: "Gwada Jagora", ig: "Nwalee Jagora" };
+export const CHOOSE_AV: L = { en: "Choose avatar", pcm: "Pick avatar", yo: "Yan àwòrán", ha: "Zaɓi hoto", ig: "Họrọ onyinyo" };
 const SEE_ALL: L = { en: "See all", pcm: "See all", yo: "Wo gbogbo rẹ̀", ha: "Duba duka", ig: "Lee ha niile" };
 
 /** One story in the feed, shaped like the reference: picture on the left, bold title, then source and time. */
@@ -491,12 +493,13 @@ function ProfileMenu({ canFull }: { canFull: boolean }) {
   const lang = useApp((s) => s.lang);
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  const [pick, setPick] = useState(false);
   const item = "flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-left text-[15.5px] font-bold text-ink hover:bg-black/5 dark:hover:bg-white/10";
   return (
     <div className="relative">
       <Glass radius={22} bezel={12} refraction={30} pressable className="cursor-pointer" onClick={() => setOpen((v) => !v)}>
-        <span className="grid h-11 w-11 place-items-center text-ink" role="button" aria-label="My details and settings" aria-expanded={open}>
-          <User size={20} />
+        <span className="grid h-11 w-11 place-items-center" role="button" aria-label="My details and settings" aria-expanded={open}>
+          <Avatar size={34} />
         </span>
       </Glass>
       <AnimatePresence>
@@ -513,6 +516,9 @@ function ProfileMenu({ canFull }: { canFull: boolean }) {
               <Link href="/app/details" className={item}>
                 <User size={19} /> My details
               </Link>
+              <button onClick={() => (setPick(true), setOpen(false))} className={item}>
+                <Avatar size={20} /> {CHOOSE_AV[lang]}
+              </button>
               <button onClick={() => (toggleTheme(), setOpen(false))} className={item}>
                 {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />} {theme === "dark" ? THEME_L.light[lang] : THEME_L.dark[lang]}
               </button>
@@ -531,6 +537,7 @@ function ProfileMenu({ canFull }: { canFull: boolean }) {
           </>
         )}
       </AnimatePresence>
+      <AvatarPicker open={pick} onClose={() => setPick(false)} />
     </div>
   );
 }
