@@ -24,8 +24,7 @@ export function useSkySrc() {
     return () => m.removeEventListener("change", on);
   }, []);
   // big white clouds by day, the deep blue sky at night (on computers it shows around the browser window)
-  void wide;
-  return theme === "dark" ? "/sky/night-phone.webp" : "/sky/sky-phone.webp";
+  return theme === "dark" ? (wide ? "/sky/night-desktop.webp" : "/sky/night-phone.webp") : wide ? "/sky/sky-desktop.webp" : "/sky/sky-phone.webp";
 }
 
 export function Backdrop(_: { level?: MutableRefObject<number> }) {

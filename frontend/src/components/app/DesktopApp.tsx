@@ -451,7 +451,7 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
         {/* the sky card */}
         <section
           className="relative overflow-hidden rounded-[28px] px-8 pb-8 pt-4 shadow-[0_30px_60px_-34px_rgba(10,40,110,.65)]"
-          style={{ background: `url(${theme === "dark" ? "/sky/night-phone.webp" : "/sky/sky-phone.webp"}) center ${theme === "dark" ? "62%" : "18%"} / cover, linear-gradient(180deg,#2f8fe6,#7cc0f2)` }}
+          style={{ background: `url(${theme === "dark" ? "/sky/night-desktop.webp" : "/sky/sky-desktop.webp"}) center ${theme === "dark" ? "62%" : "18%"} / cover, linear-gradient(180deg,#2f8fe6,#7cc0f2)` }}
         >
           <div className="flex flex-col items-center">
             <div className="flex items-center gap-1">

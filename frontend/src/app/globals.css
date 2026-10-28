@@ -127,18 +127,19 @@ body {
   --sky: url(/sky/sky-phone.webp);
   --sky-fill: #2fa3ea;
 }
-@media (orientation: landscape) and (min-width: 700px) {
+/* computers and tablets: the same skies, made three times sharper (AI upscale), so they stay crisp on a wide screen */
+@media (min-width: 900px) {
   :root {
-    --sky: url(/sky/sky-phone.webp);
+    --sky: url(/sky/sky-desktop.webp);
   }
 }
 [data-theme="dark"] {
   --sky: url(/sky/night-phone.webp);
   --sky-fill: #1d5f99;
 }
-@media (orientation: landscape) and (min-width: 700px) {
+@media (min-width: 900px) {
   [data-theme="dark"] {
-    --sky: url(/sky/night-phone.webp);
+    --sky: url(/sky/night-desktop.webp);
   }
 }
 .sky-bg {
