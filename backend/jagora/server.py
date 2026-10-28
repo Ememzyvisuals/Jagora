@@ -883,6 +883,8 @@ class Session:
                 await b.wheel(float(ev.get("dy", 0)))
             elif act == "back":
                 await b.back()
+            elif act == "forward":
+                await b.forward()
         except Exception as e:  # noqa: BLE001
             log.info("input failed: %s", e)
         try:

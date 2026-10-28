@@ -130,7 +130,7 @@ async function printDoc(d: JDoc) {
 
 function Exports({ d, dark = false }: { d: JDoc; dark?: boolean }) {
   const [busy, setBusy] = useState(false);
-  const cls = `flex h-10 items-center gap-1.5 rounded-full px-3.5 text-[14px] font-semibold transition active:scale-95 ${dark ? "bg-white/10 text-white hover:bg-white/20" : "bg-black/5 text-ink hover:bg-black/10"}`;
+  const cls = `flex h-10 items-center gap-1.5 rounded-full px-3.5 text-[14px] font-semibold transition active:scale-95 ${dark ? "bg-white/10 text-snow hover:bg-white/20" : "bg-black/5 text-ink hover:bg-black/10"}`;
   return (
     <div className="flex flex-wrap gap-1.5">
       <button className={cls} onClick={() => void printDoc(d)}>

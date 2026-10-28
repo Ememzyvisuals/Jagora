@@ -11,6 +11,7 @@ import {
   GameController,
   Info,
   DotsThree,
+  DotsThreeVertical,
   Moon,
   Sun,
   GraduationCap,
@@ -34,6 +35,7 @@ import { Starters, openSite, useTopSites } from "./NewTabBits";
 import { startPageWars } from "../PageWars";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
+import { remoteInput } from "@/lib/engine/remote";
 import { useEffect, useState, type ComponentType } from "react";
 import { ask, live, quick } from "@/lib/engine";
 import { LANGS, type Lang } from "@/lib/i18n";
@@ -289,7 +291,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
   };
 
   return (
-    <div className="relative h-full">
+    <div className="relative h-full bg-[#f3f6fb] dark:bg-[#15171c]">
       <div
         className="no-scrollbar relative h-full overflow-y-auto pb-36"
         onScroll={(e) => {
@@ -301,95 +303,78 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
           }
         }}
       >
-        {/* top row */}
+        {/* top row: her chats and the language on the left, her profile on the right (as in the reference) */}
         <div className="flex items-center justify-between px-4 pt-[max(14px,env(safe-area-inset-top))]">
           <div className="relative flex items-center gap-2">
-            {/* her chats, like ChatGPT's menu (History.tsx) */}
-            <Glass radius={22} bezel={12} refraction={30} pressable className="cursor-pointer" onClick={openHistory}>
-              <span className="grid h-11 w-11 place-items-center text-ink" role="button" aria-label={CHATS[lang]}>
-                <List size={21} weight="bold" />
-              </span>
-            </Glass>
-            <Glass radius={22} bezel={12} refraction={30} pressable className="cursor-pointer" onClick={() => setLangOpen((v) => !v)} data-tour="lang">
-              <span className="flex h-11 items-center gap-2 px-3">
-                <Flag />
-                <span className="text-[15px] font-semibold text-ink">{LANGS.find((x) => x.id === lang)?.native}</span>
-                <CaretDown size={13} weight="bold" className="text-ink-2" />
-              </span>
-            </Glass>
+            <button onClick={openHistory} className={`${ROUND} h-11 w-11`} aria-label={CHATS[lang]}>
+              <List size={21} weight="bold" />
+            </button>
+            <button onClick={() => setLangOpen((v) => !v)} className={`${ROUND} h-11 gap-2 px-3.5`} data-tour="lang" aria-expanded={langOpen}>
+              <Flag />
+              <span className="text-[15px] font-bold">{LANGS.find((x) => x.id === lang)?.native}</span>
+              <CaretDown size={13} weight="bold" className="text-ink-2" />
+            </button>
             {langOpen && (
-              <Glass radius={22} bezel={14} tint="rgba(255,255,255,.55)" className="absolute left-0 top-[52px] z-50 w-52 p-1.5">
+              <div className="absolute left-0 top-[52px] z-50 w-56 rounded-[22px] bg-white p-1.5 shadow-[0_20px_44px_-18px_rgba(10,25,60,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
                 <ul>
                   {LANGS.map((x) => (
                     <li key={x.id}>
                       <button
                         onClick={() => (setLang(x.id), setLangOpen(false))}
-                        className={`w-full rounded-[16px] px-3 py-2.5 text-left text-[15.5px] font-medium transition ${x.id === lang ? "bg-white/80 text-ink" : "text-ink-2 hover:bg-white/50"}`}
+                        className={`w-full rounded-[16px] px-3 py-2.5 text-left text-[15.5px] font-bold transition ${x.id === lang ? "bg-accent-soft text-ink" : "text-ink-2 hover:bg-black/5"}`}
                       >
                         {x.native}
-                        <span className="ml-2 text-[13px] text-ink-3">{x.hello}</span>
+                        <span className="ml-2 text-[13px] font-semibold text-ink-3">{x.hello}</span>
                       </button>
                     </li>
                   ))}
                 </ul>
-              </Glass>
+              </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
-          {canFull && (
-            <Glass radius={22} bezel={12} refraction={30} pressable className="cursor-pointer" onClick={() => void toggleFullscreen()}>
-              <span className="grid h-11 w-11 place-items-center text-ink" aria-label="Full screen">
-                <CornersOut size={20} />
+          <ProfileMenu canFull={canFull} />
+        </div>
+
+        {/* the curved sky card holding the ask bar, with the orb sitting in its notch */}
+        <div className="relative mx-4 mt-[60px]">
+          <div
+            className="relative flex h-[218px] flex-col items-center justify-end rounded-[32px] px-4 pb-5 shadow-[0_22px_40px_-26px_rgba(20,70,150,.7)]"
+            style={{
+              backgroundImage: "linear-gradient(180deg, rgba(56,150,240,.62) 0%, rgba(29,99,237,.9) 100%), url(/sky/hero-mobile.webp), linear-gradient(180deg, #5fb4f2, #2f7fe0)",
+              backgroundSize: "cover",
+              backgroundPosition: "center 30%",
+              WebkitMaskImage: "radial-gradient(circle 54px at 50% 0, transparent 53px, #000 54px)",
+              maskImage: "radial-gradient(circle 54px at 50% 0, transparent 53px, #000 54px)",
+            }}
+          >
+            <p className="mb-4 px-4 text-center text-[17px] font-extrabold leading-snug text-snow [text-shadow:0_2px_10px_rgba(10,40,100,.45)]">{TAGLINE[lang]}</p>
+            <form onSubmit={(e) => (e.preventDefault(), send())} className="w-full" data-tour="ask">
+              <span className="flex h-[58px] items-center gap-3 rounded-full bg-white pl-5 pr-2 shadow-[0_12px_28px_-14px_rgba(10,30,80,.55)] dark:bg-[#1d2027]">
+                <VoiceBars />
+                <input
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  onFocus={() => setLangOpen(false)}
+                  placeholder={PLACEHOLDER[lang]}
+                  className="h-full min-w-0 flex-1 bg-transparent text-[16px] font-bold text-ink outline-none placeholder:font-semibold placeholder:text-ink-3"
+                />
+                {text.trim() ? (
+                  <button type="submit" aria-label="Go" className="grid h-[42px] w-[42px] place-items-center rounded-full bg-ink text-paper transition active:scale-90">
+                    <PaperPlaneRight size={18} weight="fill" />
+                  </button>
+                ) : (
+                  <LiveButton compact />
+                )}
               </span>
-            </Glass>
-          )}
-          <Link href="/app/details" aria-label="My details">
-            <Glass radius={22} bezel={12} refraction={30} pressable>
-              <span className="grid h-11 w-11 place-items-center text-ink">
-                <User size={20} />
-              </span>
-            </Glass>
-          </Link>
+            </form>
           </div>
-        </div>
-
-        {/* the orb, big and alive, and the word */}
-        <div className="flex flex-col items-center">
-          <button onClick={() => (setActive(null), setSheet(true))} aria-label="Talk to Jagora" className="-mt-1 transition active:scale-95">
-            <Orb size={168} state={orb} levelRef={pulse} />
+          <button onClick={() => (setActive(null), setSheet(true))} aria-label="Talk to Jagora" className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 transition active:scale-95">
+            <Orb size={100} state={orb} levelRef={pulse} />
           </button>
-          <CloudWordmark width={270} levelRef={pulse} className="-mt-7" />
-          <p className="-mt-1 px-8 text-center text-[15px] font-medium text-ink-2 dark:text-ink dark:[text-shadow:0_1px_10px_rgba(0,0,0,.55)]">{TAGLINE[lang]}</p>
         </div>
 
-        {/* ask bar */}
-        <form onSubmit={(e) => (e.preventDefault(), send())} className="mx-4 mt-5" data-tour="ask">
-          <Glass radius={30} bezel={18} refraction={40} tint="rgba(255,255,255,.5)" lens={PILL} lensTint={0.14}>
-            <span className="flex h-[58px] items-center gap-3 pl-5 pr-2">
-              <VoiceBars />
-              <input
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onFocus={() => setLangOpen(false)}
-                placeholder={PLACEHOLDER[lang]}
-                className="h-full min-w-0 flex-1 bg-transparent text-[16px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-3"
-              />
-              {text.trim() ? (
-                <button type="submit" aria-label="Go" className="grid h-[42px] w-[42px] place-items-center rounded-full bg-ink text-paper shadow-[inset_0_1px_1px_rgba(255,255,255,.25)] transition active:scale-90">
-                  <PaperPlaneRight size={18} weight="fill" />
-                </button>
-              ) : (
-                <LiveButton compact />
-              )}
-            </span>
-          </Glass>
-        </form>
-        <div className="mx-4 mt-3">
-          <Starters lang={lang} />
-        </div>
-
-        {/* shortcuts */}
-        <div className="mt-5 overflow-hidden">
+        {/* site shortcuts, four at a time */}
+        <div className="mt-6 overflow-hidden">
           <div
             className="flex touch-pan-y transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)]"
             style={{ transform: `translateX(-${page * 100}%)` }}
@@ -404,82 +389,136 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
               <div key={p} className="grid w-full shrink-0 grid-cols-4 gap-2.5 px-4">
                 {top.slice(p * 4, p * 4 + 4).map((s) => (
                   <button key={s.goal} onClick={() => openSite(s)} className="flex flex-col items-center gap-1.5 rounded-[18px] py-1.5 transition active:scale-95" title={s.name[lang]}>
-                    <AppIcon site={s} size={54} />
-                    <span className="max-w-full truncate px-1 text-[12.5px] font-medium text-ink [text-shadow:0_1px_6px_rgba(255,255,255,.7)] dark:[text-shadow:0_1px_6px_rgba(0,0,0,.6)]">{s.name[lang]}</span>
+                    <AppIcon site={s} size={52} />
+                    <span className="max-w-full truncate px-1 text-[13px] font-bold text-ink">{s.name[lang]}</span>
                   </button>
                 ))}
               </div>
             ))}
           </div>
-          <div className="mt-3 flex justify-center gap-1.5">
+          <div className="mt-2 flex justify-center gap-1.5">
             {[0, 1, 2].map((p) => (
-              <button key={p} onClick={() => setPage(p)} aria-label={`Shortcuts ${p + 1}`} className={`h-[7px] rounded-full transition-all duration-300 ${page === p ? "w-[7px] bg-accent" : "w-[7px] bg-ink/20"}`} />
+              <button key={p} onClick={() => setPage(p)} aria-label={`Shortcuts ${p + 1}`} className={`h-[7px] rounded-full transition-all duration-300 ${page === p ? "w-[18px] bg-accent" : "w-[7px] bg-ink/20"}`} />
             ))}
           </div>
         </div>
 
-        {/* discover */}
-        <section className="mt-5 px-4">
-          {!open ? (
-            <DiscoverStack lang={lang} onSeeAll={() => setOpen(true)} stories={[...CARDS.map((c) => ({ key: c.id, image: c.thumb, title: c.title[lang], source: c.source, open: () => run(c.id) })), ...news.slice(0, 6).map((n) => ({ key: n.link, image: n.image, title: n.title, source: n.source, listen: true, open: () => ask(`Read this news story to me: ${n.title} ${n.link}`) }))]} />
-          ) : (
-          <>
+        {/* Discover: the day's news, nothing else */}
+        <section className="mt-6 px-4">
           <div className="flex items-center justify-between px-1">
-            <h2 className="text-[28px] leading-none text-ink">{DISCOVER[lang]}</h2>
-            <button onClick={() => setOpen(false)} className="flex h-8 items-center gap-1 rounded-full px-3 text-[13.5px] font-semibold text-ink-2 hover:bg-white/40">
-              {CLOSE_L[lang]} <CaretUp size={13} weight="bold" />
-            </button>
+            <h2 className="text-[21px] font-extrabold text-ink">{DISCOVER[lang]}</h2>
+            {news.length > 4 && (
+              <button onClick={() => setOpen((v) => !v)} className="rounded-full px-3 py-1.5 text-[14px] font-bold text-accent hover:bg-accent-soft">
+                {open ? CLOSE_L[lang] : SEE_ALL[lang]}
+              </button>
+            )}
           </div>
-          <div className="mt-3 flex flex-col gap-2.5">
-            {CARDS.map((c, i) => (
-              <motion.div key={c.id} {...deal(i)}>
-              <Glass radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.55)" pressable className="cursor-pointer" onClick={() => run(c.id)}>
-                <span className="flex gap-3 p-2.5">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={c.thumb} alt="" className="h-[80px] w-[96px] shrink-0 rounded-[14px] object-cover shadow-[0_4px_10px_-6px_rgba(0,0,0,.35)]" />
-                  <span className="flex min-w-0 flex-1 flex-col py-0.5">
-                    <span className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{c.title[lang]}</span>
-                    <span className="mt-auto flex items-center gap-1.5 text-[12.5px] text-ink-3">
-                      <span className="truncate">{c.source}</span>
-                      <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-ink-3/60" />
-                      <span className="shrink-0">{c.when[lang]}</span>
-                      <DotsThree size={20} weight="bold" className="ml-auto shrink-0 text-ink-2" />
-                    </span>
-                  </span>
-                </span>
-              </Glass>
-              </motion.div>
-            ))}
-            {news.slice(0, 6).map((n, i) => (
-              <motion.div key={n.link} {...deal(i + CARDS.length)}>
-              <Glass radius={22} bezel={14} refraction={26} tint="rgba(255,255,255,.55)" pressable className="cursor-pointer" onClick={() => ask(`Read this news story to me: ${n.title} ${n.link}`)}>
-                <span className="flex gap-3 p-2.5">
-                  {n.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={n.image} alt="" loading="lazy" className="h-[80px] w-[96px] shrink-0 rounded-[14px] object-cover shadow-[0_4px_10px_-6px_rgba(0,0,0,.35)]" />
-                  ) : (
-                    <span className="grid h-[80px] w-[96px] shrink-0 place-items-center rounded-[14px] bg-ink text-paper">
-                      <Newspaper size={28} weight="fill" />
-                    </span>
-                  )}
-                  <span className="flex min-w-0 flex-1 flex-col py-0.5">
-                    <span className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{n.title}</span>
-                    <span className="mt-auto flex items-center gap-1.5 text-[12.5px] text-ink-3">
-                      <span className="truncate">{n.source}</span>
-                      {n.date && <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-ink-3/60" />}
-                      {n.date && <span className="shrink-0">{ago(Date.parse(n.date))}</span>}
-                      <SpeakerHigh size={17} className="ml-auto shrink-0 text-accent" aria-label="Listen" />
-                    </span>
-                  </span>
-                </span>
-              </Glass>
-              </motion.div>
+          <div className="mt-3 flex flex-col gap-3">
+            {news.length === 0
+              ? [0, 1].map((i) => <div key={i} className="h-[124px] animate-pulse rounded-[22px] bg-white/80 dark:bg-white/5" />)
+              : news.slice(0, open ? 12 : 4).map((n) => (
+                  <FeedCard
+                    key={n.link}
+                    image={n.image}
+                    title={n.title}
+                    source={n.source}
+                    when={n.date ? ago(Date.parse(n.date)) : ""}
+                    listen
+                    onOpen={() => ask(`Read this news story to me: ${n.title} ${n.link}`)}
+                  />
+                ))}
+          </div>
+        </section>
+
+        {/* things to try with Jagora, under the news */}
+        <section className="mt-7 px-4">
+          <h2 className="px-1 text-[21px] font-extrabold text-ink">{TRY[lang]}</h2>
+          <div className="mt-3">
+            <Starters lang={lang} align="start" />
+          </div>
+          <div className="mt-3 flex flex-col gap-3">
+            {CARDS.map((c) => (
+              <FeedCard key={c.id} image={c.thumb} title={c.title[lang]} source={c.source} when={c.when[lang]} onOpen={() => run(c.id)} />
             ))}
           </div>
-          </>
-          )}
         </section>
       </div>
+    </div>
+  );
+}
+
+const ROUND = "flex items-center justify-center rounded-full bg-white text-ink shadow-[0_6px_16px_-10px_rgba(10,25,60,.45)] ring-1 ring-black/5 transition active:scale-95 dark:bg-[#23262d] dark:ring-white/10";
+const TRY: L = { en: "Try Jagora", pcm: "Try Jagora", yo: "Ẹ dán Jagora wò", ha: "Gwada Jagora", ig: "Nwalee Jagora" };
+const SEE_ALL: L = { en: "See all", pcm: "See all", yo: "Wo gbogbo rẹ̀", ha: "Duba duka", ig: "Lee ha niile" };
+
+/** One story in the feed, shaped like the reference: picture on the left, bold title, then source and time. */
+function FeedCard({ image, title, source, when, listen = false, onOpen }: { image: string | null; title: string; source: string; when: string; listen?: boolean; onOpen: () => void }) {
+  return (
+    <button onClick={onOpen} className="w-full rounded-[22px] bg-white p-3 text-left shadow-[0_10px_26px_-20px_rgba(10,25,60,.55)] ring-1 ring-black/[.04] transition active:scale-[.99] dark:bg-[#1d2027] dark:ring-white/5">
+      <span className="flex gap-3">
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={image} alt="" loading="lazy" className="h-[84px] w-[100px] shrink-0 rounded-[16px] object-cover object-left-top" />
+        ) : (
+          <span className="grid h-[84px] w-[100px] shrink-0 place-items-center rounded-[16px] bg-ink text-paper">
+            <Newspaper size={28} weight="fill" />
+          </span>
+        )}
+        <span className="line-clamp-3 min-w-0 flex-1 text-[15.5px] font-extrabold leading-snug text-ink">{title}</span>
+      </span>
+      <span className="mt-2.5 flex items-center gap-2 text-[13px] font-semibold text-ink-2">
+        <span className="truncate">{source}</span>
+        {when && <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-ink-3" />}
+        {when && <span className="shrink-0 text-ink-3">{when}</span>}
+        {listen ? <SpeakerHigh size={18} weight="fill" className="ml-auto shrink-0 text-accent" aria-label="Listen" /> : <DotsThreeVertical size={18} weight="bold" className="ml-auto shrink-0 text-ink-3" />}
+      </span>
+    </button>
+  );
+}
+
+/** Her profile button; its menu holds what the old "more" button held. */
+function ProfileMenu({ canFull }: { canFull: boolean }) {
+  const lang = useApp((s) => s.lang);
+  const theme = useTheme();
+  const [open, setOpen] = useState(false);
+  const item = "flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-left text-[15.5px] font-bold text-ink hover:bg-black/5 dark:hover:bg-white/10";
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((v) => !v)} className={`${ROUND} h-11 w-11`} aria-label="My details and settings" aria-expanded={open}>
+        <User size={20} weight="bold" />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: -6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: -6 }}
+              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              className="absolute right-0 top-[52px] z-50 w-60 origin-top-right rounded-[22px] bg-white p-1.5 shadow-[0_20px_44px_-18px_rgba(10,25,60,.45)] ring-1 ring-black/5 dark:bg-[#23262d]"
+            >
+              <Link href="/app/details" className={item}>
+                <User size={19} /> My details
+              </Link>
+              <button onClick={() => (toggleTheme(), setOpen(false))} className={item}>
+                {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />} {theme === "dark" ? THEME_L.light[lang] : THEME_L.dark[lang]}
+              </button>
+              {canFull && (
+                <button onClick={() => (void toggleFullscreen(), setOpen(false))} className={item}>
+                  <CornersOut size={19} /> Full screen
+                </button>
+              )}
+              <button onClick={() => (startPageWars(), setOpen(false))} className={item}>
+                <GameController size={19} /> Play Page Wars
+              </button>
+              <Link href="/about" className={item}>
+                <Info size={19} /> About and credits
+              </Link>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -490,8 +529,8 @@ function TabsGlyph({ count }: { count: number }) {
   );
 }
 
-/** Safari-style bottom bar: separate floating glass pieces (back, the address capsule with the orb, tabs, more).
-    Scrolling down shrinks it to a small address capsule; scrolling up or tapping opens it again. */
+/** The bottom bar, as in the reference: back, forward, Jagora's orb in the middle (tap to talk), tabs, home. On a
+    website, back and forward move through that site's pages. */
 export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "tabs"; setScreen: (s: "home" | "page" | "tabs") => void }) {
   const lang = useApp((s) => s.lang);
   const sheet = useApp((s) => s.sheetOpen);
@@ -500,109 +539,49 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
   const count = useApp((s) => s.tasks.filter(isTab).length);
   const task = useApp(activeTask);
   const pulse = useSpeakingPulse(orb === "speaking");
-  const [small, setSmall] = useState(false);
-  const [menu, setMenu] = useState(false);
-  const theme = useTheme();
-  useEffect(() => {
-    const on = (e: Event) => setSmall((e as CustomEvent<{ down: boolean }>).detail.down);
-    addEventListener("jagora:scroll", on);
-    return () => removeEventListener("jagora:scroll", on);
-  }, []);
   const onPage = screen === "page" && task?.kind === "browse" && !!task.url;
-  const host = task?.url ? (task.url.startsWith("/practice/") ? "skillsfair.ng" : task.url.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]) : "";
-  const label = onPage ? host : sheet ? "Jagora" : ASK_SHORT[lang]; // short, so it is never cut off
-  const spring = { type: "spring", stiffness: 380, damping: 32 } as const;
-
+  const canForward = !onPage && task?.kind === "browse" && !!task.url && isTab(task);
+  const btn = "grid h-12 w-12 place-items-center rounded-full text-ink transition active:scale-90 disabled:opacity-25";
   return (
     <div className="absolute inset-x-0 bottom-[max(10px,env(safe-area-inset-bottom))] z-40 flex justify-center px-3">
-      <motion.div layout transition={spring} className={`flex items-center ${small ? "gap-0" : "w-full gap-2"}`}>
-        <AnimatePresence initial={false}>
-          {!small && (
-            <motion.div key="back" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }} transition={spring}>
-              <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable lens={onPage ? PAGE_PILL : PILL} lensTint={onPage ? 0.62 : 0.38} overContent={!live}>
-                <button className="grid h-[52px] w-[52px] place-items-center text-ink disabled:opacity-30" disabled={screen !== "page"} onClick={() => setScreen("home")} aria-label={NAV.back[lang]}>
-                  <CaretLeft size={22} weight="bold" />
-                </button>
-              </Glass>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <motion.div layout transition={spring} className={small ? "" : "min-w-0 flex-1"}>
-          <Glass radius={30} bezel={16} refraction={36} blur={10} tint="rgba(255,255,255,.66)" pressable lens={onPage ? PAGE_PILL : PILL} lensTint={onPage ? 0.62 : 0.38} overContent={!live}>
-            {small ? (
-              <button onClick={() => setSmall(false)} className="flex h-9 items-center gap-1.5 px-4 text-[13px] font-semibold text-ink">
-                {onPage && <LockSimple size={12} weight="bold" className="text-ink-2" />}
-                {onPage ? host : "Jagora"}
-              </button>
-            ) : (
-              <div className="flex h-[52px] items-center gap-2 pl-1.5 pr-1.5">
-                <button onClick={() => setSheet(!sheet)} aria-label="Talk to Jagora" className="shrink-0 transition active:scale-90" data-tour="orb">
-                  <Orb size={42} state={orb} levelRef={pulse} />
-                </button>
-                <button onClick={() => setSheet(true)} className="min-w-0 flex-1 truncate text-left text-[15px] font-semibold text-ink">
-                  {label}
-                </button>
-                {onPage && <ArrowClockwise size={17} className="shrink-0 text-ink-2" />}
-                {onPage && <LiveButton compact />}
-              </div>
-            )}
-          </Glass>
-        </motion.div>
-
-        <AnimatePresence initial={false}>
-          {!small && (
-            <motion.div key="right" className="flex gap-2" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }} transition={spring}>
-              <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable lens={onPage ? PAGE_PILL : PILL} lensTint={onPage ? 0.62 : 0.38} overContent={!live}>
-                <button className={`grid h-[52px] w-[52px] place-items-center transition ${screen === "tabs" ? "rounded-full bg-ink text-paper" : "text-ink"}`} onClick={() => setScreen("tabs")} aria-label={`${NAV.tabs[lang]}, ${count}`} aria-pressed={screen === "tabs"} data-tour="tabs">
-                  <TabsGlyph count={count} />
-                </button>
-              </Glass>
-              <div className="relative">
-                <Glass radius={26} bezel={14} refraction={30} blur={10} tint="rgba(255,255,255,.62)" pressable lens={onPage ? PAGE_PILL : PILL} lensTint={onPage ? 0.62 : 0.38} overContent={!live}>
-                  <button className="grid h-[52px] w-[52px] place-items-center text-ink" onClick={() => setMenu((v) => !v)} aria-label="More" aria-expanded={menu}>
-                    <DotsThree size={24} weight="bold" />
-                  </button>
-                </Glass>
-                <AnimatePresence>
-                  {menu && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.9, y: 8 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.9, y: 8 }}
-                      transition={spring}
-                      className="absolute bottom-[62px] right-0 w-56 origin-bottom-right"
-                    >
-                      <Glass radius={24} bezel={14} refraction={30} blur={14} tint="rgba(255,255,255,.86)">
-                        <div className="p-1.5">
-                          {[
-                            { k: "chats", Icon: List, label: CHATS[lang], on: openHistory },
-                            { k: "home", Icon: House, label: NAV.home[lang], on: () => setScreen("home") },
-                            { k: "fwd", Icon: CaretRight, label: NAV.fwd[lang], on: () => task?.kind === "browse" && setScreen("page") },
-                            { k: "full", Icon: CornersOut, label: "Full screen", on: () => void toggleFullscreen() },
-                            { k: "game", Icon: GameController, label: "Play Page Wars", on: () => startPageWars() },
-                            { k: "theme", Icon: theme === "dark" ? Sun : Moon, label: theme === "dark" ? THEME_L.light[lang] : THEME_L.dark[lang], on: toggleTheme },
-                          ].map(({ k, Icon, label: l, on }) => (
-                            <button key={k} onClick={() => (on(), setMenu(false))} className="flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-left text-[15px] font-medium text-ink hover:bg-black/5">
-                              <Icon size={19} /> {l}
-                            </button>
-                          ))}
-                          <Link href="/app/details" className="flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-[15px] font-medium text-ink hover:bg-black/5">
-                            <User size={19} /> My details
-                          </Link>
-                          <Link href="/about" className="flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-[15px] font-medium text-ink hover:bg-black/5">
-                            <Info size={19} /> About and credits
-                          </Link>
-                        </div>
-                      </Glass>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+      <nav className="relative flex h-[64px] w-full max-w-[460px] items-center justify-around rounded-[30px] bg-white/95 px-2 shadow-[0_18px_40px_-18px_rgba(10,25,60,.5)] ring-1 ring-black/5 backdrop-blur-xl dark:bg-[#1d2027]/95 dark:ring-white/10">
+        <button
+          className={btn}
+          disabled={!onPage}
+          onClick={() => task && void remoteInput(task.id, { action: "back" })}
+          aria-label={NAV.back[lang]}
+        >
+          <CaretLeft size={23} weight="bold" />
+        </button>
+        <button
+          className={btn}
+          disabled={!onPage && !canForward}
+          onClick={() => (onPage && task ? void remoteInput(task.id, { action: "forward" }) : setScreen("page"))}
+          aria-label={NAV.fwd[lang]}
+        >
+          <CaretRight size={23} weight="bold" />
+        </button>
+        <button
+          onClick={() => setSheet(!sheet)}
+          aria-label="Talk to Jagora"
+          data-tour="orb"
+          className="-mt-7 grid h-[70px] w-[70px] place-items-center rounded-full bg-white shadow-[0_12px_26px_-12px_rgba(20,80,180,.6)] ring-4 ring-[#f3f6fb] transition active:scale-95 dark:bg-[#1d2027] dark:ring-[#15171c]"
+        >
+          <Orb size={58} state={orb} levelRef={pulse} />
+        </button>
+        <button
+          className={`${btn} ${screen === "tabs" ? "bg-ink text-paper" : ""}`}
+          onClick={() => setScreen("tabs")}
+          aria-label={`${NAV.tabs[lang]}, ${count}`}
+          aria-pressed={screen === "tabs"}
+          data-tour="tabs"
+        >
+          <TabsGlyph count={count} />
+        </button>
+        <button className={btn} onClick={() => (setSheet(false), setScreen("home"))} aria-label={NAV.home[lang]}>
+          <House size={23} weight={screen === "home" ? "fill" : "bold"} />
+        </button>
+      </nav>
     </div>
   );
 }

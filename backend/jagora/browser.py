@@ -409,6 +409,9 @@ class Browser:
             return
         await page.go_back(wait_until="domcontentloaded", timeout=20000)
 
+    async def forward(self) -> None:
+        await self._need_page().go_forward(wait_until="domcontentloaded", timeout=20000)
+
     async def click(self, eid: int) -> str:
         """Click; returns a note when the click did something unexpected (opened a new tab, jumped to another site)."""
         page = self._need_page()

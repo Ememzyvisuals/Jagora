@@ -1,5 +1,10 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
+/* Montserrat (headings) and Noto Sans (everything else): both carry every Yorùbá, Hausa and Igbo letter (ẹ ọ ṣ with
+   tone marks, ɓ ɗ ƙ ƴ, ị ụ ṅ) and the naira sign, so no word ever breaks into two fonts. Each loads only the letter
+   ranges a page uses. */
+@import "@fontsource-variable/montserrat";
+@import "@fontsource-variable/noto-sans";
 
 /* dark: utilities for the few spots tokens cannot cover */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
@@ -43,9 +48,9 @@
   --font-weight-semibold: 700;
   --font-weight-bold: 800;
 
-  --font-sans: "Jagora Body", "Jagora Sans", "Inter Variable", ui-serif, Georgia, serif;
-  --font-head: "Jagora Boiling", "Jagora Sans", "Inter Variable", sans-serif;
-  --font-display: "Jagora Sans", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Noto Sans Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-head: "Montserrat Variable", "Noto Sans Variable", ui-sans-serif, sans-serif;
+  --font-display: "Montserrat Variable", "Noto Sans Variable", ui-sans-serif, system-ui, sans-serif;
 
   --color-ink: #0e0f12;
   --color-ink-2: #4b4a50;
@@ -175,6 +180,7 @@ body {
 
 body {
   font-family: var(--font-sans);
+  font-weight: 500; /* a touch heavier than regular everywhere, so text holds up in sunlight */
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -395,15 +401,18 @@ h3,
   }
 }
 
-/* headings and subheadings: Boiling, a heavy friendly display face; body text is Vollkorn */
-h1,
-h2,
-h3,
-.font-pixel,
-.font-head {
-  font-family: var(--font-head);
-  font-weight: 400;
-  letter-spacing: -0.005em;
+/* headings and subheadings: Montserrat, heavy; body text is Noto Sans. In the base layer, so a heading's own
+   weight class still applies. */
+@layer base {
+  h1,
+  h2,
+  h3,
+  .font-pixel,
+  .font-head {
+    font-family: var(--font-head);
+    font-weight: 800;
+    letter-spacing: -0.015em;
+  }
 }
 
 /* reading pages (about, legal): calm, roomy, professional */
@@ -484,7 +493,7 @@ h3,
 .jd-title {
   margin-top: 14px;
   font-family: var(--font-head);
-  font-weight: 400;
+  font-weight: 800;
   font-size: clamp(30px, 4.8vw, 44px);
   line-height: 1.08;
   letter-spacing: -0.01em;
@@ -504,7 +513,7 @@ h3,
 .jd-h {
   margin-top: 40px;
   font-family: var(--font-head);
-  font-weight: 400;
+  font-weight: 800;
   font-size: 20px;
   letter-spacing: -0.02em;
   color: #111317;

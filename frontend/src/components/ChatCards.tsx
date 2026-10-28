@@ -77,11 +77,11 @@ function Lightbox({ open, onClose, src, caption }: { open: boolean; onClose: () 
       {open && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}
           className="fixed inset-0 z-[90] flex flex-col items-center justify-center gap-3 bg-black/75 p-4 backdrop-blur-sm">
-          <button onClick={onClose} className="absolute right-4 top-[max(16px,env(safe-area-inset-top))] grid h-10 w-10 place-items-center rounded-full bg-white/15 text-white" aria-label="Close">
+          <button onClick={onClose} className="absolute right-4 top-[max(16px,env(safe-area-inset-top))] grid h-10 w-10 place-items-center rounded-full bg-white/15 text-snow" aria-label="Close">
             <X size={18} weight="bold" />
           </button>
           <motion.img initial={{ scale: 0.96 }} animate={{ scale: 1 }} src={src} alt={caption} className="max-h-[80dvh] max-w-full rounded-[14px] bg-white shadow-2xl" />
-          <p className="max-w-[640px] text-center text-[13.5px] text-white/80">{caption}</p>
+          <p className="max-w-[640px] text-center text-[13.5px] text-snow/80">{caption}</p>
         </motion.div>
       )}
     </AnimatePresence>,

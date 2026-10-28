@@ -459,7 +459,7 @@ function device() {
 }
 
 /** her hands on the live page: taps, typing, keys, scrolling (only while she has taken over or Jagora waits for her) */
-export async function remoteInput(task: string, input: { action: "tap" | "type" | "key" | "scroll" | "back"; x?: number; y?: number; text?: string; key?: string; dy?: number }) {
+export async function remoteInput(task: string, input: { action: "tap" | "type" | "key" | "scroll" | "back" | "forward"; x?: number; y?: number; text?: string; key?: string; dy?: number }) {
   ws?.send(JSON.stringify({ type: "input", task, ...input }));
 }
 /** she tapped the thing she meant on the live page (page pixels) */
