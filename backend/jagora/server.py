@@ -1089,6 +1089,7 @@ class WsIO:
         elif kind == "moment":
             await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "moment", **data}})
         elif kind == "step":
+            await s.send({"type": "orb", "state": "working"})  # the orb shows Jagora at work on the page
             await self._ring(None)
             await self.close_step()
             self.r.step_id = mid()

@@ -79,7 +79,7 @@ export type Task = {
 
 export type Pointer = { x: number; y: number; visible: boolean; clicking: boolean };
 export type Highlight = { x: number; y: number; w: number; h: number; tone: "point" | "stop" } | null;
-export type OrbMode = "idle" | "listening" | "thinking" | "speaking";
+export type OrbMode = "idle" | "listening" | "thinking" | "speaking" | "working";
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 

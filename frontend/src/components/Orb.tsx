@@ -10,7 +10,7 @@ import { useEffect, useRef, type MutableRefObject } from "react";
 import { useTheme } from "@/lib/theme";
 import { CLOUD_FS, FINISH, GLASS_FS, ORB_FS, ORB_VS, type Finish } from "./orbShader";
 
-export type OrbState = "idle" | "listening" | "thinking" | "speaking";
+export type OrbState = "idle" | "listening" | "thinking" | "speaking" | "working";
 
 /* Jagora's palette: the pearl look from the references (pink, lilac and sky blue in a pale body). Light and dark
    fields are authored separately, as the shader's author recommends. */
@@ -19,7 +19,7 @@ const PALETTE = {
   dark: { stops: ["#2a85f5", "#59d4fc", "#9e6bfa"], body: "#07080e" },
 };
 const hex = (h: string): [number, number, number] => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255) as [number, number, number];
-const STATE = { idle: 0, listening: 1, thinking: 2, speaking: 3 } as const;
+const STATE = { idle: 0, listening: 1, thinking: 2, speaking: 3, working: 4 } as const;
 
 export function Orb({
   size = 120,
@@ -97,7 +97,7 @@ export function Orb({
       const k = Math.min(1, dt * 11);
       lin += ((st === "listening" ? v : 0) - lin) * k; // her voice lives on the edge
       lout += ((st === "speaking" ? v : 0) - lout) * k; // Jagora's voice moves the inside
-      flow += dt * (1 + lout * 3.2);
+      flow += dt * (1 + lout * 3.2 + (st === "working" ? 0.9 : st === "thinking" ? 0.4 : 0));
       ring += dt * (0.42 + lin * 0.5);
       if (!visible) return;
       gl.viewport(0, 0, cv.width, cv.height);

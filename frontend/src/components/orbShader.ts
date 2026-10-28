@@ -300,7 +300,7 @@ void main(){
  col=mix(col,vec3(1.),streak*.4);
  // the heart: cyan on one side, royal blue to deep indigo on the other, turning inside the cloud
  vec2 cq=q/R-vec2(.02,-.04);
- float spin=fl*(.32+(uState==2?.55:0.));
+ float spin=fl*(.32+(uState==2?.55:uState==4?.35:0.));
  vec2 cr=rot(spin)*cq;
  float sd=cr.y+.16*sin(cr.x*2.4+fl*.7)+(fbm(vec3(cr*1.8,fl*.22))-.5)*.2;
  float side=smoothstep(-.08,.08,sd);
@@ -315,10 +315,17 @@ void main(){
  heart+=mix(vec3(.55,.7,1.),vec3(.8,1.,1.),side)*smoothstep(.8,1.,lines)*(.08+.06*uOut);
  // the cloud's mist sits over the heart, thinner in the middle
  col=mix(col,heart,heartA*clamp(1.2-shade*.45,0.,1.));
- // thinking: a light sweeping round the cloud
- if(uState==2){float sw=.5+.5*cos(ang-fl*1.6);col+=vec3(.5,.88,1.)*pow(sw,9.)*.22*smoothstep(.55,.95,rr);}
- // her voice also shows as a cyan glow on the edge
- col=mix(col,vec3(.55,.92,1.),smoothstep(.78,.98,rr)*uIn*.6);
+ // thinking: a bright light sweeping round the cloud, and the heart breathing
+ if(uState==2){float sw=.5+.5*cos(ang-fl*1.6);col+=vec3(.5,.88,1.)*pow(sw,7.)*.5*smoothstep(.5,.95,rr);
+   col+=vec3(.35,.6,1.)*heartA*.12*(.5+.5*sin(uTime*3.2));}
+ // working on the page: a band of light scanning down through the cloud, like reading a page
+ if(uState==4){float y=q.y/R; float band=fract(uTime*.55); float by=1.-band*2.2+.1;
+   float scan=exp(-pow((y-by)*7.,2.))*smoothstep(1.02,.9,rr);
+   col=mix(col,vec3(.42,.78,1.),scan*.55);
+   col+=vec3(.25,.55,1.)*pow(.5+.5*cos(ang*3.-uTime*2.4),12.)*.25*smoothstep(.6,.97,rr);}
+ // listening: a soft cyan rim that breathes even before she speaks; her voice makes it glow more
+ float listen=uState==1?.5+.18*sin(uTime*2.2):0.;
+ col=mix(col,vec3(.5,.9,1.),smoothstep(.66,.98,rr)*clamp(uIn*.6+listen,0.,.9));
  // a soft shadow low inside, and the fine edge line
  float refl=exp(-pow(length((q/R-vec2(.02,-.8))*vec2(1.,3.))*3.,2.));
  col=mix(col,vec3(.5,.53,.66),refl*.35);

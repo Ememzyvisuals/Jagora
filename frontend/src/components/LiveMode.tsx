@@ -19,8 +19,9 @@ import { browserRecognizer } from "./Composer";
 import { Glass } from "./glass/Glass";
 import { Orb } from "./Orb";
 
-const SAY: Record<"listen" | "think" | "speak" | "paused" | "hint" | "end" | "live", Record<Lang, string>> = {
+const SAY: Record<"listen" | "think" | "work" | "speak" | "paused" | "hint" | "end" | "live", Record<Lang, string>> = {
   listen: { en: "Listening…", pcm: "I dey hear you…", yo: "Mo ń gbọ́ yín…", ha: "Ina sauraro…", ig: "Ana m ege ntị…" },
+  work: { en: "Working on the page…", pcm: "I dey work for the page…", yo: "Mo ń ṣiṣẹ́ lórí ojú-ìwé náà…", ha: "Ina aiki a shafin…", ig: "Ana m arụ ọrụ na peeji ahụ…" },
   think: { en: "Thinking…", pcm: "I dey think…", yo: "Mo ń ronú…", ha: "Ina tunani…", ig: "Ana m eche echiche…" },
   speak: { en: "Jagora is speaking", pcm: "Jagora dey talk", yo: "Jagora ń sọ̀rọ̀", ha: "Jagora tana magana", ig: "Jagora na-ekwu okwu" },
   paused: { en: "Microphone off", pcm: "Mic don off", yo: "Gbohùngbohùn ti pa", ha: "An kashe makirufo", ig: "Emechiri igwe okwu" },
@@ -71,7 +72,7 @@ export function LiveMode() {
   const speaking = useSpeakingPulse(orb === "speaking");
   const [muted, setMuted] = useState(false);
   const [heard, setHeard] = useState("");
-  const [phase, setPhase] = useState<"listen" | "think" | "speak">("listen");
+  const [phase, setPhase] = useState<"listen" | "think" | "speak" | "work">("listen");
   const busy = useRef(false);
   // the speech detector (lib/turns.ts); null while loading, false if it could not load (then the old way is used)
   const listener = useRef<Listener | null>(null);
@@ -195,6 +196,8 @@ export function LiveMode() {
     listener.current?.setAgentTalking(orb === "speaking");
     if (muted) return;
     if (orb === "speaking") return setPhase("speak");
+    if (orb === "working") return setPhase("work"); // she can still talk: the detector keeps listening
+    if (orb === "thinking") return setPhase("think");
     if (smart) {
       if (orb === "idle") setPhase("listen");
       return;
@@ -224,7 +227,11 @@ export function LiveMode() {
   };
 
   const level = phase === "speak" ? speaking : smart && listener.current ? listener.current.level : voice.level;
-  const label = muted ? SAY.paused[lang] : phase === "speak" ? SAY.speak[lang] : phase === "think" ? SAY.think[lang] : SAY.listen[lang];
+  // while Jagora works, the caption says what it is doing right now (its latest step)
+  const lastStep = [...(task?.messages ?? [])].reverse().find((m) => m.kind === "step");
+  const doing = lastStep && "text" in lastStep ? lastStep.text : "";
+  const label = muted ? SAY.paused[lang] : phase === "speak" ? SAY.speak[lang] : phase === "work" ? doing || SAY.work[lang] : phase === "think" ? SAY.think[lang] : SAY.listen[lang];
+  const orbState = phase === "speak" ? "speaking" : phase === "work" ? "working" : phase === "think" ? "thinking" : muted ? "idle" : "listening";
 
   return (
     <AnimatePresence>
@@ -240,7 +247,7 @@ export function LiveMode() {
           >
             <Glass flat radius={28} bezel={14} refraction={30} blur={14} tint="rgba(14,15,18,.82)">
               <div className="flex h-14 items-center gap-2.5 pl-2 pr-2 text-snow">
-                <Orb size={44} state={phase === "speak" ? "speaking" : phase === "think" ? "thinking" : "listening"} levelRef={level} />
+                <Orb size={44} state={orbState} levelRef={level} />
                 <button onClick={() => setShowPage(false)} className="min-w-0 max-w-[48vw] truncate text-left text-[14px] font-medium" aria-label="Back to live view">
                   {label}
                 </button>
@@ -275,7 +282,7 @@ export function LiveMode() {
                 className={phase === "speak" ? "cursor-pointer" : ""}
                 title={phase === "speak" ? "Tap to interrupt" : undefined}
               >
-                <Orb size={260} state={phase === "speak" ? "speaking" : phase === "think" ? "thinking" : muted ? "idle" : "listening"} levelRef={level} />
+                <Orb size={260} state={orbState} levelRef={level} />
               </motion.div>
               <p className="mt-2 text-[17px] font-semibold text-ink" aria-live="polite">
                 {label}

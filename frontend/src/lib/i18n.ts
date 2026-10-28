@@ -19,6 +19,7 @@ export const T = {
   ask: L("Tell Jagora what you want to do", "Tell Jagora wetin you wan do", "Sọ ohun tí ẹ fẹ́ ṣe fún Jagora", "Faɗa wa Jagora abin da kake so", "Gwa Jagora ihe ị chọrọ ime"),
   listening: L("Listening", "I dey hear you", "Mo ń gbọ́ yín", "Ina sauraro", "Ana m ege ntị"),
   thinking: L("Looking at the page", "I dey look the page", "Mo ń wo ojú ìwé náà", "Ina duba shafin", "Ana m ele ibe a"),
+  working: L("Working on the page", "I dey work for the page", "Mo ń ṣiṣẹ́ lórí ojú-ìwé náà", "Ina aiki a shafin", "Ana m arụ ọrụ na peeji ahụ"),
   speaking: L("Speaking", "I dey talk", "Mo ń sọ̀rọ̀", "Ina magana", "Ana m ekwu okwu"),
   idle: L("Tap to talk", "Tap make you talk", "Tẹ̀ ẹ́ láti sọ̀rọ̀", "Taɓa don yin magana", "Pịa ka ị kwuo okwu"),
   yes: L("Yes", "Yes", "Bẹ́ẹ̀ ni", "Eh", "Ee"),

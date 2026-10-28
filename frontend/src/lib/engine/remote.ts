@@ -185,6 +185,7 @@ function handle(ev: Record<string, unknown>) {
     }
     case "status":
       s.setStatus(task, ev.status as never);
+      if (ev.status !== "working" && s.orb === "working") s.setOrb("idle"); // the task ended: the orb rests
       break;
     case "url":
       s.setUrl(task, ev.url as string);
@@ -214,7 +215,8 @@ function handle(ev: Record<string, unknown>) {
       s.setHighlight(ev.box ? { ...(ev.box as { x: number; y: number; w: number; h: number }), tone: (ev.tone as "point" | "stop") || "point" } : null);
       break;
     case "orb":
-      s.setOrb(ev.state as never);
+      if (ev.state === "working" && isSpeaking()) break; // while she speaks, the orb shows her voice
+      s.setOrb((ev.state === "idle" ? restOrb() : ev.state) as never);
       break;
     case "pcm":
       playPcm(ev.data as string, (ev.rate as number) || 24000, ev.utt as string, ev.codec as string | undefined, (ev.n as number) || 0);
@@ -321,8 +323,14 @@ function playPcm(b64: string, rate: number, utt = "", codec?: string, n = 0) {
   src.onended = () => {
     voices.delete(src);
     voiceAt.delete(src);
-    if (!voices.size && speechDone) S().setOrb("idle");
+    if (!voices.size && speechDone) S().setOrb(restOrb());
   };
+}
+/** The orb when Jagora is not speaking: at work if a task is still running, else at rest. */
+function restOrb(): "working" | "idle" {
+  const st = S();
+  const t = st.tasks.find((x) => x.id === st.activeId);
+  return t?.status === "working" ? "working" : "idle";
 }
 /** Is Jagora talking (or about to)? */
 export const isSpeaking = () => voices.size > 0 || !speechDone;
