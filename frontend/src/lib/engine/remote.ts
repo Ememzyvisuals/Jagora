@@ -127,6 +127,9 @@ function handle(ev: Record<string, unknown>) {
       if (!s.tasks.some((t) => t.id === task)) break;
       s.push(task, ev.msg as Msg);
       break;
+    case "drop": // it was Jagora's own voice coming back through the microphone, not her words
+      s.drop(task, ev.id as string);
+      break;
     case "update": {
       const patch = ev.patch as Partial<Msg> & { text?: string };
       s.update(task, ev.id as string, patch);

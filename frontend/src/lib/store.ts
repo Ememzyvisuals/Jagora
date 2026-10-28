@@ -130,6 +130,7 @@ type State = {
   closeTask: (id: string) => void;
   push: (taskId: string, m: Msg) => void;
   update: (taskId: string, msgId: string, patch: Partial<Msg>) => void;
+  drop: (taskId: string, msgId: string) => void;
   setStatus: (taskId: string, s: TaskStatus) => void;
   setUrl: (taskId: string, url: string) => void;
   setMeta: (taskId: string, meta: Partial<Pick<Task, "title" | "kind">>) => void;
@@ -202,6 +203,7 @@ export const useApp = create<State>()(
       setActive: (activeId) => set({ activeId }),
       closeTask: (id) => set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id), activeId: s.activeId === id ? null : s.activeId })),
       push: (taskId, m) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, messages: [...t.messages, m] } : t)) })),
+      drop: (taskId, msgId) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, messages: t.messages.filter((m) => m.id !== msgId) } : t)) })),
       update: (taskId, msgId, patch) =>
         set((s) => ({
           tasks: s.tasks.map((t) =>

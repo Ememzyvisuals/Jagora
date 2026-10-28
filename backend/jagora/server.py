@@ -400,6 +400,7 @@ class Session:
         self.active_task = ""
         self.since = time.time()
         self.who: dict = {}  # email, name, plan, code label: for the admin page
+        self._said: list[tuple[float, str]] = []  # what Jagora said lately, to tell her voice from an echo of Jagora's
         self.lite = False  # data saver (lite.py): smaller voice and live view on slow or costly networks
         self.viewing = True  # False while the app is in the background: no live-view frames are sent then
         self._held_frame = ""
@@ -497,7 +498,26 @@ class Session:
 
     def speak(self, task: str, text: str) -> None:
         if speech.enabled() and text.strip():
+            self._said.append((time.time(), text))
+            del self._said[:-6]
             self._speech_q.put_nowait((task, text, self.lang, self._gen))
+
+    def echo(self, heard: str) -> bool:
+        """Is this 'what she said' really Jagora's own voice, picked up by the phone's microphone from its speaker?
+        True when 4+ words and nearly all of them are a run of what Jagora said in the last minute."""
+        import difflib
+
+        words = re.findall(r"\w+", heard.lower())
+        if len(words) < 4:
+            return False
+        for at, said in self._said:
+            if time.time() - at > 60:
+                continue
+            sw = re.findall(r"\w+", said.lower())
+            m = difflib.SequenceMatcher(None, words, sw, autojunk=False)
+            if sum(b.size for b in m.get_matching_blocks()) >= 0.8 * len(words):
+                return True
+        return False
 
     # ---- input from the app --------------------------------------------------------------------------------------
 
@@ -648,6 +668,13 @@ class Session:
             if msg_id:
                 await self.send({"type": "update", "task": task, "id": msg_id, "patch": {"text": "", "heard": False}})
             await self.agent_says(task, note)
+            await self.send({"type": "orb", "state": "idle"})
+            return
+        if self.echo(text):
+            # her phone's microphone heard Jagora's own voice: not her words, so nothing is answered
+            log.info("dropped echo of Jagora's own words")
+            if msg_id:
+                await self.send({"type": "drop", "task": task, "id": msg_id})
             await self.send({"type": "orb", "state": "idle"})
             return
         if msg_id:

@@ -131,3 +131,41 @@ def test_amina_hello_voice_is_a_small_mp3(monkeypatch, tmp_path):
     asyncio.run(server._fresh_hellos())
     assert not old.exists()
     assert sorted(f.name.split("-")[3] for f in tmp_path.glob("hello-v*.mp3")) == sorted(server.HELLO)
+
+
+async def test_jagoras_own_voice_from_the_speaker_is_not_taken_as_her_words(monkeypatch):
+    """The phone's microphone picks up Jagora's reply: those words are dropped, not answered again."""
+    import asyncio
+    import json
+    import time
+
+    import jagora.server as server
+
+    class WS:
+        def __init__(self):
+            self.out = []
+
+        async def send_text(self, t):
+            self.out.append(json.loads(t))
+
+    s = server.Session(WS(), "u1")
+    s._said.append((time.time(), "I found the JAMB registration page, and the fee is 7,700 naira. Should I start?"))
+    assert s.echo("I found the JAMB registration page and the fee is")
+    assert not s.echo("yes start the registration")  # her answer
+    assert not s.echo("what is the fee for JAMB registration this year")  # her own question about it
+    assert not s.echo("yes")  # short answers are always hers
+
+    async def heard(audio, lang):
+        return "the fee is 7,700 naira should I start"
+
+    monkeypatch.setattr(server.speech, "transcribe", heard)
+    said = []
+
+    async def words(task, text, att, hist):
+        said.append(text)
+
+    s.on_words = words
+    await s.on_audio("t", {"id": "m1", "data": ""})
+    assert said == [] and any(m["type"] == "drop" and m["id"] == "m1" for m in s.ws.out)
+    s._speaker.cancel()
+    await asyncio.sleep(0)
