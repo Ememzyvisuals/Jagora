@@ -835,19 +835,25 @@ class WsIO:
         await self.s.send({"type": "update", "task": self.task, "id": m["id"], "patch": {"status": "yes" if yes else "no"}})
         return yes
 
+    async def _ring(self, rect: dict | None, tone: str = "point") -> None:
+        """The ring around what Jagora means, drawn inside the page (so it moves with it and is in the live picture)."""
+        b = self.s.browser
+        if b is not None:
+            await b.ring(rect, tone)
+
     async def point(self, rect: dict | None, text: str) -> str:
         if rect:
-            await self.s.send({"type": "highlight", "task": self.task, "box": _box(rect), "tone": "point"})
+            await self._ring(rect, "point")
         self.s.speak(self.task, text)
         m = {"id": mid(), "kind": "handoff", "text": text, "status": "waiting"}
         v = await self._wait("handoff", m)
         await self.s.send({"type": "update", "task": self.task, "id": m["id"], "patch": {"status": "done"}})
-        await self.s.send({"type": "highlight", "task": self.task, "box": None})
+        await self._ring(None)
         return v or "done"
 
     async def handoff(self, rect: dict | None, text: str) -> str:
         if rect:
-            await self.s.send({"type": "highlight", "task": self.task, "box": _box(rect), "tone": "stop"})
+            await self._ring(rect, "stop")
         return await self.point(None, text)
 
     async def ask_point(self, question: str) -> dict:
@@ -857,17 +863,17 @@ class WsIO:
         v = await self._wait("point", m)
         await self.s.send({"type": "update", "task": self.task, "id": m["id"], "patch": {"status": "done"}})
         if isinstance(v, dict) and "x" in v:
-            await self.s.send({"type": "highlight", "task": self.task, "box": {"x": v["x"] - 18, "y": v["y"] - 18, "w": 36, "h": 36}, "tone": "point"})
+            await self._ring({"x": v["x"] - 18, "y": v["y"] - 18, "w": 36, "h": 36}, "point")
             return {"x": float(v["x"]), "y": float(v["y"])}
         return {"text": str(v)}
 
     async def ask_private(self, rect: dict | None, label: str, field: str, digits: int | None) -> dict:
         if rect:
-            await self.s.send({"type": "highlight", "task": self.task, "box": _box(rect), "tone": "stop"})
+            await self._ring(rect, "stop")
         self.s.speak(self.task, label)
         m = {"id": mid(), "kind": "secret", "label": label, "field": field, "status": "waiting", **({"digits": digits} if digits else {})}
         value = await self._wait("secret", m)
-        await self.s.send({"type": "highlight", "task": self.task, "box": None})
+        await self._ring(None)
         return value
 
     async def close_step(self) -> None:
@@ -903,7 +909,7 @@ class WsIO:
         elif kind == "moment":
             await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "moment", **data}})
         elif kind == "step":
-            await s.send({"type": "highlight", "task": t, "box": None})
+            await self._ring(None)
             await self.close_step()
             self.r.step_id = mid()
             await s.send({"type": "msg", "task": t, "msg": {"id": self.r.step_id, "kind": "step", "text": data["text"], "status": "doing"}})
@@ -953,7 +959,7 @@ class WsIO:
         elif kind == "pointer":
             await s.send({"type": "pointer", "task": t, "x": data["x"], "y": data["y"], "visible": True, "clicking": data.get("clicking", False)})
         elif kind == "highlight":
-            await s.send({"type": "highlight", "task": t, "box": data.get("box"), "tone": "point"})
+            await self._ring(data.get("box"), "point")
 
     async def watch(self, url: str, what: str, every_hours: int) -> None:
         wid = uuid.uuid4().hex[:12]

@@ -721,6 +721,19 @@ class Browser:
         img = await page.screenshot(type="jpeg", quality=78, clip=clip)
         return {"rect": r, "image": img, "page": None, "text": quote}
 
+    async def ring(self, rect: dict | None, tone: str = "point") -> None:
+        """Draw (or, with None, remove) the ring around something on the page, inside the page itself."""
+        try:
+            page = self._need_page()
+            if rect:
+                b = {"x": float(rect.get("x", 0)), "y": float(rect.get("y", 0)), "w": float(rect.get("width", rect.get("w", 0))),
+                     "h": float(rect.get("height", rect.get("h", 0))), "tone": tone}
+                await page.evaluate(RING_JS, b)
+            else:
+                await page.evaluate("() => document.getElementById('__jg_ring')?.remove()")
+        except Exception:  # noqa: BLE001
+            pass
+
     async def clear_highlight(self) -> None:
         try:
             await self._need_page().evaluate("() => document.querySelectorAll('mark.__jg').forEach(m => m.replaceWith(...m.childNodes))")
@@ -1092,8 +1105,12 @@ FIND_JS = r"""
 MARK_JS = r"""
 ({q}) => {
   document.querySelectorAll('mark.__jg').forEach(m => m.replaceWith(...m.childNodes));
-  const norm = s => s.replace(/\s+/g, ' ').toLowerCase();
-  const want = norm(q).trim();
+  // one character in, one character out, so positions still map back to the page: quotes, dashes and spaces of
+  // every kind count as the same
+  const fold = c => /\s/.test(c) ? ' ' : /[‘’‚′´`]/.test(c) ? "'" : /[“”„″]/.test(c) ? '"'
+    : /[‐-―−]/.test(c) ? '-' : c.toLowerCase();
+  const norm = s => [...s].map(fold).join('').replace(/ +/g, ' ').trim();
+  const want = norm(q);
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {acceptNode: n =>
     n.parentElement && n.parentElement.offsetParent !== null && !/SCRIPT|STYLE|NOSCRIPT/.test(n.parentElement.tagName) ? 1 : 2});
   const nodes = []; let full = '';
@@ -1103,52 +1120,85 @@ MARK_JS = r"""
     for (let i = 0; i < t.length; i++) { map.push([nodes.length - 1, i]); }
     full += t;
   }
-  // match on normalised text, keeping a map back to the nodes
   let flat = '', back = [];
   for (let i = 0; i < full.length; i++) {
-    const c = /\s/.test(full[i]) ? ' ' : full[i].toLowerCase();
+    const c = fold(full[i]);
     if (c === ' ' && flat.endsWith(' ')) continue;
     flat += c; back.push(i);
   }
-  let at = flat.indexOf(want);
-  let len = want.length;
-  if (at < 0) {
-    // fall back to the block holding most of the words
-    const words = want.split(' ').filter(w => w.length > 2);
-    let best = null, bestScore = 0;
-    for (const e of document.querySelectorAll('p,li,td,tr,dd,h1,h2,h3,h4,div,span')) {
-      if (e.offsetParent === null || e.children.length > 8) continue;
-      const t = norm(e.innerText || ''); if (t.length > 900) continue;
-      const s = words.filter(w => t.includes(w)).length / (words.length || 1);
-      if (s > bestScore || (s === bestScore && best && t.length < norm(best.innerText).length)) { best = e; bestScore = s; }
+  const mark = (at, len) => {
+    const s = back[at], e = back[at + len - 1] + 1;
+    const [sn, so] = map[s], [en, eo] = map[e - 1];
+    const parts = [];
+    for (let k = sn; k <= en; k++) {
+      const n = nodes[k];
+      const a = k === sn ? so : 0, b = k === en ? eo + 1 : n.data.length;
+      if (b > a && n.data.slice(a, b).trim()) parts.push([n, a, b]);
     }
-    if (!best || bestScore < 0.7) return false;
-    best.scrollIntoView({block: 'center'});
-    const m = document.createElement('mark'); m.className = '__jg';
-    m.style.cssText = 'background:rgba(255,214,0,.55);outline:3px solid #1d63ed;outline-offset:2px;border-radius:3px';
-    while (best.firstChild) m.appendChild(best.firstChild);
-    best.appendChild(m);
+    for (const [n, a, b] of parts.reverse()) {
+      const r = document.createRange(); r.setStart(n, a); r.setEnd(n, b);
+      const m = document.createElement('mark'); m.className = '__jg';
+      m.style.cssText = 'background:rgba(255,214,0,.6);box-shadow:0 0 0 3px #1d63ed;border-radius:2px;color:inherit';
+      r.surroundContents(m);
+    }
+    document.querySelector('mark.__jg')?.scrollIntoView({block: 'center'});
     return true;
+  };
+  // the whole quote; else its sentences, longest first; else its first or last dozen words
+  const words = want.split(' ');
+  const tries = [want, ...want.split(/(?<=[.;:!?])\s+/).filter(x => x.length >= 25).sort((a, b) => b.length - a.length),
+                 words.slice(0, 12).join(' '), words.slice(-12).join(' ')];
+  for (const t of tries) {
+    if (t.length < 12) continue;
+    const at = flat.indexOf(t.replace(/[.;:!?]+$/, ''));
+    if (at >= 0) return mark(at, t.replace(/[.;:!?]+$/, '').length);
   }
-  const s = back[at], e = back[at + len - 1] + 1;
-  const range = document.createRange();
-  const [sn, so] = map[s], [en, eo] = map[e - 1];
-  range.setStart(nodes[sn], so); range.setEnd(nodes[en], eo + 1);
-  // wrap each text node part separately so the page layout is kept
-  const parts = [];
-  for (let k = sn; k <= en; k++) {
-    const n = nodes[k];
-    const a = k === sn ? so : 0, b = k === en ? eo + 1 : n.data.length;
-    if (b > a && n.data.slice(a, b).trim()) parts.push([n, a, b]);
+  // fall back to the block holding most of the words (long paragraphs of terms and news pages included)
+  const keys = words.filter(w => w.length > 2);
+  let best = null, bestScore = 0, bestLen = 1e9;
+  for (const e of document.querySelectorAll('p,li,td,dd,blockquote,h1,h2,h3,h4,h5,section,article,div,span')) {
+    if (e.offsetParent === null || e.children.length > 30) continue;
+    const t = norm(e.innerText || ''); if (!t || t.length > 8000) continue;
+    const s = keys.filter(w => t.includes(w)).length / (keys.length || 1);
+    if (s > bestScore || (s === bestScore && t.length < bestLen)) { best = e; bestScore = s; bestLen = t.length; }
   }
-  for (const [n, a, b] of parts.reverse()) {
-    const r = document.createRange(); r.setStart(n, a); r.setEnd(n, b);
-    const m = document.createElement('mark'); m.className = '__jg';
-    m.style.cssText = 'background:rgba(255,214,0,.6);box-shadow:0 0 0 3px #1d63ed;border-radius:2px;color:inherit';
-    r.surroundContents(m);
-  }
-  document.querySelector('mark.__jg')?.scrollIntoView({block: 'center'});
+  if (!best || bestScore < 0.7) return false;
+  best.scrollIntoView({block: 'center'});
+  const m = document.createElement('mark'); m.className = '__jg';
+  m.style.cssText = 'background:rgba(255,214,0,.55);outline:3px solid #1d63ed;outline-offset:2px;border-radius:3px';
+  while (best.firstChild) m.appendChild(best.firstChild);
+  best.appendChild(m);
   return true;
+}
+"""
+
+# A ring drawn inside the page itself (so it is part of the live picture and cannot drift): it locks onto the
+# element under the box and follows it as the page scrolls or moves. tone: point (blue) or stop (red).
+RING_JS = r"""
+({x, y, w, h, tone}) => {
+  document.getElementById('__jg_ring')?.remove();
+  const el = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, x + w / 2)), Math.min(innerHeight - 1, Math.max(0, y + h / 2)));
+  const r0 = el && el !== document.body && el !== document.documentElement ? el.getBoundingClientRect() : null;
+  const sx = scrollX, sy = scrollY;
+  const c = tone === 'stop' ? '194,53,47' : '29,99,237';
+  const ring = document.createElement('div');
+  ring.id = '__jg_ring'; ring.setAttribute('aria-hidden', 'true');
+  ring.style.cssText = `position:fixed;z-index:2147483647;pointer-events:none;box-sizing:border-box;border:3px solid rgb(${c});`
+    + `border-radius:12px;box-shadow:0 0 0 5px rgba(${c},.18),0 0 22px rgba(${c},.55);animation:__jgpulse 1.4s ease-in-out infinite`;
+  const st = document.createElement('style'); st.id = '__jg_ring_css';
+  st.textContent = '@keyframes __jgpulse{0%,100%{opacity:1}50%{opacity:.55}}';
+  if (!document.getElementById('__jg_ring_css')) document.documentElement.appendChild(st);
+  document.documentElement.appendChild(ring);
+  const place = () => {
+    if (!ring.isConnected) return;
+    let dx, dy;
+    if (r0 && el.isConnected) { const r = el.getBoundingClientRect(); dx = r.left - r0.left; dy = r.top - r0.top; }
+    else { dx = sx - scrollX; dy = sy - scrollY; }
+    ring.style.left = (x + dx - 6) + 'px'; ring.style.top = (y + dy - 6) + 'px';
+    ring.style.width = (w + 12) + 'px'; ring.style.height = (h + 12) + 'px';
+    requestAnimationFrame(place);
+  };
+  place();
 }
 """
 
