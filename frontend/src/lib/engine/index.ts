@@ -152,6 +152,21 @@ export function giveSecret(taskId: string, msgId: string, value: string | null, 
   else demo.answer(msgId, v);
 }
 
+/** a file of the app (the sample letter) as a data URL, the way her own photos are sent */
+async function dataUrl(path: string): Promise<string | undefined> {
+  try {
+    const blob = await (await fetch(path)).blob();
+    return await new Promise<string>((ok, bad) => {
+      const r = new FileReader();
+      r.onload = () => ok(String(r.result));
+      r.onerror = bad;
+      r.readAsDataURL(blob);
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 export function answer(taskId: string, msgId: string, value: string) {
   const s = useApp.getState();
   const first = pending.get(taskId);
@@ -164,7 +179,8 @@ export function answer(taskId: string, msgId: string, value: string) {
     const goal = first === "scam" ? `Check if this message is a scam: ${sample ? demo.SAMPLE_SCAM : value}` : "Explain this paper to me in simple words";
     const msg = s.tasks.find((t) => t.id === taskId)?.messages.findLast((m) => m.kind === "user");
     const att = msg && msg.kind === "user" ? msg.attachment : undefined;
-    void remoteStart(taskId, goal, sample && first === "paper" ? { kind: "image", name: "letter", data: "/samples/letter.webp" } : att && { kind: att.kind, name: att.name, data: att.url });
+    if (sample && first === "paper") void dataUrl("/samples/letter.webp").then((data) => remoteStart(taskId, goal, { kind: "image", name: "letter", data }));
+    else void remoteStart(taskId, goal, att && { kind: att.kind, name: att.name, data: att.url });
     return;
   }
   if (live) void remoteAnswer(taskId, msgId, value);

@@ -63,7 +63,9 @@ def _muse_extras(model) -> dict:
         return {}
     from jagora import muse
 
-    out: dict = {"images": muse.Images()}
+    from jagora.sam import Sam
+
+    out: dict = {"images": muse.Images(), "sam": Sam()}
     try:
         out["wonder"] = MuseSpark(settings.wonder_model)
     except Exception:  # noqa: BLE001
@@ -1226,6 +1228,9 @@ class WsIO:
             await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "verdict", **data}})
         elif kind == "reading":
             await self.close_step()
+            if str(data.get("image", "")).startswith("/"):
+                data = {**data, "image": settings.public_url.rstrip("/") + data["image"]}
+            data = {k: v for k, v in data.items() if k != "seen_on_photo"}
             await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "reading", **data}})
             await db.remember(s.user_id, t, "agent", f"[read {data.get('kind')} with {data.get('read_by')}] {data.get('summary', '')}")
         elif kind == "pictures":

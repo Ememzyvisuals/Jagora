@@ -40,6 +40,7 @@ from jagora.config import FILES_DIR, settings
 from jagora.guard import guard, registrable
 from jagora.llm import Model, image_part, tool
 from jagora import muse
+from jagora import sam as sam_mod
 from jagora.safety import INSTALLER, Verdict, check_click, check_navigate, check_type, site
 
 log = logging.getLogger("jagora.agent")
@@ -481,6 +482,7 @@ class Agent:
     wonder: Model | None = None  # Muse Wonder: reads their photos, PDFs and videos
     side_model: Model | None = None  # open weights (Muse Glimmer / Spark Open) for safety checks, when configured
     images: Any = None  # Muse Image, for picture guides
+    sam: Any = None  # SAM 3.1: outlines the facts and safety signs on their photos
     run_id: str = field(default_factory=lambda: time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6])
     browser_factory: Callable[[], Awaitable[Browser]] | None = None
     steering: asyncio.Queue | None = None  # their words spoken while the agent works
@@ -1495,15 +1497,60 @@ class Agent:
         if not str(att.get("data", "")).startswith(("data:image", "data:application/pdf", "data:video")):
             return
         today = dt.datetime.now(dt.timezone(dt.timedelta(hours=1))).strftime("%A %d %B %Y")
+        # SAM 3.1 starts looking for safety signs on the photo while Muse Wonder reads it
+        photo = await asyncio.to_thread(sam_mod.photo_for_sam, str(att.get("data", ""))) if self.sam else None
+        signs_job = asyncio.create_task(sam_mod.look(self.sam, photo[0])) if photo else None
         try:
             d = await muse.read_attachment(att, self.lang, today, wonder=self.wonder, fallback=self.model if self.wonder else None)
         except Exception as e:  # noqa: BLE001
             log.info("reading failed: %s", e)
             d = None
+        marks = (d or {}).pop("marks", []) if d else []
+        if d and photo:
+            try:
+                await self._mark_photo(d, marks, photo, await signs_job)
+            except Exception as e:  # noqa: BLE001
+                log.warning("SAM marking failed: %s", e)
+        elif signs_job:
+            signs_job.cancel()
         if d:
             await self.io.event("reading", d)
             self.history.append(muse.reading_note(d))
             self._record("reading", {"by": d.get("read_by"), "kind": d.get("kind")})
+
+    async def _mark_photo(self, d: dict, marks: list, photo: tuple[bytes, int, int], signs: dict) -> None:
+        """SAM 3.1 on their photo: precise outlines for the facts Wonder found (numbered like the facts on the card),
+        and the safety signs it saw (a QR code becomes a warning). Adds "image", "marked" and "signs" to the reading."""
+        jpeg, w, h = photo
+        rough = sam_mod.rough_boxes(marks, w, h)
+        rough = [(i, b) for i, b in rough if 0 <= i < len(d.get("facts") or [])]
+        outlined = {}
+        if rough:
+            try:
+                outlined = await self.sam.outline([b for _, b in rough], jpeg, w, h)
+            except Exception as e:  # noqa: BLE001
+                log.info("SAM could not outline the facts: %s", e)
+        facts = [(i, b, outlined.get(n)) for n, (i, b) in enumerate(rough)]
+        found = [(k, f) for k, fs in signs.items() for f in fs[:3]]
+        d["signs"] = [{"kind": k, "label": sam_mod.SIGN_NAMES[k].get(self.lang, sam_mod.SIGN_NAMES[k]["en"]), "found": bool(signs.get(k))}
+                      for k in sam_mod.SIGNS if k in signs]
+        if signs.get("qr"):
+            flag = sam_mod.QR_FLAG.get(self.lang, sam_mod.QR_FLAG["en"])
+            d["red_flags"] = [flag] + list(d.get("red_flags") or [])
+            if d.get("risk") == "low":
+                d["risk"] = "medium"
+        d["seen_on_photo"] = [s["label"] for s in d["signs"] if s["found"]]
+        if not facts and not found:
+            return
+        img = await asyncio.to_thread(sam_mod.draw, jpeg, facts, found)
+        token = secrets.token_urlsafe(12)
+        folder = FILES_DIR / token
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "marked.webp").write_bytes(img)
+        d["image"] = f"/files/{token}/marked.webp"
+        d["marked"] = [i for i, _, _ in facts]  # the facts on the card that have a number on the photo, in order
+        d["outlined_by"] = "SAM 3.1"
+        self._record("sam", {"facts": len(facts), "outlined": len(outlined), "signs": d["seen_on_photo"]})
 
     async def _picture_guide(self, a: dict) -> tuple[str, bool, None]:
         """Muse Image: the result as 3 or 4 pictures with the same woman in the same style, captions in their language."""

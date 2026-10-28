@@ -55,7 +55,9 @@ export type Msg =
   /** a task Jagora will do on its own later */
   /** a site's terms and privacy policy, read for her */
   | { id: string; kind: "reading"; read_by: string; name?: string; from?: string; summary: string; risk: "low" | "medium" | "high";
-      facts: { label: string; value: string }[]; deadlines: { what: string; date: string }[]; asks_her_to: string[]; red_flags: string[]; next_steps: string[] }
+      facts: { label: string; value: string }[]; deadlines: { what: string; date: string }[]; asks_her_to: string[]; red_flags: string[]; next_steps: string[];
+      /** SAM 3.1: her photo with the facts outlined and numbered, which facts have a number, and the safety signs it looked for */
+      image?: string; marked?: number[]; outlined_by?: string; signs?: { kind: "qr" | "stamp" | "signature"; label: string; found: boolean }[] }
   | { id: string; kind: "pictures"; title: string; panels: { caption: string; url: string }[] }
   | { id: string; kind: "terms"; site: string; verdict: "ok" | "caution" | "red"; summary: string; points: { level: "caution" | "red"; text: string }[]; urls?: string[] }
   /** Jagora is not sure what she means: she taps it on the live page */

@@ -18,6 +18,7 @@ dependencies = [
   "cryptography>=42",
   "python-multipart>=0.0.9",
   "pywebpush>=2.0",
+  "meta-sam-parser>=0.1.0",  # SAM 3.1 output (boxes and masks) on her photos
 ]
 
 [project.optional-dependencies]

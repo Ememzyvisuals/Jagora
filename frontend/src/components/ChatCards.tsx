@@ -354,6 +354,7 @@ const READ: Record<string, L> = {
   title: { en: "Read from what you shared", pcm: "Wetin I read from wetin you send", yo: "Ohun tí mo kà nínú ohun tí ẹ fi ránṣẹ́", ha: "Abin da na karanta daga abin da ka aiko", ig: "Ihe m gụrụ n'ihe i zitere" },
   due: { en: "Deadlines", pcm: "Last day", yo: "Ọjọ́ ìparí", ha: "Ranar ƙarshe", ig: "Ụbọchị njedebe" },
   next: { en: "What to do", pcm: "Wetin to do", yo: "Ohun tí ẹ máa ṣe", ha: "Abin da za a yi", ig: "Ihe ị ga-eme" },
+  marked: { en: "Your photo, with the important parts marked", pcm: "Your photo, with the important parts marked", yo: "Fọ́tò yín, pẹ̀lú àwọn apá pàtàkì tí a sàmì sí", ha: "Hotonku, da muhimman wurare an yi musu alama", ig: "Foto gị, ebe ndị dị mkpa ka akara" },
   flags: { en: "Be careful", pcm: "Shine your eye", yo: "Ẹ ṣọ́ra", ha: "Ka yi hankali", ig: "Kpachara anya" },
 };
 
@@ -368,11 +369,33 @@ export function ReadingCard({ m }: { m: Extract<Msg, { kind: "reading" }> }) {
         {m.from ? ` · ${m.from}` : ""}
       </p>
       <Rich text={m.summary} className="mt-1 text-[15.5px] leading-snug text-ink" />
+      {m.image && (
+        <a href={m.image} target="_blank" rel="noreferrer" className="mt-3 block overflow-hidden rounded-[16px] ring-1 ring-black/5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={m.image} alt={READ.marked[lang]} loading="lazy" className="max-h-[420px] w-full bg-mist object-contain" />
+        </a>
+      )}
+      {m.signs && m.signs.some((s) => s.found) && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {m.signs.filter((s) => s.found).map((s) => (
+            <span key={s.kind} className={`rounded-full px-2.5 py-1 text-[12.5px] font-semibold ${s.kind === "qr" ? "bg-danger-soft text-danger" : "bg-[#e3f4ea] text-[#1a7f45] dark:bg-[#1a3326] dark:text-[#7fd6a3]"}`}>
+              {s.label}
+            </span>
+          ))}
+        </div>
+      )}
       {m.facts.length > 0 && (
         <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[14.5px]">
           {m.facts.slice(0, 8).map((f, i) => (
             <div key={i} className="contents">
-              <dt className="text-ink-3">{f.label}</dt>
+              <dt className="flex items-start gap-1.5 text-ink-3">
+                {m.image && (m.marked ?? []).includes(i) && (
+                  <span className="mt-[1px] grid h-[18px] min-w-[18px] place-items-center rounded-full bg-accent text-[11px] font-bold text-white">
+                    {(m.marked ?? []).indexOf(i) + 1}
+                  </span>
+                )}
+                {f.label}
+              </dt>
               <dd className="font-semibold text-ink [overflow-wrap:anywhere]">{f.value}</dd>
             </div>
           ))}
@@ -410,7 +433,10 @@ export function ReadingCard({ m }: { m: Extract<Msg, { kind: "reading" }> }) {
           </ol>
         </div>
       )}
-      <p className="mt-3 text-[11.5px] text-ink-3">Read by {m.read_by}</p>
+      <p className="mt-3 text-[11.5px] text-ink-3">
+        Read by {m.read_by}
+        {m.outlined_by ? ` · Marked by ${m.outlined_by}` : ""}
+      </p>
     </div>
   );
 }

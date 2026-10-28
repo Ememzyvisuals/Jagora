@@ -22,6 +22,7 @@
   <img alt="Muse Spark 1.3" src="https://img.shields.io/badge/Meta-Muse%20Spark%201.3-0467DF?style=flat-square">
   <img alt="Muse Wonder" src="https://img.shields.io/badge/Meta-Muse%20Wonder-0467DF?style=flat-square">
   <img alt="Muse Image" src="https://img.shields.io/badge/Meta-Muse%20Image-0467DF?style=flat-square">
+  <img alt="SAM 3.1" src="https://img.shields.io/badge/Meta-SAM%203.1-0467DF?style=flat-square">
   <img alt="Languages" src="https://img.shields.io/badge/languages-yo%20%C2%B7%20ha%20%C2%B7%20ig%20%C2%B7%20pcm%20%C2%B7%20en-111318?style=flat-square">
   <img alt="Tests" src="https://img.shields.io/badge/backend%20tests-77%20passing-3f8f5c?style=flat-square">
   <a href="#live-result-against-the-real-model"><img alt="Attacks resisted" src="https://img.shields.io/badge/live%20attack%20range-20%2F20%20resisted-3f8f5c?style=flat-square"></a>
@@ -139,8 +140,9 @@ of people.
   Nigeria.
 - **It has an open-weights family.** Muse Glimmer and Muse Spark Open give the desktop browser a future option to run
   the safety checks on the user's own machine. In this demo, Muse Spark does all of them.
-- **The family covers the rest.** Muse Wonder reads photos, PDFs and videos of real letters and bills; Muse Image
-  turns steps into picture guides for people who find reading hard.
+- **The family covers the rest.** Muse Wonder reads photos, PDFs and videos of real letters and bills; SAM 3.1
+  outlines the key facts on her own photo and spots a QR code (a common trick in fake bills); Muse Image turns steps
+  into picture guides for people who find reading hard.
 
 ### What it takes to run this on servers today
 
@@ -189,7 +191,7 @@ millions of cloud browsers.
 | **Talks like a person** | It waits until you have finished speaking, stops the moment you cut in, and picks up where it was when you say "continue". Each language has its own voice. |
 | **News, read to you** | Tap a story and Jagora opens it and tells it in your language, in plain words. |
 | **Proof from official sources** | Checks the site is the real one, finds the exact line in the page or PDF, and highlights it as evidence. |
-| **Snap a letter, it reads it** | A photo, PDF or short video of a bill, letter or result slip becomes facts, deadlines and scam signs (Muse Wonder). |
+| **Snap a letter, it reads it** | A photo, PDF or short video of a bill, letter or result slip becomes facts, deadlines and scam signs (Muse Wonder). Her photo comes back with each fact outlined and numbered, and any QR code flagged (SAM 3.1). |
 | **Shows you in pictures** | For people who find reading hard, the steps become a short picture guide with the same character in every frame (Muse Image). |
 | **Websites in your language** | English pages are shown in Yorùbá, Hausa or Igbo while the agent still reads the original. |
 | **Logins that stay yours** | Passwords, PINs, OTPs, NIN and BVN go through a private box the model never sees. Saved logins are sealed (AES-256-GCM) and bound to their own site. |
@@ -203,13 +205,14 @@ millions of cloud browsers.
 
 ## How Meta AI powers Jagora
 
-Jagora runs on three of Meta's models, each for the job it does best, and is ready for a fourth (open weights) when
+Jagora runs on four of Meta's models, each for the job it does best, and is ready for a fifth (open weights) when
 we choose to host one.
 
 | Meta model | Role in Jagora | Where in the code |
 |---|---|---|
 | **Muse Spark 1.3**<br>`muse-spark-1.3` | The agent's brain. One tool-calling loop over 50+ tools (search, open, click, type, upload, drag, read PDFs, show evidence, schedule, remember). Sees the page as a numbered element list plus a screenshot. Also runs the **completion checker** (a second call that must agree the task is done before the user hears "done"). | `backend/jagora/agent.py`, `llm.py` |
 | **Muse Wonder**<br>`muse-wonder-1.0` | Reads what she shares in one call: photos, screenshots, PDFs (as page images) and short videos (as stills). Returns sender, amounts, reference numbers, deadlines, what it asks her to do, and scam risk, in her language. Jagora then acts on it. | `backend/jagora/muse.py` (`read_attachment`) |
+| **SAM 3.1**<br>`sam-3.1` | Marks her own photo. Muse Wonder gives the rough place of each key fact (amount, due date, account number); SAM turns all of them into precise outlines in one call (box prompts), and the photo comes back with numbers that match the facts on the card, so she can check each one with her own eyes. In parallel, SAM looks for safety signs with concept prompts: a **QR code** becomes a warning not to scan or pay through it, and an official stamp or signature is noted. Output parsed with Meta's `meta-sam-parser`. | `backend/jagora/sam.py`, `agent.py` (`_mark_photo`) |
 | **Muse Image**<br>`muse-image-1.0` | Picture guides. A result becomes 3 or 4 illustrations: the first is generated from a fixed character and style, the rest are drawn from it with `images/edits`, so the same woman appears in every frame. Captions are read aloud. | `backend/jagora/muse.py` (`Images`, `draw_guide`) |
 | **Muse Glimmer / Muse Spark Open**<br>open weights, *optional, off in this demo* | Not used in this demo: Muse Spark does all of the work above, including every safety check. The code is ready for later: when `OPEN_BASE_URL` points at an OpenAI-compatible server (vLLM, SGLang, llama.cpp or a hosted provider), the **safety judgement** and the **terms review** move to the open model, on hardware we control. | `backend/jagora/muse.py` (`open_model`) |
 
@@ -253,7 +256,7 @@ what happens around it:
 |---|---|
 | App | Next.js 15, React 19, Tailwind v4, Motion, Zustand, WebGL (living orb, cloud-glass wordmark), three.js (3D devices), WebCodecs (live video), Silero VAD (turn-taking, in the browser) |
 | Server | Python 3.12, FastAPI, WebSockets, Playwright Chromium, PyAV (x264 live video), PyMuPDF, ffmpeg |
-| Models | Meta Model API (Muse Spark, Muse Wonder, Muse Image), PlotWeaver STORM speech; an optional open-weights hook, off in this demo |
+| Models | Meta Model API (Muse Spark, Muse Wonder, Muse Image, SAM 3.1), PlotWeaver STORM speech; an optional open-weights hook, off in this demo |
 | Data | Turso (libSQL over HTTP), SQLite fallback, per-site encrypted vault |
 | Safety | Public blocklists (StevenBlack, URLhaus, Phishing.Database, HaGeZi), lookalike detection, content classifiers |
 | Delivery | Vercel (app), Docker behind Caddy on AWS EC2 (agent), Web Push (VAPID) |
@@ -394,6 +397,7 @@ cd backend && pytest -q
 | `test_fields_safety.py` | Number and date reading in five languages, the approval gate, her account's locks |
 | `test_hands.py` | Hover menus, drag and drop, key combinations, canvas clicks, uploads, date pickers, pointing |
 | `test_muse.py` | Muse Wonder reading (photos, PDFs), fallback to Muse Spark, picture guides, the optional open-weights hook |
+| `test_sam.py` | SAM 3.1: its wire format parsed, facts outlined in one box-prompt call, QR code turned into a warning, the reading still arriving when SAM is down |
 | `test_power.py` | Vault, scheduled sign-in, translation, page tools, retries, parallel reading, checker, memory, terms review, learned skills |
 | `test_research.py` | Search, official-site checks, evidence |
 | `test_server.py` | Sign-up with proof-of-work, a full research run over WebSocket, admin monitoring, phone notifications |
@@ -501,6 +505,7 @@ backend/
     safety.py      the approval gate and her account's locks
     flow.py        task sites and data labels: what may cross from one site to another
     muse.py        Muse Wonder reading, Muse Image picture guides, optional open-weights hook
+    sam.py         SAM 3.1: facts outlined on her photo, safety signs (QR code, stamp, signature)
     speech.py      STORM ASR and streaming TTS, a voice for each language
     voicefx.py     Jagora's voice a little quicker (WSOLA) and evenly loud
     video.py       the live page as H.264 video
@@ -533,7 +538,7 @@ docs/              research notes, media and diagrams (docs/diagrams/make_diagra
 ## Credits
 
 - **Built by** Emmanuel Ariyo, ML Engineer at [PlotWeaver](https://www.plotweaver.app).
-- **Models:** Meta Muse Spark, Muse Wonder and Muse Image, via the Meta Model API. Voice by PlotWeaver STORM.
+- **Models:** Meta Muse Spark, Muse Wonder, Muse Image and SAM 3.1, via the Meta Model API. Voice by PlotWeaver STORM.
 
 Open-source work Jagora builds on is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 

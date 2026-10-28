@@ -9,6 +9,7 @@ Jagora uses the following open-source work. Thank you to their authors.
 | [100Avatars, "Cursed Amy"](https://github.com/toxsam/open-source-avatars) | Amina's 3D model (recoloured, halo removed) | Polygonal Mind | CC0 |
 | [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) | Profile avatars (3D people, resized) | Microsoft | MIT |
 | [Silero VAD](https://github.com/snakers4/silero-vad) via [vad-web](https://github.com/ricky0123/vad) | Hearing when she has finished speaking | Silero Team; ricky0123 | MIT; ISC |
+| [meta-sam-parser](https://github.com/meta-models/meta-sam) | Reading SAM 3.1's boxes and outlines | Meta Platforms, Inc. | SAM License |
 | Bricolage Grotesque, Outfit (both with Yorùbá and Igbo letters added), Vollkorn | Fonts | Their designers | SIL Open Font License |
 | Boiling | Display font | Alit Design | Per its license |
 | StevenBlack hosts, URLhaus (abuse.ch), Phishing.Database, HaGeZi DNS blocklists | Site guard lists, downloaded at run time | Their maintainers | Per each list's license |

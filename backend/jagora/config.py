@@ -106,6 +106,7 @@ class Settings:
     meta_model: str = field(default_factory=lambda: env("META_MODEL", "muse-spark-1.3"))
     wonder_model: str = field(default_factory=lambda: env("META_WONDER_MODEL", "muse-wonder-1.0"))  # reads photos, PDFs, videos
     image_model: str = field(default_factory=lambda: env("META_IMAGE_MODEL", "muse-image-1.0"))  # picture guides
+    sam_model: str = field(default_factory=lambda: env("META_SAM_MODEL", "sam-3.1"))  # outlines facts and safety signs on photos
     # open weights (Muse Glimmer / Muse Spark Open) on any OpenAI-compatible server; runs the safety checks when set
     open_base_url: str = field(default_factory=lambda: env("OPEN_BASE_URL"))
     open_model: str = field(default_factory=lambda: env("OPEN_MODEL"))
