@@ -141,6 +141,8 @@ export const CARDS: { id: "register" | "scam" | "paper"; thumb: string; source: 
   },
 ];
 
+const ASK_SHORT = { en: "Ask Jagora", pcm: "Ask Jagora", yo: "Bi Jagora", ha: "Tambayi Jagora", ig: "Jụọ Jagora" } as const;
+
 /** her chat history (the menu); MobileApp shows it */
 export const openHistory = () => dispatchEvent(new CustomEvent("jagora:app", { detail: { action: "show_history", value: "" } }));
 export const CHATS = { en: "Chats", pcm: "Chats", yo: "Àwọn ìjíròrò", ha: "Hirarraki", ig: "Mkparịta ụka" } as const;
@@ -508,7 +510,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
   }, []);
   const onPage = screen === "page" && task?.kind === "browse" && !!task.url;
   const host = task?.url ? (task.url.startsWith("/practice/") ? "skillsfair.ng" : task.url.replace(/^https?:\/\/(www\.)?/, "").split("/")[0]) : "";
-  const label = onPage ? host : sheet ? "Jagora" : PLACEHOLDER[lang];
+  const label = onPage ? host : sheet ? "Jagora" : ASK_SHORT[lang]; // short, so it is never cut off
   const spring = { type: "spring", stiffness: 380, damping: 32 } as const;
 
   return (
@@ -542,7 +544,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
                   {label}
                 </button>
                 {onPage && <ArrowClockwise size={17} className="shrink-0 text-ink-2" />}
-                <LiveButton compact />
+                {onPage && <LiveButton compact />}
               </div>
             )}
           </Glass>

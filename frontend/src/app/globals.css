@@ -38,6 +38,11 @@
   font-display: swap;
 }
 @theme {
+  /* every weight one step heavier, so text is easy to read in sunlight and on small phones */
+  --font-weight-medium: 600;
+  --font-weight-semibold: 700;
+  --font-weight-bold: 800;
+
   --font-sans: "Jagora Body", "Jagora Sans", "Inter Variable", ui-serif, Georgia, serif;
   --font-head: "Jagora Boiling", "Jagora Sans", "Inter Variable", sans-serif;
   --font-display: "Jagora Sans", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
@@ -69,9 +74,9 @@
 }
 
 :root {
-  --glass: rgba(255, 255, 255, 0.42);
-  --glass-2: rgba(255, 255, 255, 0.68);
-  --glass-3: rgba(255, 255, 255, 0.86);
+  --glass: rgba(255, 255, 255, 0.58);
+  --glass-2: rgba(255, 255, 255, 0.8);
+  --glass-3: rgba(255, 255, 255, 0.92);
   --glass-line: rgba(255, 255, 255, 0.72);
   --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 18px 44px -24px rgba(60, 38, 16, 0.28);
   color-scheme: light;
@@ -101,9 +106,9 @@ body {
   --color-danger-soft: #3b2423;
   --color-mist: #2b2e36;
   --color-mist-2: #353842;
-  --glass: rgba(30, 33, 40, 0.5);
-  --glass-2: rgba(30, 33, 40, 0.68);
-  --glass-3: rgba(30, 33, 40, 0.84);
+  --glass: rgba(30, 33, 40, 0.64);
+  --glass-2: rgba(30, 33, 40, 0.8);
+  --glass-3: rgba(30, 33, 40, 0.9);
 }
 [data-theme="dark"] body {
   background: #16181d;

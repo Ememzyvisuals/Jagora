@@ -19,8 +19,48 @@ const COUNT: L = { en: "{n} stories", pcm: "{n} stories", yo: "Ìtàn {n}", ha: 
 
 export type Story = { key: string; image: string | null; title: string; source: string; listen?: boolean; open: () => void };
 
+const DISCOVER: L = { en: "Discover", pcm: "Discover", yo: "Ṣàwárí", ha: "Gano", ig: "Chọpụta" };
+
 export function DiscoverStack(props: { stories: Story[]; lang: Lang; onSeeAll: () => void; wide?: boolean }) {
-  return <DiscoverFan {...props} />;
+  return props.wide ? <DiscoverFan {...props} /> : <DiscoverRow {...props} />;
+}
+
+/* Phones: one clean row of whole cards, swiped sideways (each snaps into place). Nothing overlaps or is cut off, and
+   every title is readable in full. */
+function DiscoverRow({ stories, lang, onSeeAll }: { stories: Story[]; lang: Lang; onSeeAll: () => void }) {
+  return (
+    <div>
+      <div className="mb-2.5 flex items-end justify-between px-1">
+        <h2 className="text-[20px] font-bold text-ink [text-shadow:0_1px_8px_rgba(255,255,255,.8)] dark:[text-shadow:none]">{DISCOVER[lang]}</h2>
+        <button onClick={onSeeAll} className="rounded-full bg-white/85 px-3.5 py-1.5 text-[14px] font-bold text-ink shadow-[0_4px_12px_-6px_rgba(10,25,60,.35)] dark:bg-white/15">
+          {SEE_ALL[lang]}
+        </button>
+      </div>
+      <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-3">
+        {stories.map((s) => (
+          <button
+            key={s.key}
+            onClick={s.open}
+            className="w-[76%] max-w-[300px] shrink-0 snap-start overflow-hidden rounded-[24px] bg-white text-left shadow-[0_14px_30px_-16px_rgba(10,25,60,.5)] transition active:scale-[.98] dark:bg-[#1d2027]"
+          >
+            {s.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={s.image} alt="" loading="lazy" draggable={false} className="h-[150px] w-full object-cover object-left-top" />
+            ) : (
+              <span className="grid h-[150px] w-full place-items-center bg-ink text-[18px] font-bold text-paper">{s.source}</span>
+            )}
+            <span className="block px-4 pb-4 pt-3">
+              <span className="line-clamp-3 text-[16.5px] font-bold leading-snug text-ink">{s.title}</span>
+              <span className="mt-1.5 flex items-center gap-1.5 text-[13.5px] font-semibold text-ink-2">
+                <span className="truncate">{s.source}</span>
+                {s.listen && <SpeakerHigh size={16} weight="fill" className="ml-auto shrink-0 text-accent" aria-label="Listen" />}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /* Wide screens: the stories spread out in a fan, like cards held in a hand, rising out of the glass pocket. Hover
