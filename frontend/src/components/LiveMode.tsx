@@ -274,6 +274,8 @@ export function LiveMode() {
     });
   };
 
+  // the big orb fits the phone: smaller on short screens so the reply and buttons stay in view
+  const orbBig = typeof window !== "undefined" ? (window.innerHeight < 760 ? 180 : window.innerHeight < 880 ? 220 : 260) : 220;
   const level = phase === "speak" ? speaking : smart && listener.current ? listener.current.level : voice.level;
   // while Jagora works, the caption says what it is doing right now (its latest step)
   const lastStep = [...(task?.messages ?? [])].reverse().find((m) => m.kind === "step");
@@ -341,15 +343,19 @@ export function LiveMode() {
                 className={phase === "speak" ? "cursor-pointer" : ""}
                 title={phase === "speak" ? "Tap to interrupt" : undefined}
               >
-                <Orb size={260} state={orbState} levelRef={level} />
+                <Orb size={orbBig} state={orbState} levelRef={level} />
               </motion.div>
               <p className="mt-2 text-[17px] font-semibold text-ink" aria-live="polite">
                 {label}
               </p>
               <div className="mt-6 min-h-[96px] w-full max-w-[420px] text-center">
-                {heard && <p className="text-[16px] leading-snug text-ink-2">“{heard}”</p>}
+                {heard && <p className="line-clamp-2 text-[15px] leading-snug text-ink-2">“{heard}”</p>}
                 {replyText ? (
-                  <p className="mt-3 text-[19px] font-medium leading-snug text-ink">{replyText}</p>
+                  // Jagora's latest reply: never more than a few lines on screen (it scrolls if longer), so the orb and
+                  // the buttons always stay in view
+                  <div className="no-scrollbar mx-auto mt-3 max-h-[7.6em] overflow-y-auto text-[16px] font-semibold leading-snug text-ink [mask-image:linear-gradient(to_bottom,black_80%,transparent)] sm:text-[17px]">
+                    {replyText}
+                  </div>
                 ) : (
                   !heard && <p className="text-[15.5px] leading-snug text-ink-2">{SAY.hint[lang]}</p>
                 )}

@@ -24,7 +24,7 @@ export function Conversation({ task }: { task: Task }) {
     end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [task.messages.length, task.messages.at(-1)]);
   return (
-    <div className="flex flex-col gap-3 px-4 pb-4 pt-4">
+    <div className="flex flex-col gap-2.5 px-3 pb-4 pt-3 sm:gap-3 sm:px-4 sm:pt-4">
       {task.messages.map((m, i) => (
         <motion.div key={m.id} {...enter}>
           <Item m={m} task={task} />
@@ -64,8 +64,8 @@ function Item({ m, task }: { m: Msg; task: Task }) {
     case "user":
       if (m.voice) return <VoiceBubble m={m} />;
       return (
-        <div className="flex justify-end pl-10">
-          <div className="min-w-0 max-w-full rounded-[20px] rounded-br-[6px] bg-ink px-4 py-2.5 text-[15.5px] leading-snug text-paper">
+        <div className="flex justify-end pl-8 sm:pl-10">
+          <div className="min-w-0 max-w-full rounded-[20px] rounded-br-[6px] bg-ink px-3.5 py-2 text-[15px] leading-snug text-paper sm:px-4 sm:py-2.5 sm:text-[15.5px]">
             {m.attachment && (
               <div className="mb-1 flex items-center gap-1.5 text-[13px] text-paper/75">
                 {m.attachment.kind === "image" ? <ImageIcon size={14} /> : m.attachment.kind === "link" ? <LinkSimple size={14} /> : <Paperclip size={14} />}
@@ -77,7 +77,7 @@ function Item({ m, task }: { m: Msg; task: Task }) {
         </div>
       );
     case "agent":
-      return <Rich text={m.text} className="pr-6 text-[17px] leading-[1.5] text-ink" />;
+      return <Rich text={m.text} className="pr-1 text-[15.5px] leading-[1.5] text-ink sm:pr-6 sm:text-[17px]" />;
     case "step":
       return (
         <div className="flex items-center gap-2 text-[13.5px] text-ink-3">

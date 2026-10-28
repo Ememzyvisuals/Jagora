@@ -36,15 +36,16 @@ export function Evidence({ m }: { m: Extract<Msg, { kind: "evidence" }> }) {
     <div className="overflow-hidden rounded-[22px] bg-white shadow-[0_10px_30px_-18px_rgba(10,30,70,.45)] ring-1 ring-black/5 dark:bg-[#23262d]">
       {src && (
         <button onClick={() => setBig(true)} className="block w-full bg-[#f3f5f8] dark:bg-black/30" aria-label="See the highlighted part larger">
-          <img src={src} alt={m.quote} className="max-h-[240px] w-full object-cover object-center" />
+          {/* the whole picture, so the yellow highlight is always in view; tap to see it large */}
+          <img src={src} alt={m.quote} className="max-h-[300px] w-full object-contain object-center" />
         </button>
       )}
-      <div className="px-4 pb-3.5 pt-3">
+      <div className="px-3.5 pb-3 pt-2.5 sm:px-4 sm:pb-3.5 sm:pt-3">
         <div className={`mb-1.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ${m.official ? "bg-ok/12 text-ok" : "bg-stop-soft text-stop"}`}>
           {m.official ? <SealCheck size={14} weight="fill" /> : <Warning size={14} weight="fill" />}
           {m.official ? `${W.official[lang]}${m.owner ? ` · ${m.owner}` : ""}` : W.unofficial[lang]}
         </div>
-        <p className="text-[16px] font-semibold leading-snug text-ink">{m.claim}</p>
+        <p className="text-[15px] font-semibold leading-snug text-ink sm:text-[16px]">{m.claim}</p>
         <p className="mt-1.5 border-l-2 border-accent/60 pl-2.5 text-[14px] italic leading-snug text-ink-2">“{m.quote.length > 240 ? `${m.quote.slice(0, 238)}…` : m.quote}”</p>
         <div className="mt-2.5 flex items-center gap-2 text-[12.5px] text-ink-3">
           <span className="min-w-0 truncate">
