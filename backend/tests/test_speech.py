@@ -9,6 +9,10 @@ def test_sentences_and_speakable():
     s = speech.sentences("Ẹ káàárọ̀. Mo ti rí i. UNILAG requires English, Mathematics and Physics! Check https://unilag.edu.ng now.")
     assert s[0].startswith("Ẹ káàárọ̀. Mo ti rí i.")  # short pieces join
     assert all(len(x) <= 900 for x in speech.sentences("a, " * 800))
+    # the voice gets the whole message in one go when it fits, else whole sentences under the API limit
+    assert speech.chunks("One. Two is here. Three!") == ["One. Two is here. Three!"]
+    long = " ".join(f"Sentence number {i} is right here." for i in range(60))
+    assert all(len(c) <= 900 for c in speech.chunks(long)) and len(speech.chunks(long)) == 3
     assert "https" not in speech.speakable("See https://jamb.gov.ng/x for **details**")
 
 
@@ -44,7 +48,9 @@ async def test_voice_streams_in_order_and_makes_the_next_sentence_early(monkeypa
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(stream), **kw))
     monkeypatch.setattr(speech, "enabled", lambda: True)
     monkeypatch.setattr(speech, "TTS_CACHE", tmp_path)
-    text = "Alpha sentence is here for you. Bravo sentence comes next right away. Charlie sentence is the last one."
+    # each sentence long enough to be its own piece (pieces stay under the API limit)
+    a, b, c = ("Alpha " + "word " * 90 + "end."), ("Bravo " + "word " * 90 + "end."), ("Charlie " + "word " * 90 + "end.")
+    text = f"{a} {b} {c}"
     got, first = [], None
     t0 = time.monotonic()
     async for i, rate, pcm in speech.speak_stream(text, "en"):
@@ -54,7 +60,7 @@ async def test_voice_streams_in_order_and_makes_the_next_sentence_early(monkeypa
     assert [g[0] for g in got] == sorted(g[0] for g in got)  # in order
     assert {g[1] for g in got if g[0] == 0} == {b"A"} and {g[1] for g in got if g[0] == 2} == {b"C"}
     assert first < 0.2  # sound starts before the sentence is finished
-    assert started["Bravo sentence comes next right away."] - started["Alpha sentence is here for you."] < 0.1  # made ahead
+    assert started[b] - started[a] < 0.1  # made ahead
     # said again: straight from the cache, no request
     started.clear()
     again = [i async for i, _, _ in speech.speak_stream(text, "en")]

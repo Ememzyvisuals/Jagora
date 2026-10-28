@@ -10,7 +10,9 @@ import { blobToDataUrl, useSpeakingPulse, useVoice } from "@/lib/voice";
 import { Composer, StopButton, browserRecognizer } from "./Composer";
 import { Conversation } from "./Conversation";
 import { IconPasteMessage, IconRegister, IconSnapPaper } from "./icons";
-import { Orb } from "./Orb";
+import { Bounce, Orb } from "./Orb";
+import { micLevel, startHandsFree, stopHandsFree, useHandsFree } from "@/lib/handsfree";
+import { isSpeaking } from "@/lib/engine/remote";
 
 export function ModeSwitch() {
   const mode = useApp((s) => s.mode);
@@ -33,7 +35,9 @@ export function ModeSwitch() {
   );
 }
 
-/** The orb, wired to her microphone: tap to talk, tap again to send. */
+/** The orb, wired to her microphone: tap once and Jagora listens hands-free (each turn is heard and sent by itself,
+    and talking over Jagora stops it); tap again to stop listening. Phones without the speech detector: tap to
+    talk, tap again to send. */
 export function TalkOrb({ size = 96 }: { size?: number }) {
   const orb = useApp((s) => s.orb);
   const lang = useApp((s) => s.lang);
@@ -44,7 +48,12 @@ export function TalkOrb({ size = 96 }: { size?: number }) {
   const [rec, setRec] = useState<ReturnType<typeof browserRecognizer>>(null);
   const [t0, setT0] = useState(0);
 
+  const handsFree = useHandsFree();
   const toggle = useCallback(async () => {
+    if (live && !voice.listening) {
+      if (handsFree) return void stopHandsFree();
+      if (await startHandsFree()) return;
+    }
     if (voice.listening) {
       setOrb("thinking");
       rec?.stop();
@@ -72,9 +81,9 @@ export function TalkOrb({ size = 96 }: { size?: number }) {
       setHint("Speaking in this language needs Jagora's server. Type for now.");
     }
     setOrb("listening");
-  }, [voice, rec, lang, setOrb, t0]);
+  }, [voice, rec, lang, setOrb, t0, handsFree]);
 
-  const level = orb === "speaking" ? speaking : voice.level;
+  const level = orb === "speaking" ? speaking : handsFree ? micLevel : voice.level;
   const label = voice.error ? "Allow the microphone to talk to Jagora" : hint || t(orb === "idle" ? "idle" : orb, lang);
 
   return (
@@ -82,9 +91,11 @@ export function TalkOrb({ size = 96 }: { size?: number }) {
       <button
         onClick={toggle}
         className="rounded-full transition-transform active:scale-95"
-        aria-label={voice.listening ? "Stop and send" : "Talk to Jagora"}
+        aria-label={handsFree ? "Stop listening" : voice.listening ? "Stop and send" : "Talk to Jagora"}
       >
-        <Orb size={size} state={orb} levelRef={level} />
+        <Bounce level={level}>
+          <Orb size={size} state={orb} levelRef={level} />
+        </Bounce>
       </button>
       <p className="mt-1 min-h-5 text-center text-[13.5px] text-ink-2" aria-live="polite">
         {label}
@@ -112,6 +123,15 @@ export function Suggestions() {
   );
 }
 
+/** Stop, always in reach while Jagora works or talks: it goes quiet at once and the task stops. */
+function ChatStop() {
+  const task = useApp(activeTask);
+  const orb = useApp((s) => s.orb);
+  const busy = task?.status === "working" || task?.status === "waiting" || orb === "speaking" || isSpeaking();
+  if (!task || !busy) return null;
+  return <StopButton onStop={() => stop(task.id)} />;
+}
+
 export function AgentPanel({ orbSize = 96 }: { orbSize?: number }) {
   const task = useApp(activeTask);
   const lang = useApp((s) => s.lang);
@@ -124,7 +144,7 @@ export function AgentPanel({ orbSize = 96 }: { orbSize?: number }) {
         </motion.div>
         <div className="flex items-center gap-2">
           <ModeSwitch />
-          {task?.status === "working" && <StopButton onStop={() => stop(task.id)} />}
+          <ChatStop />
         </div>
       </div>
       <div data-chat-scroll className="no-scrollbar min-h-0 flex-1 overflow-y-auto">

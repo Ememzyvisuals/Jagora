@@ -191,8 +191,8 @@ export function Composer() {
 
 export function StopButton({ onStop }: { onStop: () => void }) {
   return (
-    <button className="btn btn-glass h-9 px-3.5 text-[13.5px]" onClick={onStop}>
-      <Stop size={14} weight="fill" /> Stop
+    <button className="btn btn-ink h-10 px-4 text-[14.5px]" onClick={onStop}>
+      <Stop size={15} weight="fill" /> Stop
     </button>
   );
 }

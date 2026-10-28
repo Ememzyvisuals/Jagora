@@ -26,10 +26,11 @@ def _setup(monkeypatch):
     spoken = []
 
     async def fake_stream(text, lang, ahead=2):
-        for i, sent in enumerate(server.speech.sentences(text)):
+        for i, sent in enumerate(server.speech.chunks(text)):
             spoken.append(sent)
-            await asyncio.sleep(0.05)
-            yield i, 24000, b"\\1\\0" * 4800
+            for _ in range(4):  # a piece plays for a while
+                await asyncio.sleep(0.05)
+                yield i, 24000, b"\\1\\0" * 4800
 
     monkeypatch.setattr(server.speech, "enabled", lambda: True)
     monkeypatch.setattr(server.speech, "speak_stream", fake_stream)
@@ -45,7 +46,8 @@ async def test_continue_picks_up_from_the_sentence_she_was_hearing(monkeypatch):
     spoken.clear()
     await s.on_words("t", "continue", None, None)
     await asyncio.sleep(0.4)
-    assert spoken == ["Second sentence here.", "Third sentence here.", "Fourth sentence here."]
+    # the message went to the voice as one piece: "continue" says it again from the start of that piece
+    assert spoken == [TEXT]
     s._speaker.cancel()
 
 
@@ -63,7 +65,7 @@ async def test_a_noise_that_cut_her_off_does_not_stop_the_reading(monkeypatch):
     spoken.clear()
     await s.on_audio("t", {"id": "m1", "data": ""})
     await asyncio.sleep(0.3)
-    assert spoken[:1] == ["Third sentence here."]
+    assert spoken[:1] == [TEXT]
     assert not any(m.get("type") == "msg" and "catch" in json.dumps(m) for m in s.ws.out)  # no "I didn't catch that"
     s._speaker.cancel()
 

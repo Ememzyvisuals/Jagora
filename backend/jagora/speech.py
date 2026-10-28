@@ -101,6 +101,18 @@ def sentences(text: str) -> list[str]:
     return final
 
 
+def chunks(text: str, limit: int = 900) -> list[str]:
+    """What is sent to the voice in one go: the whole message when it fits (one natural flow, the way a person reads
+    it out), else as few pieces as possible, each made of whole sentences and under the API's 1000 character limit."""
+    out: list[str] = []
+    for s in sentences(text):
+        if out and len(out[-1]) + 1 + len(s) <= limit:
+            out[-1] += " " + s
+        else:
+            out.append(s)
+    return out
+
+
 def pcm_to_wav(pcm: bytes, rate: int = 24000) -> bytes:
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
@@ -141,7 +153,7 @@ async def speak_stream(text: str, lang: str, ahead: int = 2) -> AsyncIterator[tu
     import httpx
 
     TTS_CACHE.mkdir(parents=True, exist_ok=True)
-    parts = sentences(speakable(text))
+    parts = chunks(speakable(text))
     if not parts:
         return
     queues: list[asyncio.Queue] = [asyncio.Queue() for _ in parts]

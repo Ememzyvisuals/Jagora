@@ -153,3 +153,20 @@ export function Orb({
     </span>
   );
 }
+
+/** The orb bounces with whoever is talking: Jagora (its voice) or her (her microphone). `level` is 0..1. */
+export function Bounce({ level, children, amount = 0.2 }: { level: MutableRefObject<number>; children: React.ReactNode; amount?: number }) {
+  const el = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    let raf = 0, v = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const target = Math.min(1, Math.max(0, level.current || 0));
+      v += (target - v) * (target > v ? 0.45 : 0.18); // quick up, softer down, like a voice
+      if (el.current) el.current.style.transform = `scale(${(1 + v * amount).toFixed(3)})`;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [level, amount]);
+  return <span ref={el} className="block will-change-transform">{children}</span>;
+}

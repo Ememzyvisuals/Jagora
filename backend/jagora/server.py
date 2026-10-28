@@ -642,6 +642,9 @@ class Session:
                 last = time.monotonic()
                 jpeg = await b.full_frame() if self._cast_mode() == "signal" else self._latest_jpeg
                 if not jpeg:
+                    # the page was busy (loading, or Jagora reading it for itself): try again shortly. A still page
+                    # sends no more change signals, so without this her screen could stay on "Opening the page"
+                    asyncio.get_running_loop().call_later(0.4, self._video_kick.set)
                     continue
                 w, h = video.jpeg_size(jpeg)
                 if enc is None or (enc.w, enc.h) != (w - w % 2, h - h % 2) or enc.lite != self.lite:
@@ -753,8 +756,8 @@ class Session:
         task = ""
         if self._speaking:
             task, text, _ = self._speaking
-            parts = speech.sentences(speech.speakable(text))
-            rest += parts[max(0, int(heard or 0)):]
+            parts = speech.chunks(speech.speakable(text))
+            rest += parts[max(0, min(int(heard or 0), len(parts) - 1)):]  # from the start of the piece she was hearing
         while not self._speech_q.empty():
             t, text, _, _ = self._speech_q.get_nowait()
             task = task or t
@@ -1192,6 +1195,7 @@ class WsIO:
             if url != s._last_url:  # a new page: speech waits until its first picture has gone out
                 s._last_url = url
                 s._page_ready.clear()
+                s._video_kick.set()  # and a picture of it goes out now, not only when Chrome next repaints
             await s.send({"type": "url", "task": t, "url": url})
         elif kind == "plan":
             if self.r.plan_id:

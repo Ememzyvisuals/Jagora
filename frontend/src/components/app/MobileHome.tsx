@@ -51,7 +51,8 @@ import { CLOSE_L, DiscoverStack, deal } from "./DiscoverStack";
 import { toggleTheme, useTheme } from "@/lib/theme";
 import { Glass } from "../glass/Glass";
 import { PAGE_PILL, PILL } from "@/lib/glassRegistry";
-import { Orb } from "../Orb";
+import { Bounce, Orb } from "../Orb";
+import { micLevel, startHandsFree, stopHandsFree, useHandsFree } from "@/lib/handsfree";
 
 type L = Record<Lang, string>;
 
@@ -352,7 +353,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
 
         {/* the orb, big and alive, and the word */}
         <div className="flex flex-col items-center">
-          <button onClick={() => (setActive(null), setSheet(true))} aria-label="Talk to Jagora" data-tour="orb" className="-mt-1 transition active:scale-95">
+          <button onClick={() => (setActive(null), setSheet(true), void startHandsFree())} aria-label="Talk to Jagora" data-tour="orb" className="-mt-1 transition active:scale-95">
             <Orb size={168} state={orb} levelRef={pulse} />
           </button>
           <CloudWordmark width={270} levelRef={pulse} className="-mt-7" />
@@ -558,6 +559,7 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
   const count = useApp((s) => s.tasks.filter(isTab).length);
   const task = useApp(activeTask);
   const pulse = useSpeakingPulse(orb === "speaking");
+  const handsFree = useHandsFree();
   const onPage = screen === "page" && task?.kind === "browse" && !!task.url;
   const canForward = !onPage && task?.kind === "browse" && !!task.url && isTab(task);
   const btn = "grid h-12 w-12 place-items-center rounded-full text-ink transition active:scale-90 disabled:opacity-25";
@@ -584,12 +586,21 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
         {/* on the home screen the big orb is already there, so the bar shows it only elsewhere */}
         {screen !== "home" || sheet ? (
           <button
-            onClick={() => setSheet(!sheet)}
-            aria-label="Talk to Jagora"
+            onClick={() => {
+              // the chat comes up and Jagora listens at once; with the chat already up, the tap turns listening on or off
+              if (!sheet) {
+                setSheet(true);
+                void startHandsFree();
+              } else if (handsFree) void stopHandsFree();
+              else void startHandsFree();
+            }}
+            aria-label={handsFree ? "Stop listening" : "Talk to Jagora"}
             data-tour="orb"
-            className="shrink-0 transition active:scale-90"
+            className="-my-2 shrink-0 transition active:scale-90"
           >
-            <Orb size={52} state={orb} levelRef={pulse} />
+            <Bounce level={orb === "speaking" ? pulse : micLevel} amount={0.24}>
+              <Orb size={62} state={orb} levelRef={orb === "speaking" ? pulse : micLevel} />
+            </Bounce>
           </button>
         ) : null}
         <button
