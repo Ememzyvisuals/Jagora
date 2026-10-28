@@ -809,10 +809,17 @@ class Browser:
         await self._need_page().mouse.wheel(0, dy)
         await asyncio.sleep(0.3)
 
-    async def rect(self, eid: int) -> dict | None:
+    async def rect(self, eid: int, show: bool = False) -> dict | None:
         loc = self._need_page().locator(f'[data-jg="{eid}"]').first
         if await loc.count() == 0:
             return None
+        if show:
+            # what Jagora points at must be on her screen: scrolled into the middle, also sideways on a wide page
+            try:
+                await loc.evaluate("e => e.scrollIntoView({block: 'center', inline: 'center', behavior: 'instant'})")
+                await asyncio.sleep(0.15)
+            except Exception:  # noqa: BLE001
+                pass
         box = await loc.bounding_box()
         return {k: round(v) for k, v in box.items()} if box else None
 

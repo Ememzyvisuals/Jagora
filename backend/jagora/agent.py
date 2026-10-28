@@ -515,6 +515,9 @@ HOW YOU WORK
 - Series and lists: when what they want comes in parts (episodes, seasons, part 1/2/3, an album, a playlist, a course's lessons), find the parts in order and use play_list, so Next plays the next part. Say how many parts there are.
 - Never bring back an answer, card or page you already gave earlier in the chat unless they ask for it again; a new message is about something new.
 - Do not double-check by yourself: answer from the first good source you read (official when there is one) and say where it came from. Check again in another source only when they ask ("are you sure?", "check again", "confirm it").
+- Voice gets Nigerian names wrong ("uni learning" is UNILAG, "jam" is JAMB, "wake result" is WAEC result). Read their words with Nigerian schools, exams and agencies in mind. When they correct a name ("I said UNILAG"), use their correction for the rest of the chat and do not ask them to confirm it again.
+- Do not greet ("good evening", "hello") and do not repeat back what they told you; go straight to the answer or the first step.
+- In Do mode you press buttons yourself: never ask them to tap something on the page unless it is private (a password, a code) or a robot check. When you point at something for them (Guide mode), it must be in view on their screen.
 - Say the answer once, short: at most 3 short sentences (the answer and where it came from). Never send another reply that says the same in other words. Long details go in a document only if useful. Either tell_user it and then finish with a one-line wrap-up, or put it only in finish. Never tell_user the answer and then repeat it in finish.
 - When done, call finish with a short summary in {lang}: the answer, where it was confirmed, what was not confirmed, and the best next step. Offer a document or download if it would help.
 
@@ -592,6 +595,8 @@ class Agent:
     _last_fp_same: bool = False  # the last action left the page exactly as it was
     _changed_any: bool = False
     _chat_note: str | None = None  # this chat's own memory
+    _known: dict | None = None  # the page that answered this question before
+    _source: str = ""  # the page the answer was read from this time
     _told_at: int = -99
     _told_since_act: bool = False  # she was told something and nothing has been done since
     _heard_since_told: bool = False  # she said something since she was last told  # where in the history Jagora last told her something
@@ -662,6 +667,13 @@ class Agent:
             heard += new
             if self.vault and self._vault_names is None:
                 self._vault_names = await self.vault.names()
+            if self.memory and self._known is None and hasattr(self.memory, "known_get"):
+                try:
+                    self._known = await self.memory.known_get(self._goal) or {}
+                except Exception:  # noqa: BLE001
+                    self._known = {}
+                if self._known:
+                    self._record("known", {"url": self._known.get("url")})
             if self.memory and self._chat_note is None and hasattr(self.memory, "chat_note"):
                 try:
                     self._chat_note = await self.memory.chat_note()
@@ -1334,7 +1346,7 @@ class Agent:
                 return f"there is no element {a.get('element')} on this page; read the page again", True, None
 
             if name == "hand_over":
-                said = await self.io.handoff(await b.rect(el.id), a.get("message", ""))
+                said = await self.io.handoff(await b.rect(el.id, show=True), a.get("message", ""))
                 return f"the user did it themselves ({said})", True, None
             if name == "ask_private":
                 return await self._private(el, a)
@@ -1348,7 +1360,7 @@ class Agent:
                 value = None  # noqa: F841  (dropped)
                 return f'typed their saved "{a.get("name")}" ({n} characters)', False, None
             if name == "point_at":
-                said = await self.io.point(await b.rect(el.id), a.get("message", ""))
+                said = await self.io.point(await b.rect(el.id, show=True), a.get("message", ""))
                 return f"the user says: \"{said}\"", True, None
             if self.mode == "guide" and name not in GUIDE_READ:
                 return "in Guide me mode you do not act on the page; use point_at", False, None
@@ -1544,9 +1556,9 @@ class Agent:
             return "the user did not want their details on this site; stop and ask them what they want", True, None
         ask_private = getattr(self.io, "ask_private", None)
         if not ask_private:
-            said = await self.io.handoff(await self.browser.rect(el.id), a.get("label", ""))
+            said = await self.io.handoff(await self.browser.rect(el.id, show=True), a.get("label", ""))
             return f"the user typed it on the page themselves ({said})", True, None
-        got = await ask_private(await self.browser.rect(el.id), str(a.get("label", "")), str(a.get("field", "other")),
+        got = await ask_private(await self.browser.rect(el.id, show=True), str(a.get("label", "")), str(a.get("field", "other")),
                                 a.get("digits"))
         value, save = (got.get("value", ""), bool(got.get("save"))) if isinstance(got, dict) else (got, False)
         if not value:
@@ -1630,6 +1642,17 @@ class Agent:
 
     async def _done(self, success: bool, summary: str, turns: int, t0: float) -> Result:
         """Finish: show them what Jagora did, then return the result."""
+        if success and not self._changed_any and self.memory and hasattr(self.memory, "known_put"):
+            # a question answered from a page: remembered with its page, so asking again takes the same route
+            url = self._source
+            b = self.browser
+            if not url and b and b.page and b.page.url.startswith("http") and not re.search(r"google\.|bing\.|duckduckgo\.", b.page.url):
+                url = b.pdf.url if b.pdf else b.page.url
+            if url:
+                try:
+                    await self.memory.known_put(self._goal, url, summary or self._said_last)
+                except Exception:  # noqa: BLE001
+                    pass
         if self._trail:
             try:
                 await self.io.event("record", {"steps": self._trail, "sites": sorted(self._flow.acts), "success": success})
@@ -1669,6 +1692,8 @@ class Agent:
             "official": v.official, "owner": v.owner, "page": got["page"], "date": when,
             "image": base64.b64encode(got["image"]).decode()})
         self.evidence += 1
+        if self.browser and self.browser.page and self.browser.page.url.startswith("http"):
+            self._source = self.browser.pdf.url if self.browser.pdf else self.browser.page.url
         bits = [f"evidence shown from {v.site}" + (" (official)" if v.official else " (NOT an official site: say so)")]
         if when:
             bits.append(f"page dated {when}")
@@ -2099,6 +2124,10 @@ class Agent:
         if self.screen is not None and (seen := self.screen()):
             parts.append("On the user's screen in the Jagora app now (use app_control to change it):\n" + seen[:1500])
         parts.append(f"Their saved details: {self._profile_summary()}")
+        if self._known:
+            parts.append(f"She asked this (or nearly this) before, and it was answered from {self._known['url']}: "
+                         f"\"{self._known['answer'][:400]}\". Take the same route: open that page first with go_to and "
+                         "answer from it, so the answer stays the same. Search again only if that page no longer answers it.")
         if self._chat_note:
             parts.append("This chat's memory (what this conversation is about and where it stopped; carry on from it):\n"
                          + self._chat_note)

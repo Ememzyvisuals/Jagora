@@ -186,7 +186,36 @@ def speakable(text: str) -> str:
     t = re.sub(r"(?m)^\s*(?:[-*+]|\d+[.)])\s+", "", t)  # list markers
     t = re.sub(r"[*_`#>|]", "", t)
     t = re.sub(r"([^\s.!?:;,])[ \t]*\n+", r"\1. ", t)  # a line (a list item, a heading) ends a sentence
-    return re.sub(r"\s+", " ", t).strip()
+    return say_names(re.sub(r"\s+", " ", t).strip())
+
+
+# How names and abbreviations are said aloud in Nigeria. The voice spells out words in CAPITALS letter by letter
+# ("COMPUTER SCIENCE" came out as C-O-M-P-U...), so capitals are only kept for real initials, and these are written the
+# way people say them.
+SAID_AS = {
+    "JAMB": "Jamb", "UNILAG": "Unilag", "UNIBEN": "Uniben", "UNIZIK": "Unizik", "UNIABUJA": "Uniabuja", "UNIPORT": "Uniport",
+    "UNICAL": "Unical", "UNIJOS": "Unijos", "UNIOSUN": "Uniosun", "UNILORIN": "Unilorin", "UNIUYO": "Uniuyo", "LASU": "Lasu",
+    "FUTA": "Futa", "FUTO": "Futo", "FUTMINNA": "Fut Minna", "WAEC": "Waec", "NECO": "Neco", "NABTEB": "Nabteb",
+    "NYSC": "N Y S C", "NIN": "N I N", "BVN": "B V N", "UTME": "U T M E", "OAU": "O A U", "ABU": "A B U", "UNN": "U N N",
+    "UI": "U I", "LAUTECH": "Lautech", "NIMC": "Nimc", "INEC": "Inec", "NAFDAC": "Nafdac", "NEPA": "Nepa", "PHCN": "P H C N",
+    "FRSC": "F R S C", "EFCC": "E F C C", "CBN": "C B N", "NCC": "N C C", "NUC": "N U C", "ASUU": "Asuu", "IBASS": "I Bass",
+    "CAPS": "Caps", "OTP": "O T P", "PIN": "pin", "ATM": "A T M", "USSD": "U S S D", "GSM": "G S M", "MTN": "M T N",
+    "GTB": "G T B", "FCT": "F C T", "NIRSAL": "Nirsal", "TETFUND": "Tetfund", "POS": "P O S",
+}
+
+
+def say_names(text: str) -> str:
+    def word(m: re.Match) -> str:
+        w = m.group(0)
+        if w in SAID_AS:
+            return SAID_AS[w]
+        if w in ("OF", "AND", "THE", "IN", "FOR", "TO", "AT", "ON", "BY", "OR", "IS", "ARE", "WITH", "FROM", "YOUR", "YOU", "ALL",
+                 "NEW", "NOT", "NO", "YES", "NOW", "FREE", "HOW", "WHAT", "WHO", "ONE", "TWO", "OUR"):
+            return w.lower()  # small words inside a title written in capitals
+        if len(w) >= 5:
+            return w.capitalize()  # a word in capitals (COMPUTER, SCIENCE, LAGOS) is said as a word
+        return w  # short initials (UK, IT, CBT) stay as letters
+    return re.sub(r"\b[A-Z][A-Z]{1,}\b", word, text)
 
 
 CHUNK = 24000 * 2 // 5  # 0.2 s of 24 kHz 16-bit audio

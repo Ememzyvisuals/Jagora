@@ -55,6 +55,8 @@ SCHEMA = [
          uses integer not null default 1)""",
     """create table if not exists chat_notes (user_id text not null, chat_id text not null, note text not null,
          t real not null, primary key (user_id, chat_id))""",
+    """create table if not exists known (user_id text not null, qkey text not null, question text not null, url text not null,
+         answer text not null, t real not null, primary key (user_id, qkey))""",
     """create table if not exists push_subs (endpoint text primary key, user_id text not null, keys text not null, t real not null)""",
     """create table if not exists events (
          id integer primary key autoincrement, t real not null, user_id text not null, kind text not null,

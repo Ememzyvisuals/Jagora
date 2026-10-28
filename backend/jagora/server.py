@@ -544,6 +544,28 @@ HERE_IDLE = {"en": "I'm here. What would you like me to do?", "pcm": "I dey here
              "yo": "Mo wà níbí. Kí ni kí n ṣe fún ọ?", "ha": "Ina nan. Me kake so in yi?", "ig": "Anọ m ebe a. Gịnị ka ị chọrọ ka m mee?"}
 
 
+# What the speech recogniser often makes of Nigerian names, put right before Jagora reads it
+_EXAMS = re.compile(r"\b(exam|result|registration|register|score|cut ?off|utme|admission|subject|brochure|wrote|write|form|candidate|school|universit)", re.I)
+HEARD_FIXES = [
+    (re.compile(r"\b(uni[ -]?lag|uni[ -]?learning|uni[ -]?lack|unila[cgk]|you ?ni ?lag|university of lag)\b", re.I), "UNILAG"),
+    (re.compile(r"\b(uni[ -]?ben|uni[ -]?bend)\b", re.I), "UNIBEN"),
+    (re.compile(r"\b(lasu|la su|last you)\b(?= (cut|admission|school|course|form|portal))", re.I), "LASU"),
+    (re.compile(r"\b(u ?t ?m ?e|you tme|utm e)\b", re.I), "UTME"),
+    (re.compile(r"\b(o ?a ?u|oh a you)\b(?= (cut|admission|school|course|ile))", re.I), "OAU"),
+    (re.compile(r"\b(neco|neko|necko)\b", re.I), "NECO"),
+    (re.compile(r"\b(waec|wayek|wake|way ec|w a e c)\b(?= (result|exam|certificate|scratch|card|gce|subject))", re.I), "WAEC"),
+]
+
+
+def fix_heard(text: str) -> str:
+    t = text
+    for rx, name in HEARD_FIXES:
+        t = rx.sub(name, t)
+    if _EXAMS.search(t):
+        t = re.sub(r"\b(jam|jamb|jab|jam b|jumb)\b", "JAMB", t, flags=re.I)
+    return t
+
+
 def _contained(late: str, said: str) -> bool:
     """Are these (late) words already part of what was said? Same words, nearly the same order."""
     import difflib
@@ -1348,7 +1370,7 @@ class Session:
         except asyncio.CancelledError:
             return
         self._flush = None
-        text = " ".join(self._turn + ([self._partial] if self._partial else [])).strip()
+        text = fix_heard(" ".join(self._turn + ([self._partial] if self._partial else [])).strip())
         from_partial = bool(self._partial)
         msg_id = self._hearing if self._hearing and self._hearing_task == task else None
         self._turn.clear()
@@ -1404,7 +1426,7 @@ class Session:
         try:
             audio = base64.b64decode(ev.get("data") or "")
             t_asr = time.monotonic()
-            text = await speech.transcribe(audio, lang)
+            text = fix_heard(await speech.transcribe(audio, lang))
             trace.write(self.user_id, "voice_note_transcribed", seconds=round(time.monotonic() - t_asr, 2),
                         kb=len(audio) // 1024, lang=lang, via="storm box" if speech.STORM_ASR_WS else "developer api")
         except Exception as e:  # noqa: BLE001
@@ -1798,6 +1820,15 @@ class WsIO:
                       (wid, self.s.user_id, url, what, None, max(60, every_hours * 60), time.time(), self.s.lang))
 
 
+_STOP = set("a an the is are was were be to of in on at for and or i me my we you your it this that what which when where how "
+             "who do does did can could should would will please tell find check show give get want need know about from with "
+             "abeg wetin dey na una e o oh ehn so now".split())
+
+
+def _qwords(q: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9]+", (q or "").lower()) if w not in _STOP and len(w) > 1}
+
+
 async def update_chat_note(user_id: str, chat_id: str, lang: str) -> None:
     """After each task: the chat's own memory, rewritten short by the fast model from its old note and the latest
     lines: what this chat is about, what was found or done, her choices here (which course, which film, which font),
@@ -1882,6 +1913,29 @@ class DbMemory:
 
     async def remember_fact(self, fact: str) -> None:
         await db.exec("insert into facts (id, user_id, t, fact) values (?,?,?,?)", (uuid.uuid4().hex[:10], self.u, time.time(), fact))
+
+    async def known_get(self, question: str) -> dict | None:
+        """A question she asked before (the same, or nearly) that was answered from a page: the page and the answer,
+        so the same route is taken again and the answer stays consistent."""
+        words = _qwords(question)
+        if len(words) < 2:
+            return None
+        rows = await db.exec("select question, url, answer, t from known where user_id=? order by t desc limit 60", (self.u,))
+        best, score = None, 0.0
+        for r in rows:
+            w = _qwords(r["question"])
+            sc = len(words & w) / max(1, min(len(words), len(w)))
+            if sc > score:
+                best, score = r, sc
+        return dict(best) if best and score >= 0.6 else None
+
+    async def known_put(self, question: str, url: str, answer: str) -> None:
+        if not url.startswith("http") or len(_qwords(question)) < 2:
+            return
+        key = " ".join(sorted(_qwords(question)))[:200]
+        await db.exec("insert into known (user_id, qkey, question, url, answer, t) values (?,?,?,?,?,?) on conflict(user_id, qkey) "
+                      "do update set url=excluded.url, answer=excluded.answer, question=excluded.question, t=excluded.t",
+                      (self.u, key, question[:300], url[:500], answer[:900], time.time()))
 
     async def chat_note(self) -> str:
         """What this chat is about so far (its own memory: each chat remembers its own thread)."""

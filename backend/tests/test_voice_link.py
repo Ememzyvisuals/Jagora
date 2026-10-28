@@ -132,7 +132,7 @@ async def test_words_showing_are_answered_when_the_voice_does_not_end_her_turn(m
     await s.on_voice({"type": "partial", "text": "when is jamb registration"})
     s._flush_later("t", 0)
     await asyncio.sleep(0.05)
-    assert got == ["when is jamb registration"]
+    assert got == ["when is JAMB registration"]
 
 
 async def test_words_not_meant_for_jagora_do_nothing_and_say_again_is_never_repeated(monkeypatch):
