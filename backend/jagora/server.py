@@ -964,8 +964,11 @@ class Session:
                     await out(i, rate, fx.feed(pcm))
                 if fx and gen == self._gen:
                     await out(at, last_rate, fx.flush())
+                trace.write(self.user_id, "spoken_through_app", chars=len(text), sound=not first,
+                            first_sound_s=None if first else round(time.monotonic() - t_voice, 1), cut_short=gen != self._gen)
             except Exception as e:  # noqa: BLE001
                 log.warning("speech failed: %s", e)
+                trace.write(self.user_id, "speech_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
             if gen == self._gen:
                 self._speaking = None
             if self._speech_q.empty() and gen == self._gen:
