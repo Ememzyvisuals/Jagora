@@ -208,6 +208,9 @@ def wrap_soon(turns: int, max_turns: int) -> bool:
 CHANGE_TOOLS = {"click", "type_text", "choose", "set_checkbox", "press_key", "hover", "double_click", "right_click", "drag",
                 "click_at", "upload_file", "set_date", "go_back", "fill_form"}
 
+SAY_MAX = 480  # characters Jagora says in one go; longer answers are shortened (details go in a document)
+
+
 def _same_news(a: str, b: str) -> bool:
     """Does the summary mostly repeat what she was just told? (shared words, any order)"""
     wa, wb = set(re.findall(r"\w{3,}", (a or "").lower())), set(re.findall(r"\w{3,}", (b or "").lower()))
@@ -512,7 +515,7 @@ HOW YOU WORK
 - Series and lists: when what they want comes in parts (episodes, seasons, part 1/2/3, an album, a playlist, a course's lessons), find the parts in order and use play_list, so Next plays the next part. Say how many parts there are.
 - Never bring back an answer, card or page you already gave earlier in the chat unless they ask for it again; a new message is about something new.
 - Do not double-check by yourself: answer from the first good source you read (official when there is one) and say where it came from. Check again in another source only when they ask ("are you sure?", "check again", "confirm it").
-- Say the answer once. Either tell_user it and then finish with a one-line wrap-up, or put it only in finish. Never tell_user the answer and then repeat it in finish.
+- Say the answer once, short: at most 3 short sentences (the answer and where it came from). Never send another reply that says the same in other words. Long details go in a document only if useful. Either tell_user it and then finish with a one-line wrap-up, or put it only in finish. Never tell_user the answer and then repeat it in finish.
 - When done, call finish with a short summary in {lang}: the answer, where it was confirmed, what was not confirmed, and the best next step. Offer a document or download if it would help.
 
 Mode: {mode}"""
@@ -589,7 +592,9 @@ class Agent:
     _last_fp_same: bool = False  # the last action left the page exactly as it was
     _changed_any: bool = False
     _chat_note: str | None = None  # this chat's own memory
-    _told_at: int = -99  # where in the history Jagora last told her something
+    _told_at: int = -99
+    _told_since_act: bool = False  # she was told something and nothing has been done since
+    _heard_since_told: bool = False  # she said something since she was last told  # where in the history Jagora last told her something
     _heard_all: list = field(default_factory=list)  # everything she said during the task
     _goal: str = ""
     _fails: int = 0
@@ -650,6 +655,8 @@ class Agent:
                 await self.pause_gate()  # the user has taken over the page: wait until the user hands it back
             new = self._drain_steering()
             self._heard_all += new
+            if new:
+                self._heard_since_told = True
             for h in new:
                 self._flow.heard(h)
             heard += new
@@ -725,6 +732,8 @@ class Agent:
                     await self.browser.changes()  # start clean: only what this action changes is reported
                     url_before = self.browser.page.url
                 note, replan, done = await self._act(call.name, call.args, snap)
+                if call.name not in ("tell_user", "update_plan", "finish", "look"):
+                    self._told_since_act = False  # something new was done: a new reply may follow
                 if watch and not done:
                     note += await self._what_changed(call.name, url_before, note)
                 log.info("timing   %s %.1fs", call.name, time.monotonic() - t_act)
@@ -1025,8 +1034,17 @@ class Agent:
                 key = re.sub(r"\W+", " ", msg).strip().lower()
                 if key and key == self._said_key:
                     return "already told them that; do not repeat it", False, None
+                if self._told_since_act and not self._heard_since_told:
+                    # one reply per thing found: nothing new happened since she was told, so nothing new is said
+                    return ("not said: you already told them and nothing new happened since. Do not say it again in other "
+                            "words: finish, or take the next real step"), False, None
+                if len(msg) > SAY_MAX:
+                    return (f"not said: too long for speaking ({len(msg)} characters). Say it in at most 3 short sentences "
+                            f"(under {SAY_MAX} characters): the answer and where it came from. Put long details in "
+                            "write_document if they are useful"), False, None
                 self._said_key, self._said_last = key, msg
                 self._told_at = len(self.history)
+                self._told_since_act, self._heard_since_told = True, False
                 await self.io.say(msg)
                 return "told them", False, None
             if name == "fill_form":
@@ -1085,6 +1103,9 @@ class Agent:
             if name == "look":
                 self._want_look = True
                 return "you will see the page as a picture now", True, None
+            if name == "finish" and a.get("summary") and len(str(a["summary"])) > SAY_MAX and not self._told_since_act:
+                return (f"not finished: the summary is too long to speak ({len(str(a['summary']))} characters). Finish again "
+                        f"with at most 3 short sentences (under {SAY_MAX} characters)."), False, None
             if name == "finish":
                 if False and a.get("success") and self.searched and not self.evidence and not self._nudged_evidence:
                     self._nudged_evidence = True
@@ -1101,7 +1122,10 @@ class Agent:
                         return f"the checker does not agree it is done: {verdict}. Fix this, then finish.", True, None
                 # she was just told the answer (tell_user in the step before): the summary is not said again, so
                 # she hears it once
-                if not (len(self.history) - self._told_at <= 2 and _same_news(self._said_last, str(a.get("summary", "")))):
+                # she has already been told (nothing done since): the summary is not said again in other words
+                told_answer = self._told_since_act and (len(self._said_last) > 150 or _same_news(self._said_last, str(a.get("summary", ""))))
+                if not told_answer and not (len(self.history) - self._told_at <= 2
+                                            and _same_news(self._said_last, str(a.get("summary", "")))):
                     await self.io.say(a.get("summary", ""))
                 return "finished", False, (bool(a.get("success")), a.get("summary", ""))
             if name == "give_verdict":
