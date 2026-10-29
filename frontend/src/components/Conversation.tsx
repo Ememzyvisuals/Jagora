@@ -125,7 +125,12 @@ function Item({ m, task }: { m: Msg; task: Task }) {
                 <span className="truncate">{m.attachment.name === "sample" ? "Sample letter" : m.attachment.name}</span>
               </div>
             )}
-            <Rich text={m.text} tone="dark" />
+            {/* a photo she sent shows as the photo; its file name is never repeated as her message */}
+            {m.attachment?.kind === "image" && m.attachment.url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={m.attachment.url} alt="" className="mb-1.5 mt-1 max-h-56 w-auto rounded-[14px]" />
+            )}
+            {m.text && m.text !== m.attachment?.name && <Rich text={m.text} tone="dark" />}
           </div>
         </div>
       );
