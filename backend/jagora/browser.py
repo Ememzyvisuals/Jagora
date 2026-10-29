@@ -36,6 +36,9 @@ from jagora.guard import SiteVerdict, guard, registrable
 
 log = logging.getLogger("jagora.browser")
 SNAPSHOT_JS = (Path(__file__).parent / "snapshot.js").read_text()
+# the same reading of a box's state as in snapshot.js (class words, colours), for one box after it was pressed
+_HELPERS = SNAPSHOT_JS[SNAPSHOT_JS.index("  const STATE_WORDS"):SNAPSHOT_JS.index("  const out = [];")]
+STATE_JS = "(e) => {\n" + _HELPERS + "  return stateOf(e, getComputedStyle(e));\n}"
 MAX_DOWNLOAD = 40 * 1024 * 1024
 
 
@@ -485,6 +488,17 @@ class Browser:
             pass
         if guardmod.registrable(d.url) and not d.url.lower().split("?")[0].endswith(".pdf"):
             self.notice("download", SiteVerdict(registrable(d.url), "ads", reason=f"the page tried to download {name} by itself; Jagora stopped it"))
+
+    async def state_of(self, eid: int) -> str | None:
+        """What the page says about this box now (booked, selected, its colours); None if it is gone."""
+        try:
+            loc = self._need_page().locator(f'[data-jg="{eid}"]').first
+            if await loc.count() == 0:
+                return None
+            await asyncio.sleep(0.15)
+            return await loc.evaluate(STATE_JS)
+        except Exception:  # noqa: BLE001
+            return None
 
     async def download_by_click(self, eid: int) -> tuple[bytes, str, str]:
         """A "Download ticket / slip / receipt" button with no address behind it: press it and take the file it gives.

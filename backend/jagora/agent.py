@@ -691,7 +691,11 @@ class Agent:
     _last_fp_same: bool = False  # the last action left the page exactly as it was
     _changed_any: bool = False
     _chat_note: str | None = None  # this chat's own memory
-    _asked: list = field(default_factory=list)  # (question, her answer) asked in this task
+    _asked: list = field(default_factory=list)
+    _reached: str = ""  # the milestone this task has reached (its route is saved then)
+    _bounced: dict = field(default_factory=dict)  # addresses that sent her elsewhere (pages that need earlier steps)
+    _same_click: dict = field(default_factory=dict)  # label -> times pressed with nothing changing
+    route_carry: dict | None = None  # this chat's route so far, across her messages (a booking takes several)  # (question, her answer) asked in this task
     _last_app: tuple = ("", "")  # the last app_control done (the same one twice in a row is refused)
     _video_searches: set = field(default_factory=set)  # video searches already made in this task
     _media_sent: set = field(default_factory=set)  # lists and previews already put on her screen in this task
@@ -840,6 +844,7 @@ class Agent:
             else:
                 talk_only = 0
             self._acted = any(c.name in CHANGE_TOOLS for c in reply.calls)
+            self._reply_names = [c.name for c in reply.calls]
             # work that changes something for her (filling, choosing, uploading): only that gets the checker
             self._changed_any = self._changed_any or any(c.name in FILL_TOOLS for c in reply.calls)
             for call in reply.calls[:12]:
@@ -859,6 +864,7 @@ class Agent:
                 log.info("timing   %s %.1fs", call.name, time.monotonic() - t_act)
                 self.history.append(f"{call.name}({_short(call.args)}) -> {note}")
                 self._learn(call.name, call.args, snap, note)
+                await self._milestone(call.name, note)
                 if note.startswith(("could not", "that did not work", "refused", "not typed", "there is no element")):
                     self._fails += 1
                     if self._fails in (3, 6):
@@ -1326,6 +1332,9 @@ class Agent:
                     return "the document was empty; write it again with content", False, None
                 await self.io.event("doc", doc)
                 return "document given to them", False, None
+            if name == "update_plan" and any(h.startswith("update_plan(") for h in self.history) and \
+                    getattr(self, "_reply_names", ["update_plan"]) == ["update_plan"]:
+                return "not shown: the plan is already on her screen. Take the next real step now (update the plan only together with it).", False, None
             if name == "update_plan" and self.history and self.history[-1].startswith("update_plan("):
                 return "the plan is already on their screen; do not change it again now: take the first real step", False, None
             if name == "update_plan":
@@ -1655,6 +1664,21 @@ class Agent:
         self._trail_add("clicked", f'"{el.label[:60]}" on {self._here()}')
         if el.href and site(el.href) and site(el.href) != self.home_site and not self._doing_task():
             self.home_site = site(el.href)  # she is browsing: the site she is on now is the one that counts
+        if getattr(el, "state", "") or len(el.label or "") <= 3:
+            # a seat or a small box: did pressing it change it? (pressed again and again with nothing changing = stuck)
+            now = await self.browser.state_of(el.id)
+            if now is not None and now == el.state:
+                n = self._same_click.get(el.label, 0) + 1
+                self._same_click[el.label] = n
+                note = (note + "; " if note else "") + (
+                    f'"{el.label}" looks exactly as before ({el.state or "no state"}): the press did not take. It may be '
+                    "taken, or the page wants something else first: read the page's messages and errors, do not press it again"
+                    if n >= 2 else f'"{el.label}" did not change after the press; look at the page messages before pressing again')
+                if n >= 3:
+                    return (f'not pressed again: "{el.label}" was pressed {n} times and nothing changed. Tell her plainly what '
+                            "the page shows (any message or error) and ask her what to do, or pick another one."), False, None
+            elif now is not None:
+                note = (note + "; " if note else "") + f'"{el.label}" now: {now or "no state"} (before: {el.state or "no state"})'
         return f'clicked "{el.label}"' + (f"; {note}" if note else ""), True, None
 
     async def _type(self, el, a):
@@ -1910,10 +1934,24 @@ class Agent:
             return f"refused: {gate.reason}", False, None
         if gate.verdict == Verdict.CONFIRM and not await self._approve(a, url, gate.reason):
             return "the user said no; stay on this website", True, None
+        if url in self._bounced:
+            return (f"not opened: {url} sent you back to {self._bounced[url]} before. That page only opens through the "
+                    "site's own steps: go through them from where you are (the remembered route shows them)."), False, None
         if new_tab and b.page and b.page.url not in ("about:blank", ""):
             await b.new_tab(url)
         else:
             await b.goto(url)
+        if not b.pdf:
+            try:
+                await b.quiet(cap=1.8, calm_ms=400)  # a page that sends visitors away does it at once
+            except Exception:  # noqa: BLE001
+                pass
+            want, got = urlparse(url), urlparse(b.page.url)
+            if want.path.rstrip("/") not in ("", got.path.rstrip("/")) and registrable(b.page.url) == registrable(url):
+                self._bounced[url] = b.page.url
+                return (f"the site did not open {want.path}: it sent you to {b.page.url} instead (that page needs the "
+                        "earlier steps first, like choosing the train). Do those steps on this page; do not open that "
+                        "address again."), True, None
         if not on_task:
             self.home_site = site(b.pdf.url if b.pdf else b.page.url)
         shown = b.pdf.url if b.pdf else b.page.url
@@ -2268,25 +2306,69 @@ class Agent:
             "fetch_code": lambda: "copy the one-time code from their email",
             "hover": lambda: f'open the menu "{label}"',
         }[name]()
+        if re.search(r"did not change|nothing visible changed|not pressed again|looks exactly as before|did not open", note):
+            return  # it did not move the task on: not part of the route
+        st = getattr(el, "state", "") if el is not None else ""
+        if name == "click" and el is not None and (self.PERSONAL.search(f"{el.label} {st}") or st or 0 < len(el.label) <= 3):
+            # her own choice (a seat, a day, a time, a train, a price): the route never repeats it. It marks the place
+            # where she is asked, so next time she chooses again
+            step = "HER CHOICE here (a seat, date, time or option): ask her, then press what she picks"
+            if self._route and self._route[-1] == (here, step):
+                return
+            self._route.append((here, step))
+            if self.route_carry is not None:
+                self.route_carry.setdefault("steps", []).append((here, step))
+            return
         self._route.append((here, step))
+        if self.route_carry is not None:
+            self.route_carry.setdefault("steps", []).append((here, step))
+            self.route_carry.setdefault("goal", self._goal)
         # navigation clicks that needed no one's yes can be replayed next time without a model call (Stagehand's cache)
         if name == "click" and isinstance(el, Element) and el.label and el.kind in ("link", "button") and snap and \
                 check_click(el, snap.url, self.home_site).verdict == Verdict.ALLOW:
             self._replay_log.append({"site": here, "path": _path_key(snap.url), "label": el.label[:80], "kind": el.kind})
 
-    async def _save_skills(self) -> None:
+    PERSONAL = re.compile(r"\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*day\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.? \d|"
+                          r"\b\d{1,2}:\d{2}\b|₦|\bseat\b|\bcoach\b|C\d{2}|\b(morning|afternoon|evening)\b", re.I)
+    MILESTONE = re.compile(r"checkout|payment|pay(?:stack)?|flutterwave|remita|confirm|receipt|ticket|success|thank", re.I)
+
+    async def _milestone(self, name: str, note: str) -> None:
+        """The task has reached the point that matters (the payment page, a confirmation, a ticket): the steps that
+        got here, across all of her messages in this chat, are kept as the route for this site, so next time Jagora
+        follows them instead of working it out again."""
+        url = self.browser.page.url if self.browser and self.browser.page else ""
+        reached = ""
+        if name == "keep_payment":
+            reached = "the payment step"
+        elif name in ("click", "go_to", "ask_form", "fill_form") and urlparse(url).path and self.MILESTONE.search(urlparse(url).path + " " + registrable(url)):
+            reached = f"the {self.MILESTONE.search(urlparse(url).path + ' ' + registrable(url)).group(0).lower()} page"
+        if reached and self._reached != reached:
+            self._reached = reached
+            await self._save_skills(reached)
+
+    async def _save_skills(self, reached: str = "the end") -> None:
         if self.memory and hasattr(self.memory, "replay_put") and self._replay_log and not self._replayed_bad:
             try:
                 await self.memory.replay_put(_goal_key(self._goal), self._replay_log[:15])
             except Exception as e:  # noqa: BLE001
                 log.info("replay not saved: %s", e)
-        if not self.memory or not hasattr(self.memory, "skills_put") or not self._route:
+        route = (self.route_carry or {}).get("steps") or self._route
+        if not self.memory or not hasattr(self.memory, "skills_put") or not route:
             return
         by: dict[str, list[str]] = {}
-        for s_, step in self._route:
+        for s_, step in route:
             if not by.get(s_) or by[s_][-1] != step:
                 by.setdefault(s_, []).append(step)
-        goal = re.sub(r"\S+@\S+", "[email]", re.sub(r"\d{4,}", "…", self._goal))[:120]
+        for s_ in by:  # a step tried again and again was a struggle, not the way: kept once
+            seen: dict[str, int] = {}
+            kept = []
+            for step in by[s_]:
+                seen[step] = seen.get(step, 0) + 1
+                if seen[step] <= 1 or step.startswith(("choose", "the user", "HER CHOICE")):
+                    kept.append(step)
+            by[s_] = kept
+        first = str((self.route_carry or {}).get("goal") or self._goal)
+        goal = re.sub(r"\S+@\S+", "[email]", re.sub(r"\d{4,}", "…", first))[:110] + f" (worked end to end to {reached})"
         for s_, steps in by.items():
             if len(steps) >= 2:
                 try:
@@ -2501,8 +2583,9 @@ class Agent:
             parts.append("What you know about them from before (across all chats): " + "; ".join(self._facts))
         here_skills = self._skills.get(registrable(snap.url)) if snap and snap.url.startswith("http") else None
         if here_skills:
-            parts.append("What worked on this site before (a guide from earlier successful runs; the page may have changed, "
-                         "so check each step):\n" + "\n".join(
+            parts.append("ROUTE THAT WORKED on this site before (follow it step by step, in this order, instead of working it "
+                         "out again; where the page differs, adapt only that step; her choices, like the date, seat or "
+                         "station, come from her, not from the route):\n" + "\n".join(
                              f"- For \"{k['goal']}\": " + " -> ".join(k["steps"][:14]) for k in here_skills[:2]))
         if snap and snap.url.startswith("http"):
             rv = self._terms.get(registrable(snap.url))
@@ -2558,6 +2641,8 @@ class Agent:
     def _looping(self, name: str, args: dict) -> bool:
         key = f"{name}({_short(args)})"
         if sum(1 for h in self.history[-8:] if h.startswith(key)) >= 3:
+            return True
+        if name == "go_to" and sum(1 for h in self.history[-8:] if h.startswith("go_to(") and str(args.get("url", ""))[:40] in h) >= 2:
             return True
         # the same quote, words or address tried twice and failed (the claim may be worded differently each time)
         what = str(args.get("quote") or args.get("query") or args.get("url") or "").strip().lower()

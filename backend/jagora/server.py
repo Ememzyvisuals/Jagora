@@ -668,6 +668,7 @@ class Session:
         self.files: dict[str, str] = {}  # files she gave in the chat, kept for this session only
         self.translate = False
         self.runs: dict[str, Run] = {}
+        self.routes: dict[str, dict] = {}  # chat -> the steps that moved her task on, across her messages
         self.money: dict[str, bool] = {}  # chat -> a payment is in progress there (the session is held for her)
         self._yes_no_again: set[str] = set()  # yes/no questions already asked a second time
         self._she_spoke_at = 0.0  # when she last started talking (her LiveKit voice)
@@ -1764,7 +1765,9 @@ class Session:
         io = WsIO(self, r)
         try:
             model = _model()
-            agent = Agent(model, self.browser, io, **_muse_extras(model), lang=self.lang, mode=self.mode, profile=self.profile,
+            carry = self.routes.setdefault(task, {"goal": goal, "steps": []})
+            carry["steps"] = carry["steps"][-120:]
+            agent = Agent(model, self.browser, io, **_muse_extras(model), route_carry=carry, lang=self.lang, mode=self.mode, profile=self.profile,
                           conversation=convo[-14:], attachment=attachment, browser_factory=self.get_browser,
                           steering=r.steer, user_id=self.user_id, on_watch=io.watch, screen=lambda: self.screen,
                           memory=DbMemory(self.user_id, task, self.lang, self.mode, self.profile), pause_gate=r.free.wait,
