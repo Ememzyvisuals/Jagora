@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardText, Microphone, Paperclip, PaperPlaneRight, Stop, Trash } from "@phosphor-icons/react";
+import { ClipboardText, Microphone, Paperclip, PaperPlaneRight, Stop, Trash, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { ask, voiceNote } from "@/lib/engine";
@@ -40,6 +40,8 @@ export function Composer() {
   const chat = useApp((s) => s.activeId) ?? undefined;
   const [text, setText] = useState("");
   const [note, setNote] = useState("");
+  // a photo or document she picked waits here, in the box, until she sends it (with words or without), as in other chat apps
+  const [pending, setPending] = useState<{ kind: "image" | "doc"; name: string; url: string } | null>(null);
   const file = useRef<HTMLInputElement>(null);
   const voice = useVoice();
   const [recording, setRecording] = useState(false);
@@ -68,10 +70,11 @@ export function Composer() {
 
   const send = () => {
     const v = text.trim();
-    if (!v) return;
+    if (!v && !pending) return;
     fly(document.querySelector('[data-send="composer"]'));
-    ask(v, undefined, { chat });
+    ask(v, pending ?? undefined, { chat });
     setText("");
+    setPending(null);
   };
 
   const paste = async () => {
@@ -88,7 +91,7 @@ export function Composer() {
     if (!f) return;
     // a data URL, so the same file can go to the agent and still show in the chat after a reload
     const r = new FileReader();
-    r.onload = () => ask("", { kind: f.type.startsWith("image/") ? "image" : "doc", name: f.name, url: String(r.result) }, { chat });
+    r.onload = () => setPending({ kind: f.type.startsWith("image/") ? "image" : "doc", name: f.name, url: String(r.result) });
     r.readAsDataURL(f);
   };
 
@@ -134,6 +137,22 @@ export function Composer() {
   return (
     <div className="px-3 pb-3">
       {note && <p className="px-3 pb-1.5 text-[12.5px] text-ink-3">{note}</p>}
+      {pending && (
+        <div className="glass-3 mb-2 flex items-center gap-3 rounded-[20px] p-2 pr-3">
+          {pending.kind === "image" ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={pending.url} alt="" className="h-14 w-14 shrink-0 rounded-[12px] object-cover" />
+          ) : (
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[12px] bg-white/70 text-ink-2">
+              <Paperclip size={22} />
+            </span>
+          )}
+          <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-ink">{pending.name}</span>
+          <button className="btn h-9 w-9 shrink-0 text-ink-2 hover:bg-white" onClick={() => setPending(null)} aria-label="Remove the attachment">
+            <X size={17} weight="bold" />
+          </button>
+        </div>
+      )}
       <div className="glass-3 relative flex items-center gap-1 rounded-full p-1.5">
         <AnimatePresence initial={false} mode="wait">
           {recording ? (
@@ -168,8 +187,8 @@ export function Composer() {
               <button className="btn h-10 w-10 shrink-0 text-ink-2 hover:bg-white" onClick={() => file.current?.click()} aria-label="Add a photo or document">
                 <Paperclip size={20} />
               </button>
-              <input ref={file} type="file" accept="image/*,application/pdf,video/mp4,video/webm,video/quicktime" hidden onChange={(e) => attach(e.target.files?.[0])} />
-              {text.trim() ? (
+              <input ref={file} type="file" accept="image/*,application/pdf,video/mp4,video/webm,video/quicktime" hidden onChange={(e) => (attach(e.target.files?.[0]), (e.target.value = ""))} />
+              {text.trim() || pending ? (
                 <button className="btn btn-ink h-10 w-10 shrink-0" data-send="composer" onClick={send} aria-label="Send">
                   <PaperPlaneRight size={18} weight="fill" />
                 </button>
