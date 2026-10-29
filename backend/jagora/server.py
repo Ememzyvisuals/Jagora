@@ -1442,6 +1442,9 @@ class Session:
             self._wait_more()  # she is still talking
             self._partial = self._merge_piece(text)
             await self._show_turn(task)
+            # if the voice never says she stopped (it happens in Yorùbá: pieces keep coming, then nothing), what she
+            # said is still answered a few seconds after the last piece, instead of waiting for ever
+            self._flush_later(task, TURN_GAP + 2.5)
         elif kind == "words":
             text = str(ev.get("text") or "").strip()
             if not task or not text:
