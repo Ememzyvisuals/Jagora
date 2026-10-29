@@ -112,6 +112,11 @@ def _stall_watchdog() -> None:
     import sys
     import threading
 
+    if "pytest" in sys.modules or os.environ.get("JAGORA_WATCHDOG", "1") == "0":
+        return  # tests run the app without a server to ask
+
+    nonlocal_state = {"n": 0, "fails": 0}
+
     def run() -> None:
         dumped = False
         while True:
@@ -126,6 +131,21 @@ def _stall_watchdog() -> None:
             if stuck > STALL_EXIT_S:
                 print(f"EVENT LOOP STALLED for {stuck:.0f}s: restarting the backend", file=sys.stderr, flush=True)
                 os._exit(3)
+            # the loop may turn while requests still hang (a deadlock further in): ask the server itself every 20 s
+            nonlocal_state["n"] += 1
+            if nonlocal_state["n"] % 10 == 0:
+                try:
+                    import urllib.request
+                    urllib.request.urlopen(f"http://127.0.0.1:{os.environ.get('PORT', '8000')}/health", timeout=8).read()
+                    nonlocal_state["fails"] = 0
+                except Exception as e:  # noqa: BLE001
+                    nonlocal_state["fails"] += 1
+                    print(f"health check failed ({nonlocal_state['fails']}): {e}", file=sys.stderr, flush=True)
+                    if nonlocal_state["fails"] == 2:
+                        faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+                    if nonlocal_state["fails"] >= 4:
+                        print("the backend stopped answering: restarting it", file=sys.stderr, flush=True)
+                        os._exit(3)
 
     threading.Thread(target=run, name="stall-watchdog", daemon=True).start()
 
@@ -1014,7 +1034,15 @@ class Session:
 
     async def get_browser(self) -> Browser:
         if self.browser is None:
-            self.browser = await Browser(self.device).start(load_signins(self.user_id))
+            b = Browser(self.device)
+            try:
+                # Chrome normally starts in about 2 s; one that never does must not leave her task waiting for ever
+                self.browser = await asyncio.wait_for(b.start(load_signins(self.user_id)), 45)
+            except asyncio.TimeoutError:
+                trace.write(self.user_id, "browser_start_timed_out")
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(b.close(), 8)
+                raise RuntimeError("the browser did not start; try again in a moment") from None
             uid = self.user_id
             self.browser.on_log = lambda what, **d: trace.write(uid, "browser_" + what, **d)
             trace.write(uid, "browser_started", viewport=self.browser.viewport, mobile=self.browser.mobile,
