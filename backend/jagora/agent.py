@@ -274,6 +274,7 @@ YT_ID = re.compile(r"(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/)|
 
 # steps that only look things up (never wait for her answer): each is stopped if it takes longer than this
 STEP_LIMIT_S = 90
+LONG_REPLY = 150  # a reply this long is the answer itself: said once per request
 NEVER_WAITS = {"search", "go_to", "new_tab", "find_text", "read_page", "page_tables", "download", "read_sources", "check_official",
                "check_link", "find_video", "find_media", "recommend_videos", "pdf_page", "show_evidence", "save_page", "list_links",
                "find_moments", "picture_guide", "scroll", "go_back"}
@@ -758,6 +759,7 @@ class Agent:
     _replay_log: list = field(default_factory=list)  # this run's navigation steps, saved on success
     _said_key: str = ""  # the last thing told to them (to never say the same thing twice in a row)
     _said_last: str = ""
+    _long_told: bool = False  # the answer (a long reply) was spoken in this task: never a second version
     _flow: Flow = field(default_factory=Flow)  # where each text came from, and the sites this task may act on
     _trail: list = field(default_factory=list)  # what Jagora did, shown to them at the end
 
@@ -879,7 +881,7 @@ class Agent:
                     # a plain conversational answer, no browsing needed, or the answer given as the run wraps up
                     if wrap or self.evidence:
                         await self._give_official_pdf()
-                    if self._said_last and _same_news(self._said_last, reply.text.strip()):
+                    if (self._long_told and not self._heard_since_told) or (self._said_last and _same_news(self._said_last, reply.text.strip())):
                         # she has just been told this: the run ends without saying it again in other words
                         return await self._done(True, self._said_last, turns, t0)
                     await self.io.say(reply.text.strip())
@@ -1263,6 +1265,11 @@ class Agent:
                             "or finish"), False, None
                 if not msg.strip():
                     return "not said: the message was empty. Do the next real step instead.", False, None
+                if len(msg) >= LONG_REPLY and self._long_told and not self._heard_since_told:
+                    # the answer is given once per request: a second, longer or reworded version is never spoken
+                    return ("not said: you already gave her the answer in this task, and she has not spoken since. "
+                            "Never give a second version of it. Finish now (no summary words), or say only something "
+                            "new in one short sentence."), False, None
                 if self._told_since_act and not self._heard_since_told:
                     # one reply per thing found: nothing new happened since she was told, so nothing new is said
                     return ("not said: you already told them and nothing new happened since. Do not say it again in other "
@@ -1272,6 +1279,7 @@ class Agent:
                             f"(under {SAY_MAX} characters): the answer and where it came from. Put long details in "
                             "write_document if they are useful"), False, None
                 self._said_key, self._said_last = key, msg
+                self._long_told = self._long_told or len(msg) >= LONG_REPLY
                 self._told_at = len(self.history)
                 self._told_since_act, self._heard_since_told = True, False
                 await self.io.say(msg)
@@ -1419,7 +1427,7 @@ class Agent:
                 if a.get("summary") and self._answered_before(str(a["summary"])) and not self._said_last:
                     return ("not finished: that summary is the answer she already has in the chat. Finish with one short "
                             "line about what you did now, or do what she asked."), False, None
-                told_answer = self._told_since_act and (len(self._said_last) > 150 or _same_news(self._said_last, str(a.get("summary", ""))))
+                told_answer = (self._long_told and not self._heard_since_told) or self._told_since_act and (len(self._said_last) > 150 or _same_news(self._said_last, str(a.get("summary", ""))))
                 if not told_answer and not (len(self.history) - self._told_at <= 2
                                             and _same_news(self._said_last, str(a.get("summary", "")))):
                     await self.io.say(a.get("summary", ""))
