@@ -795,6 +795,7 @@ class Agent:
     _replay_log: list = field(default_factory=list)  # this run's navigation steps, saved on success
     _said_key: str = ""  # the last thing told to them (to never say the same thing twice in a row)
     _said_last: str = ""
+    _picks_shown: bool = False  # video picks were sent in this task
     _said_all: list = field(default_factory=list)  # everything told her in this task
     _long_told: bool = False  # the answer (a long reply) was spoken in this task: never a second version
     _flow: Flow = field(default_factory=Flow)  # where each text came from, and the sites this task may act on
@@ -1332,6 +1333,10 @@ class Agent:
                     # she has not spoken since: a reworded copy of something already said this task is never said
                     return ("not said: you already told her this in this task. Do the next real step, or say only what "
                             "is new in one short sentence."), False, None
+                if self._picks_shown and len(msg) > 140 and not self._heard_since_told:
+                    # the cards already show each course and why: the voice says one short line, never the list again
+                    return ("not said: the picks are on her screen with their reasons. Say one short line (e.g. which "
+                            "one you would start with and why, in a sentence), not the list."), False, None
                 if len(msg) >= LONG_REPLY and self._long_told and not self._heard_since_told:
                     # the answer is given once per request: a second, longer or reworded version is never spoken
                     return ("not said: you already gave her the answer in this task, and she has not spoken since. "
@@ -1431,6 +1436,10 @@ class Agent:
                         "media_seek, media_big...). Never tell her to tap anything. Now finish with ONE short line. Do not "
                         "call play_list, preview_videos or find_video again."), False, None
             if name == "recommend_videos":
+                if self._picks_shown and not self._heard_since_told:
+                    return ("not shown: the picks are already on her screen. Do not send another list or read the list "
+                            "out; finish with one short line, or do what she asks next."), False, None
+                self._picks_shown = True
                 picks = []
                 for p in list(a.get("picks") or [])[:4]:
                     m = YT_ID.search(str(p.get("url", "")))
