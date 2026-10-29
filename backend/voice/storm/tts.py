@@ -67,6 +67,47 @@ SAMPLE_RATE = 24000
 NUM_CHANNELS = 1
 FIRST_AUDIO_TIMEOUT_S = 12.0  # time allowed before the first chunk arrives
 CHUNK_TIMEOUT_S = 8.0  # longest gap between chunks once audio is flowing
+# the speech model stops after about ten seconds of audio for one request, so a long reply was cut off mid-sentence:
+# each request carries one short part (a sentence, or a clause of a long one) and the parts play one after another
+MAX_PART = int(__import__("os").environ.get("TTS_MAX_PART", "120"))
+
+
+def unformatted(text: str) -> str:
+    """Chat formatting is for the eyes: no stars, list dashes or headings reach the voice. Lines become sentences."""
+    t = re.sub(r"\*\*|__|`|^#{1,6}\s*", "", text, flags=re.M)
+    t = re.sub(r"(^|\s)\*([^*\n]+)\*", r"\1\2", t)
+    t = re.sub(r"^\s*(?:[-*+•]|\d+[.)])\s+", "", t, flags=re.M)
+    t = re.sub(r"\s*[—–]\s*", ", ", t)
+    lines = [ln.strip() for ln in t.splitlines() if ln.strip()]
+    return " ".join(ln if re.search(r"[.!?:;,]$", ln) else ln + "." for ln in lines)
+
+
+def parts(text: str, size: int = MAX_PART) -> list[str]:
+    """Sentences, joined while they stay short; a long sentence is split at its commas, then at spaces."""
+    out: list[str] = []
+    for sent in re.split(r"(?<=[.!?])\s+", text.strip()):
+        pieces = [sent]
+        if len(sent) > size:
+            pieces, cur = [], ""
+            for bit in re.split(r"(?<=[,;:])\s+", sent):
+                while len(bit) > size:  # no comma to break at: break at the last space that fits
+                    cut = bit.rfind(" ", 0, size)
+                    cut = cut if cut > 40 else size
+                    pieces.append(bit[:cut].strip())
+                    bit = bit[cut:].strip()
+                if cur and len(cur) + len(bit) + 1 > size:
+                    pieces.append(cur)
+                    cur = bit
+                else:
+                    cur = f"{cur} {bit}".strip()
+            if cur:
+                pieces.append(cur)
+        for p in pieces:
+            if out and len(out[-1]) + len(p) + 1 <= size:
+                out[-1] = f"{out[-1]} {p}"
+            elif p:
+                out.append(p)
+    return [p for p in out if any(ch.isalnum() for ch in p)]
 
 
 @dataclass
@@ -159,7 +200,7 @@ class StormTTS(tts.TTS):
         # Specs into words, then numbers into English words in every language
         # ("145,009" -> "one hundred and forty-five thousand and nine"): that is
         # how Nigerians say prices, and the voice says English numbers best.
-        clean = speakable(text.strip())
+        clean = speakable(unformatted(text.strip()))
         return normalize(clean, NUMBERS_IN) if has_rules(NUMBERS_IN) else clean
 
     def synthesize(
@@ -192,31 +233,37 @@ class StormChunkedStream(tts.ChunkedStream):
             return
 
         opts = self._storm._opts
-        payload = {**speaker_field(opts.speaker), "text": text[:1000], "fast": opts.fast}
-        # Leaving this block by exception (including cancellation on interrupt)
-        # removes the socket from the pool and closes it.
         self._got_audio = False
-        for attempt in range(3):
-            try:
-                async with self._storm._pool.connection(timeout=self._conn_options.timeout) as ws:
-                    if ws.closed:
-                        # the speech server closed this idle socket while it sat in the pool: take a fresh one
-                        raise ConnectionResetError("pooled socket already closed")
-                    try:
-                        await self._speak(ws, payload, output_emitter, request_id)
-                    except BaseException:
-                        # Interrupted or failed mid-utterance: drop the connection now
-                        # so the server stops streaming; the pool replaces it on the
-                        # next sentence.
-                        _hard_close(ws)
+        for part in parts(text):
+            payload = {**speaker_field(opts.speaker), "text": part, "fast": opts.fast}
+            # Leaving this block by exception (including cancellation on interrupt)
+            # removes the socket from the pool and closes it.
+            heard_before = self._got_audio
+            for attempt in range(3):
+                try:
+                    async with self._storm._pool.connection(timeout=self._conn_options.timeout) as ws:
+                        if ws.closed:
+                            # the speech server closed this idle socket while it sat in the pool: take a fresh one
+                            raise ConnectionResetError("pooled socket already closed")
+                        try:
+                            self._part_audio = False
+                            await self._speak(ws, payload, output_emitter, request_id)
+                        except BaseException:
+                            # Interrupted or failed mid-utterance: drop the connection now
+                            # so the server stops streaming; the pool replaces it on the
+                            # next sentence.
+                            _hard_close(ws)
+                            raise
+                    break
+                except (ConnectionResetError, APIConnectionError, APITimeoutError, aiohttp.ClientConnectionError) as e:
+                    # a dead socket from the pool ("Cannot write to closing transport"): nothing of this part was said
+                    # yet, so it is sent again on a new connection instead of being lost
+                    if getattr(self, "_part_audio", False) or attempt == 2:
+                        if heard_before or self._got_audio:
+                            logger.warning("STORM TTS lost a part (%s): going on with the rest", e)
+                            break
                         raise
-                break
-            except (ConnectionResetError, APIConnectionError, aiohttp.ClientConnectionError) as e:
-                # a dead socket from the pool ("Cannot write to closing transport"): nothing was said yet, so the
-                # sentence is sent again on a new connection instead of being lost
-                if self._got_audio or attempt == 2:
-                    raise
-                logger.warning("STORM TTS socket was dead (%s); retrying on a fresh connection", e)
+                    logger.warning("STORM TTS socket was dead (%s); retrying on a fresh connection", e)
         output_emitter.flush()
 
     async def _speak(
@@ -243,6 +290,7 @@ class StormChunkedStream(tts.ChunkedStream):
                 if data:
                     got_audio = True
                     self._got_audio = True
+                    self._part_audio = True
                     output_emitter.push(data)
             elif msg.type == aiohttp.WSMsgType.TEXT:
                 try:
