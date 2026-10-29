@@ -4,7 +4,7 @@
    - Evidence: the highlighted part of the official page or PDF that proves a fact, with where it came from
    - FileCard: a file Jagora downloaded for her
    - VoiceBubble: her voice note (or live turn), playable, with the words Jagora heard */
-import { ArrowSquareOut, Bell, BellRinging, DownloadSimple, FileText, FilePdf, Pause, Play, SealCheck, Warning, X } from "@phosphor-icons/react";
+import { ArrowSquareOut, Bell, Microphone, BellRinging, DownloadSimple, FileText, FilePdf, Pause, Play, SealCheck, Warning, X } from "@phosphor-icons/react";
 import { Rich } from "./Rich";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -114,6 +114,9 @@ export function FileCard({ m }: { m: Extract<Msg, { kind: "file" }> }) {
 }
 
 /** Her voice message: play it back, see the words Jagora heard. */
+const HIDE_WORDS = new Set<Lang>(["yo", "ha", "ig"]);
+const SPOKE: Record<Lang, string> = { en: "Voice message", pcm: "Voice message", yo: "Ohùn Yorùbá", ha: "Muryar Hausa", ig: "Olu Igbo" };
+
 export function VoiceBubble({ m }: { m: Extract<Msg, { kind: "user" }> }) {
   const lang = useApp((s) => s.lang);
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -146,6 +149,24 @@ export function VoiceBubble({ m }: { m: Extract<Msg, { kind: "user" }> }) {
   };
   useEffect(() => () => audio.current?.pause(), []);
   const progress = dur ? Math.min(1, at / dur) : 0;
+  // Yorùbá, Hausa and Igbo: the speech recogniser's spelling is often wrong, so her words are not printed back to her.
+  // The bubble says she spoke, in which language; Jagora still answers from what it heard
+  const said = m.lang ?? lang; // the language her voice was transcribed in
+  const hidden = HIDE_WORDS.has(said);
+  if (!m.audio && hidden)
+    return (
+      <div className="flex justify-end">
+        <div className="flex items-center gap-2.5 rounded-[20px] rounded-br-[6px] bg-ink px-3.5 py-2.5 text-paper">
+          <Microphone size={17} weight="fill" className="shrink-0 text-paper/85" />
+          <div className="flex h-6 items-center gap-[3px]" aria-hidden>
+            {bars.slice(0, 18).map((h, i) => (
+              <span key={i} className="w-[3px] rounded-full bg-paper/60" style={{ height: `${h * 100}%` }} />
+            ))}
+          </div>
+          <span className="text-[14px] font-semibold">{m.heard === false ? W.missed[lang] : SPOKE[said]}</span>
+        </div>
+      </div>
+    );
   // heard live (her voice on LiveKit): no recording to play, just her words appearing as she speaks
   if (!m.audio)
     return (
@@ -169,8 +190,8 @@ export function VoiceBubble({ m }: { m: Extract<Msg, { kind: "user" }> }) {
           </div>
           <span className="pr-1 text-[12.5px] tabular-nums text-paper/70">{mmss(playing ? at : dur)}</span>
         </div>
-        <p className={`mt-1.5 px-1 text-[15px] leading-snug ${m.text ? "" : "italic text-paper/60"}`}>
-          {m.text || (m.heard === false ? W.missed[lang] : W.hearing[lang])}
+        <p className={`mt-1.5 px-1 text-[15px] leading-snug ${m.text && !hidden ? "" : "italic text-paper/60"}`}>
+          {m.heard === false ? W.missed[lang] : hidden ? SPOKE[said] : m.text || W.hearing[lang]}
         </p>
       </div>
     </div>

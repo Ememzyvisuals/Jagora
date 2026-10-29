@@ -1608,7 +1608,7 @@ class Session:
         text = " ".join(self._turn + ([self._partial] if self._partial else []))
         if not self._hearing or self._hearing_task != task:
             self._hearing, self._hearing_task = mid(), task
-            await self.send({"type": "msg", "task": task, "msg": {"id": self._hearing, "kind": "user", "text": text, "voice": True}})
+            await self.send({"type": "msg", "task": task, "msg": {"id": self._hearing, "kind": "user", "text": text, "voice": True, "lang": self.lang}})
         else:
             await self.send({"type": "update", "task": task, "id": self._hearing, "patch": {"text": text}})
 
@@ -1808,7 +1808,7 @@ class Session:
         if msg_id:
             await self.send({"type": "update", "task": task, "id": msg_id, "patch": {"text": text}})
         else:
-            await self.send({"type": "msg", "task": task, "msg": {"id": mid(), "kind": "user", "text": text, "voice": True}})
+            await self.send({"type": "msg", "task": task, "msg": {"id": mid(), "kind": "user", "text": text, "voice": True, "lang": self.lang}})
         await self.on_words(task, text, None, history)
 
     async def on_words(self, task: str, text: str, attachment: dict | None, history: list | None) -> None:

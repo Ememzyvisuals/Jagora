@@ -42,7 +42,7 @@ export type Attachment = { kind: "image" | "doc" | "link"; name: string; url?: s
 export type Msg =
   /** voice: she spoke it (a voice note or a live turn); audio: the recording (data URL) so she can play it back;
       heard: false when Jagora could not make out the words */
-  | { id: string; kind: "user"; text: string; attachment?: Attachment; voice?: boolean; audio?: string; secs?: number; heard?: boolean }
+  | { id: string; kind: "user"; text: string; attachment?: Attachment; voice?: boolean; audio?: string; secs?: number; heard?: boolean; lang?: Lang }
   | { id: string; kind: "agent"; text: string }
   | { id: string; kind: "step"; text: string; status: "doing" | "done" | "stopped"; guard?: boolean }
   | { id: string; kind: "confirm"; question: string; detail?: string; value?: string; status: "waiting" | "yes" | "no" }
