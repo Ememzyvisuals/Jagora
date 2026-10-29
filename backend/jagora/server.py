@@ -638,6 +638,11 @@ HEARD_FIXES = [
     (re.compile(r"\b(u ?t ?m ?e|you tme|utm e)\b", re.I), "UTME"),
     (re.compile(r"\b(o ?a ?u|oh a you)\b(?= (cut|admission|school|course|ile))", re.I), "OAU"),
     (re.compile(r"\b(neco|neko|necko)\b", re.I), "NECO"),
+    # train stations as the voice hears them (from real Pidgin sessions): Agege, Moniya, Ebute Metta, Ibadan
+    (re.compile(r"\b(akike|agige|agigi|adigoo?|magege|agegede|agile)\b(?= .{0,40}\b(to|go|moniya|ibadan|train|station)\b|$)", re.I), "Agege"),
+    (re.compile(r"\b(munea|monia|monya|nnya|ermonio|armonia|mo ?ni ?ya)\b", re.I), "Moniya"),
+    (re.compile(r"\b(ebute ?mi?t+a|ebutemita|ebute meta|ebute mita)\b", re.I), "Ebute Metta"),
+    (re.compile(r"\b(eyibadon|ibadon|eyibadan)\b", re.I), "Ibadan"),
     (re.compile(r"\b(waec|wayek|wake|way ec|w a e c)\b(?= (result|exam|certificate|scratch|card|gce|subject))", re.I), "WAEC"),
     # how the Yorùbá voice hears English words people say inside Yorùbá (from real sessions)
     (re.compile(r"\b(k[ọo]p[ùu]t[àa]|k[ọo]mp[ùu]t[àa]|k[ọo]ta) ?s[áa]y[ẹe]n[sś]?\b", re.I), "Computer Science"),

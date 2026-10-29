@@ -226,12 +226,15 @@ function Confirm({ m, task }: { m: Extract<Msg, { kind: "confirm" }>; task: Task
   );
 }
 
+const ANSWERED: Record<string, string> = { en: "Answered", pcm: "You don answer", yo: "Ẹ ti dáhùn", ha: "An amsa", ig: "Ị zaala" };
+
 function Choice({ m, task }: { m: Extract<Msg, { kind: "choice" }>; task: Task }) {
   if (!m.choices.length)
     return (
       <div className="glass-3 rounded-[22px] p-4">
         <Rich text={m.question} className="text-[16.5px] font-medium text-ink" />
-        {m.picked ? <p className="mt-1 text-[14px] text-ink-3">{m.picked}</p> : <p className="mt-1 text-[13px] text-ink-3">Type or speak your answer below.</p>}
+        {/* her answer is in the chat (a spoken one as a voice bubble): never printed here as the recogniser heard it */}
+        {m.picked ? <p className="mt-1 text-[14px] font-medium text-ink-3">{ANSWERED[useApp.getState().lang] ?? ANSWERED.en}</p> : <p className="mt-1 text-[13px] text-ink-3">Type or speak your answer below.</p>}
       </div>
     );
   return (

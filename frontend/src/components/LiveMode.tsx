@@ -425,7 +425,7 @@ export function LiveMode() {
                 {label}
               </p>
               <div className="mt-6 min-h-[96px] w-full max-w-[420px] text-center">
-                {heard && <p className="line-clamp-2 text-[15px] leading-snug text-ink-2">“{heard}”</p>}
+                {/* her own words are never shown back to her (the recogniser's spelling): only Jagora's reply */}
                 {replyText ? (
                   // Jagora's latest reply: never more than a few lines on screen (it scrolls if longer), so the orb and
                   // the buttons always stay in view

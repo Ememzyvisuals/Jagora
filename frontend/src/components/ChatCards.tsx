@@ -114,8 +114,10 @@ export function FileCard({ m }: { m: Extract<Msg, { kind: "file" }> }) {
 }
 
 /** Her voice message: play it back, see the words Jagora heard. */
-const HIDE_WORDS = new Set<Lang>(["yo", "ha", "ig"]);
-const SPOKE: Record<Lang, string> = { en: "Voice message", pcm: "Voice message", yo: "Ohùn Yorùbá", ha: "Muryar Hausa", ig: "Olu Igbo" };
+// her spoken words are never printed back (the recogniser's spelling embarrasses her, in every language): the bubble
+// says she spoke and in which language; Jagora still answers from what it heard
+const HIDE_WORDS = new Set<Lang>(["en", "pcm", "yo", "ha", "ig"]);
+const SPOKE: Record<Lang, string> = { en: "English voice", pcm: "Pidgin voice", yo: "Ohùn Yorùbá", ha: "Muryar Hausa", ig: "Olu Igbo" };
 
 export function VoiceBubble({ m }: { m: Extract<Msg, { kind: "user" }> }) {
   const lang = useApp((s) => s.lang);
