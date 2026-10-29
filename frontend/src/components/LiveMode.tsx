@@ -406,7 +406,7 @@ export function LiveMode() {
               <div className="flex items-center gap-2">
                 <span className="rounded-full bg-white/70 px-3 py-1 text-[12.5px] font-semibold text-ink-2">{SAY.live[lang]}</span>
                 {/* fold the Live screen down to the small bar; the call goes on */}
-                <button onClick={() => setSmall(true)} className="grid h-10 w-10 place-items-center rounded-full bg-white/70 text-ink transition active:scale-95" aria-label={SAY.hide[lang]}>
+                <button onClick={() => (setSmall(true), useApp.getState().setSheet(true))} className="grid h-10 w-10 place-items-center rounded-full bg-white/70 text-ink transition active:scale-95" aria-label={SAY.hide[lang]}>
                   <Minus size={18} weight="bold" />
                 </button>
               </div>

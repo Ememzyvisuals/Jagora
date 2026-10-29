@@ -104,7 +104,8 @@ export function MobileApp() {
   // she opened herself stays open until she closes it
   useEffect(() => {
     if (!task || task.kind !== "browse" || !task.url || pointing || needsHer) return;
-    if (task.status === "working") setSheet(false);
+    // in Live mode the chat stays up: the page loads behind it and she follows the steps there (she asks to see the page)
+    if (task.status === "working" && !useApp.getState().live) setSheet(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.id, task?.url, task?.status]);
 

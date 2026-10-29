@@ -629,11 +629,19 @@ export function BottomBar({ screen, setScreen }: { screen: "home" | "page" | "ta
         {screen !== "home" || sheet ? (
           <button
             onClick={() => {
-              
+              const st = useApp.getState();
+              // Live already on (folded to the small bar): the tap is for the chat, to follow the steps. Live stays folded
+              // and the call goes on; the small bar at the top brings the Live screen back
+              if (st.live) {
+                st.setShowPage(false);
+                st.setLiveSmall(true);
+                if (!sheet) setSheet(true);
+                return;
+              }
               // the chat comes up and Live mode opens: Jagora listens only there, with End and mute in view
               if (!sheet) setSheet(true);
-              useApp.getState().setLive(true); // Live opens, or comes back up if it was folded
-              useApp.getState().setLiveSmall(false);
+              st.setLive(true);
+              st.setLiveSmall(false);
             }}
             aria-label={handsFree ? "Stop listening" : "Talk to Jagora"}
             data-tour="orb"
