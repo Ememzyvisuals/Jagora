@@ -673,7 +673,11 @@ class Browser:
                 asyncio.ensure_future(cdp.send("Page.screencastFrameAck", {"sessionId": ev["sessionId"]}))
 
             cdp.on("Page.screencastFrame", frame)
-            await cdp.send("Page.startScreencast", lite.SCREENCAST[self.cast])
+            settings_ = dict(lite.SCREENCAST[self.cast])
+            if self.cast == "vlite" and not self.mobile:
+                # data saver on a computer: a phone-width picture (412 px) stretched over a big screen was unreadable
+                settings_.update(maxWidth=1024, maxHeight=800, quality=60)
+            await cdp.send("Page.startScreencast", settings_)
             self._cdp = cdp
             self.log("screencast_started", mode=self.cast, url=self.page.url, settings=lite.SCREENCAST[self.cast])
         except Exception as e:  # noqa: BLE001

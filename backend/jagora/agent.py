@@ -266,6 +266,14 @@ def _same_news(a: str, b: str) -> bool:
     return bool(wa and wb) and len(wa & wb) / len(wb) >= 0.6
 
 
+def _said_again(a: str, b: str) -> bool:
+    """Is b a reworded copy of a (most of the shorter one's words are in the other)?"""
+    def words(t: str) -> set[str]:
+        return {w for w in re.findall(r"[^\W\d_]{3,}", unicodedata.normalize("NFC", (t or "").lower()))}
+    wa, wb = words(a), words(b)
+    return bool(wa and wb) and len(wa & wb) / min(len(wa), len(wb)) >= 0.6
+
+
 def yt_embed(video_id: str) -> str:
     """YouTube's privacy-enhanced player, controllable from her app (pause while she talks, next, previous)."""
     return f"https://www.youtube-nocookie.com/embed/{video_id}?autoplay=1&rel=0&modestbranding=1&enablejsapi=1&playsinline=1"
@@ -786,6 +794,7 @@ class Agent:
     _replay_log: list = field(default_factory=list)  # this run's navigation steps, saved on success
     _said_key: str = ""  # the last thing told to them (to never say the same thing twice in a row)
     _said_last: str = ""
+    _said_all: list = field(default_factory=list)  # everything told her in this task
     _long_told: bool = False  # the answer (a long reply) was spoken in this task: never a second version
     _flow: Flow = field(default_factory=Flow)  # where each text came from, and the sites this task may act on
     _trail: list = field(default_factory=list)  # what Jagora did, shown to them at the end
@@ -1318,6 +1327,10 @@ class Agent:
                             "or finish"), False, None
                 if not msg.strip():
                     return "not said: the message was empty. Do the next real step instead.", False, None
+                if not self._heard_since_told and any(_said_again(old_, msg) for old_ in self._said_all):
+                    # she has not spoken since: a reworded copy of something already said this task is never said
+                    return ("not said: you already told her this in this task. Do the next real step, or say only what "
+                            "is new in one short sentence."), False, None
                 if len(msg) >= LONG_REPLY and self._long_told and not self._heard_since_told:
                     # the answer is given once per request: a second, longer or reworded version is never spoken
                     return ("not said: you already gave her the answer in this task, and she has not spoken since. "
@@ -1333,6 +1346,7 @@ class Agent:
                             "write_document if they are useful"), False, None
                 self._said_key, self._said_last = key, msg
                 self._long_told = self._long_told or len(msg) >= LONG_REPLY
+                self._said_all = self._said_all + [msg]
                 self._told_at = len(self.history)
                 self._told_since_act, self._heard_since_told = True, False
                 await self.io.say(msg)
