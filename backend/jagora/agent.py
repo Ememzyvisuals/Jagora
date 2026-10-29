@@ -1501,7 +1501,8 @@ class Agent:
                 if a.get("summary") and self._answered_before(str(a["summary"])) and not self._said_last:
                     return ("not finished: that summary is the answer she already has in the chat. Finish with one short "
                             "line about what you did now, or do what she asked."), False, None
-                told_answer = (self._long_told and not self._heard_since_told) or self._told_since_act and (len(self._said_last) > 150 or _same_news(self._said_last, str(a.get("summary", ""))))
+                told_answer = (not self._heard_since_told and any(_said_again(x, str(a.get("summary", ""))) for x in self._said_all)) \
+                    or (self._long_told and not self._heard_since_told) or self._told_since_act and (len(self._said_last) > 150 or _same_news(self._said_last, str(a.get("summary", ""))))
                 if not told_answer and not (len(self.history) - self._told_at <= 2
                                             and _same_news(self._said_last, str(a.get("summary", "")))):
                     await self.io.say(a.get("summary", ""))
