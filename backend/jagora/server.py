@@ -763,7 +763,19 @@ def is_noise(text: str) -> bool:
     words = re.findall(r"\w+", text)
     return len(words) < 2 or len("".join(words)) < 5
 
-SEND_WAIT = 6.0  # seconds a message may wait on her connection before the connection counts as gone
+SEND_WAIT = 6.0
+
+
+async def _send_within(coro, seconds: float) -> None:
+    """A send that gives up after `seconds` WITHOUT waiting for the stuck send to finish cancelling. asyncio.wait_for
+    waits for that, and a send stuck on a dead phone connection never finishes: the send lock was then held for
+    ever and every chat message, step and reply after it froze (the video "starting now" that never came)."""
+    t = asyncio.ensure_future(coro)
+    done, _ = await asyncio.wait({t}, timeout=seconds)
+    if not done:
+        t.cancel()
+        raise TimeoutError("send did not finish")
+    t.result()  # seconds a message may wait on her connection before the connection counts as gone
 RECONNECT_GRACE = 60.0
 HOLD_TASK = 20 * 60.0  # a task still running or waiting for her: kept this long while her app is away
 HOLD_MONEY = 60 * 60.0  # a payment in progress (she went to her bank app): kept this long
@@ -911,7 +923,7 @@ class Session:
             return
         async with self._send_lock:
             try:
-                await asyncio.wait_for(ws.send_bytes(data), SEND_WAIT)
+                await _send_within(ws.send_bytes(data), SEND_WAIT)
                 self.sent[kind] += len(data)
                 self.stream["bytes"] += len(data)
                 k = data[:1]
@@ -938,7 +950,7 @@ class Session:
                 if ws is self.ws and ws is not self._dead_ws:
                     try:
                         text = json.dumps(msg, ensure_ascii=False)
-                        await asyncio.wait_for(ws.send_text(text), SEND_WAIT)
+                        await _send_within(ws.send_text(text), SEND_WAIT)
                         k = msg.get("type")
                         self.sent[k if k in ("frame", "pcm") else "other"] += len(text)
                         return
@@ -1593,7 +1605,7 @@ class Session:
         if ws is None:
             return False
         try:
-            await asyncio.wait_for(ws.send_text(json.dumps(msg, ensure_ascii=False)), SEND_WAIT)
+            await _send_within(ws.send_text(json.dumps(msg, ensure_ascii=False)), SEND_WAIT)
             return True
         except Exception:  # noqa: BLE001
             self.voice_ws = None
