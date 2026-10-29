@@ -50,6 +50,19 @@
       if (el.name) return clean(el.name.replace(/[_-]+/g, " "));
     }
     if (el.tagName === "INPUT" && ["submit", "button", "reset"].includes(el.type)) return clean(el.value);
+    // a home-made dropdown (react-select and the like: role=combobox, an input with no label): its words are around it,
+    // like "Select Coach" or the chosen "Standard Class", and the field's own title just before it ("Coach")
+    if (el.getAttribute("role") === "combobox" || /react-select|select2|choices/.test(el.id || el.className || "")) {
+      let box = el;
+      for (let up = 0; up < 5 && box; up++) {
+        box = box.parentElement;
+        const t = box ? clean(box.innerText, 50) : "";
+        if (t) {
+          const prev = box.previousElementSibling && !box.previousElementSibling.querySelector("input,select") ? clean(box.previousElementSibling.innerText, 30) : "";
+          return clean((prev ? prev + ": " : "") + t, 70);
+        }
+      }
+    }
     const img = el.querySelector("img[alt]");
     return clean(el.innerText || el.textContent || el.title || (img && img.alt) || el.value || "");
   }

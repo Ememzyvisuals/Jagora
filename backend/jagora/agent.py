@@ -274,8 +274,33 @@ def yt_embed(video_id: str) -> str:
 YT_ID = re.compile(r"(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/)|youtu\.be/)([\w-]{11})")
 
 # steps that only look things up (never wait for her answer): each is stopped if it takes longer than this
-STEP_LIMIT_S = 60
+STEP_LIMIT_S = 100
 LONG_REPLY = 150  # a reply this long is the answer itself: said once per request
+class _HerTimeIO:
+    """The run's io, with the waits for her counted (see Agent._her_turn)."""
+    WAITS = ("ask", "confirm", "handoff", "point", "ask_point", "ask_private", "ask_form")
+
+    def __init__(self, io, agent) -> None:
+        self._io, self._agent = io, agent
+
+    def __getattr__(self, name):
+        fn = getattr(self._io, name)
+        if name not in self.WAITS or not callable(fn):
+            return fn
+        agent = self._agent
+
+        async def waiting(*args, **kw):
+            agent._her_turn += 1
+            try:
+                return await fn(*args, **kw)
+            finally:
+                agent._her_turn -= 1
+        return waiting
+
+
+# tools whose whole job is waiting for her (a question, a form, her own typing): no time limit. Every other step is
+# stopped after STEP_LIMIT_S of its own time (time spent waiting for her yes inside a step is not counted)
+WAITS_FOR_HER = {"ask_user", "ask_form", "ask_private", "ask_point", "hand_over", "use_saved_login", "fetch_code", "keep_payment"}
 NEVER_WAITS = {"search", "go_to", "new_tab", "find_text", "read_page", "page_tables", "download", "read_sources", "check_official",
                "check_link", "find_video", "find_media", "recommend_videos", "pdf_page", "show_evidence", "save_page", "list_links",
                "find_moments", "picture_guide", "scroll", "go_back"}
@@ -768,6 +793,7 @@ class Agent:
     # ---- the loop -------------------------------------------------------------------------------------------------
 
     async def run(self, goal: str, start_url: str | None = None) -> Result:
+        self._wrap_her_waits()
         t0 = time.monotonic()
         self._goal = goal
         self._flow.heard(goal)
@@ -829,7 +855,18 @@ class Agent:
                 except Exception:  # noqa: BLE001
                     self._facts = []
             t_snap = time.monotonic()
-            snap = await self._snapshot()
+            reading = asyncio.ensure_future(self._snapshot())
+            done_read, _ = await asyncio.wait({reading}, timeout=40)
+            if done_read:
+                snap = reading.result()
+            else:
+                # the page itself stopped answering (its script is stuck): never wait for ever on it
+                log.warning("PAGE READ STUCK for 40s; it was waiting here:\n%s", await_chain(reading)[-4000:])
+                reading.cancel()
+                self._record("page_read_stuck", {})
+                snap = None
+                self.history.append("(the page stopped answering: reload it with go_to on its address, or tell her it is "
+                                    "not responding and offer to try again)")
             if snap is not None and self._last_goto:
                 # a page that sends visitors away does it a few seconds later (after its own check): seen here
                 want, got = urlparse(self._last_goto), urlparse(snap.url)
@@ -909,12 +946,16 @@ class Agent:
                 if watch:
                     await self.browser.changes()  # start clean: only what this action changes is reported
                     url_before = self.browser.page.url
-                if call.name in NEVER_WAITS:
+                if call.name not in WAITS_FOR_HER:
                     # looking things up never waits for her: if it hangs (a site that never answers, a browser that will
                     # not start) the step is stopped and the run goes on, instead of rolling for ever
                     # asyncio.wait, not wait_for: wait_for would itself wait for a stuck step to finish being cancelled
                     step = asyncio.ensure_future(self._act(call.name, call.args, snap))
-                    finished, _ = await asyncio.wait({step}, timeout=STEP_LIMIT_S)
+                    finished, spent = set(), 0.0
+                    while not finished and spent < STEP_LIMIT_S:
+                        finished, _ = await asyncio.wait({step}, timeout=2.0)
+                        if not self._her_turn:  # time she spends answering a yes or a question never counts
+                            spent += 2.0
                     if finished:
                         note, replan, done = step.result()
                     else:
@@ -2224,6 +2265,15 @@ class Agent:
         if when:
             bits.append(f"page dated {when}")
         return "; ".join(bits), False, None
+
+    _her_turn: int = 0  # >0 while Jagora waits for her (a yes, an answer, her typing)
+
+    def _wrap_her_waits(self) -> None:
+        """Every way of waiting for her marks the time as hers, so the step time limit pauses meanwhile. The io is
+        wrapped for this run only (a proxy), never changed in place."""
+        if self.io is None or isinstance(self.io, _HerTimeIO):
+            return
+        self.io = _HerTimeIO(self.io, self)
 
     def _answered_before(self, text: str) -> bool:
         """Is this the answer Jagora already gave her earlier in this chat (an earlier run)? Long replies only."""
