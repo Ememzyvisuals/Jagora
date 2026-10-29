@@ -640,6 +640,7 @@ HOW YOU WORK
 - In Do mode you press buttons yourself: never ask them to tap something on the page unless it is private (a password, a code) or a robot check. When you point at something for them (Guide mode), it must be in view on their screen.
 - If a page or PDF will not open, or the words are not on the page you are on, do not try the same thing again: open the next search result or another official source.
 - Subject combinations and admission requirements: JAMB's official brochure (ibass.jamb.gov.ng, search the school, then the course) is the official source for every Nigerian university; use it when a school's own page or PDF will not open.
+- Fastest route for a subject combination: if she names a school, search "<school> admission requirements pdf" and open the school's own .edu.ng PDF, then find_text the course (one PDF answers it, and it is the brochure she can keep). Otherwise JAMB ibass: brochure-by-institution, type the school, View Courses, type the course, View Details. If she named no school, ask which school in one short question before searching (requirements differ by school).
 - When the answer came from an official PDF or brochure (a school's admission requirements, a JAMB brochure, a cut-off list): after show_evidence, give her that file at once with download (it is the official document, so no need to ask), and say in one short line that it lists every course with its requirements and cut-off marks, so she can check any other course herself. Do not go looking around other pages once the official document answers the question.
 - When she asks for the brochure, the document or "all the courses": give her the official file. If the answer came from a web page (JAMB's ibass brochure page), get the school's own admission requirements PDF from its official site (search "<school> admission requirements pdf", open the .edu.ng result) and download it; if there is none, download the official page itself with page_as_pdf. Then say in one line what is in it.
 - Never end with a promise ("I will check X next"): do it, or say plainly what you could not confirm.
@@ -1196,6 +1197,7 @@ class Agent:
             return ""
         bits = []
         if url != url_before:
+            self._scrolls = 0  # a new page: scrolling it is new
             bits.append(f"the page moved to {urlparse(url).netloc}{urlparse(url).path[:60]}")
         if c.get("shown"):
             bits.append("opened: " + " | ".join(f'"{t[:80]}"' for t in c["shown"][:3]))
@@ -1252,6 +1254,10 @@ class Agent:
                 key = re.sub(r"\W+", " ", msg).strip().lower()
                 if key and key == self._said_key:
                     return "already told them that; do not repeat it", False, None
+                if self._answered_before(msg):
+                    return ("not said: she already has this answer in the chat, from before. Do not give it again. Do what "
+                            "she asks now (\"download\", \"brochure\", \"thank you\": give the official document, or say one "
+                            "short friendly line); if her words are unclear, ask one short question."), False, None
                 if self._said_last and _same_news(self._said_last, msg) and not self._heard_since_told:
                     return ("not said: you told them nearly this already. Say only what is new, in one short sentence, "
                             "or finish"), False, None
@@ -1410,6 +1416,9 @@ class Agent:
                 # she was just told the answer (tell_user in the step before): the summary is not said again, so
                 # she hears it once
                 # she has already been told (nothing done since): the summary is not said again in other words
+                if a.get("summary") and self._answered_before(str(a["summary"])) and not self._said_last:
+                    return ("not finished: that summary is the answer she already has in the chat. Finish with one short "
+                            "line about what you did now, or do what she asked."), False, None
                 told_answer = self._told_since_act and (len(self._said_last) > 150 or _same_news(self._said_last, str(a.get("summary", ""))))
                 if not told_answer and not (len(self.history) - self._told_at <= 2
                                             and _same_news(self._said_last, str(a.get("summary", "")))):
@@ -1505,6 +1514,7 @@ class Agent:
                         "with go_to; read it and answer. Only open another if that page does not answer it):\n"
                         + "\n".join(lines)), False, None
             if name in ("go_to", "new_tab"):
+                self._scrolls = 0
                 return await self._go_to(a, new_tab=name == "new_tab")
             if name == "download":
                 return await self._download(a, snap)
@@ -1515,6 +1525,11 @@ class Agent:
                 return "no page is open yet; search or open a web address first", False, None
             b = self.browser
             if name == "scroll":
+                self._scrolls = getattr(self, "_scrolls", 0) + 1
+                if self._scrolls > 4:
+                    return ("not scrolled: you have scrolled up and down several times without finding it. Use find_text "
+                            "with the words you need, use the page's own search box, or go to another source (the "
+                            "school's admission PDF)."), False, None
                 await b.scroll(a.get("direction", "down"))
                 return "scrolled", True, None
             if name == "go_back":
@@ -2183,6 +2198,13 @@ class Agent:
         if when:
             bits.append(f"page dated {when}")
         return "; ".join(bits), False, None
+
+    def _answered_before(self, text: str) -> bool:
+        """Is this the answer Jagora already gave her earlier in this chat (an earlier run)? Long replies only."""
+        if len(text) < 120:
+            return False
+        return any(m.get("role") != "user" and len(m.get("text", "")) >= 120 and _same_news(m.get("text", ""), text)
+                   for m in self.conversation[-6:])
 
     async def _give_official_pdf(self) -> None:
         """The answer came from an official PDF (a school's admission brochure, a cut-off list) she has not been given
