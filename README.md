@@ -168,6 +168,14 @@ All of this runs in Docker on one AWS server alongside other services, within a 
 desktop browser moves this work onto the user's own computer, which is how it reaches millions of people without
 millions of cloud browsers.
 
+**New sign-ups are paused during judging.** Because every person gets a whole browser of their own, streamed live,
+plus speech both ways, one small server can only serve a handful of people at once. While the judges test Jagora, new
+accounts need an access code, so people who find the link here do not take the judges' places. Existing accounts
+still sign in. Streaming a cloud browser to every user is the expensive part; once the Jagora desktop browser is out,
+the browser runs natively on the user's own computer, and the server only carries the agent's model calls and speech,
+which is far lighter, so sign-ups can open to everyone. To run your own copy without the lock, set `SIGNUPS_OPEN=true`
+(see [Run it yourself](#run-it-yourself)).
+
 ### The problems it solves
 
 | Problem in the community | What Jagora does |

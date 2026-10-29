@@ -139,6 +139,11 @@ def is_admin_code(code: str) -> bool:
     return code_label(code) == "admin"
 
 
+CLOSED = ("New sign-ups are paused while the hackathon judges test Jagora. Each person gets a whole browser of their "
+          "own, and this demo runs on one small server, so places are kept for the judges. If you already have an "
+          "account, sign in. If you have an access code, enter it to sign up.")
+
+
 async def signup(db: DB, email: str, password: str, code: str = "", name: str = "") -> dict:
     email = (email or "").strip().lower()
     if not EMAIL.match(email):
@@ -147,6 +152,8 @@ async def signup(db: DB, email: str, password: str, code: str = "", name: str = 
         raise AuthError("password", "Use at least 8 characters for your password.")
     if code and not _code_ok(code):
         raise AuthError("code", "That access code is not valid.")
+    if not code and not settings.signups_open:
+        raise AuthError("closed", CLOSED, 403)
     if await db.one("select id from users where email=?", (email,)):
         raise AuthError("exists", "An account with this email already exists. Sign in instead.", 409)
     uid = uuid.uuid4().hex

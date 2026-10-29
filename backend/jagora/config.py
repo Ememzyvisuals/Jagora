@@ -143,6 +143,8 @@ class Settings:
     require_account: bool = field(default_factory=lambda: env("REQUIRE_ACCOUNT", "true").lower() != "false")
     credits_free: int = field(default_factory=lambda: env_int("CREDITS_FREE", 30))
     credits_code: int = field(default_factory=lambda: env_int("CREDITS_CODE", 400))
+    # judging: new accounts only with an access code (each person gets a whole browser on one small server)
+    signups_open: bool = field(default_factory=lambda: env("SIGNUPS_OPEN", "false").lower() == "true")
     daily_budget_usd: float = field(default_factory=lambda: float(env("DAILY_BUDGET_USD", "25") or 25))
     allowed_origins: tuple[str, ...] = field(default_factory=lambda: tuple(o.strip() for o in env(
         "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",") if o.strip()))
