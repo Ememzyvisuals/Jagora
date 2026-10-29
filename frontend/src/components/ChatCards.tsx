@@ -661,3 +661,70 @@ export function PaymentCard({ m, task }: { m: Extract<Msg, { kind: "payment" }>;
     </div>
   );
 }
+
+
+/* ---- Jagora's video picks: the best few for what she asked, each with why, and where learners recommend it ---- */
+const PICK: Record<"watch" | "previewAll" | "why" | "recommended", Record<Lang, string>> = {
+  watch: { en: "Watch", pcm: "Watch", yo: "Wò ó", ha: "Kalla", ig: "Kiri" },
+  previewAll: { en: "Preview all", pcm: "Preview all", yo: "Wo gbogbo rẹ̀ díẹ̀díẹ̀", ha: "Duba duka", ig: "Lelee ha niile" },
+  why: { en: "Why this one", pcm: "Why this one", yo: "Ìdí tí mo fi yàn án", ha: "Dalilin zaɓa", ig: "Ihe mere m ji họrọ ya" },
+  recommended: { en: "Learners recommend it on", pcm: "People recommend am for", yo: "Àwọn akẹ́kọ̀ọ́ dábàá rẹ̀ lórí", ha: "Ɗalibai sun ba da shawararsa a", ig: "Ndị mmụta na-atụ aro ya na" },
+};
+
+export function PicksCard({ m }: { m: Extract<Msg, { kind: "picks" }> }) {
+  const lang = useApp((s) => s.lang);
+  const play = (i: number, preview = false) => {
+    const p = m.picks[i];
+    const queue = m.picks.map((x) => ({ name: x.name, url: x.url, type: "youtube", source: x.source }));
+    useApp.getState().setPlaying({
+      id: `pick-${Date.now()}`, kind: "media", name: p.name, url: p.url, type: "youtube", size: 0, source: p.source,
+      ...(preview ? { queue, preview: 8 } : {}),
+    } as Extract<Msg, { kind: "media" }>);
+  };
+  return (
+    <div className="glass rounded-[22px] p-4">
+      <p className="text-[15.5px] font-bold leading-snug text-ink">{m.intro}</p>
+      <ol className="mt-3 space-y-3">
+        {m.picks.map((p, i) => (
+          <li key={p.url} className="rounded-[18px] bg-white/70 p-3 dark:bg-white/5">
+            <div className="flex gap-3">
+              {p.image ? (
+                <img src={p.image} alt="" className="h-[64px] w-[112px] shrink-0 rounded-[10px] object-cover" loading="lazy" />
+              ) : (
+                <span className="grid h-[64px] w-[112px] shrink-0 place-items-center rounded-[10px] bg-ink text-[22px] font-bold text-paper">{i + 1}</span>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-2 text-[14.5px] font-semibold leading-snug text-ink">{i + 1}. {p.name}</p>
+                <p className="mt-0.5 truncate text-[12.5px] text-ink-3">{[p.channel, p.duration, p.views && `${p.views} views`, p.date].filter(Boolean).join(" · ")}</p>
+              </div>
+            </div>
+            {p.why && (
+              <p className="mt-2 text-[13.5px] leading-snug text-ink-2">
+                <span className="font-semibold text-ink">{PICK.why[lang]}: </span>
+                {p.why}
+              </p>
+            )}
+            {!!p.evidence?.length && (
+              <p className="mt-1.5 text-[12.5px] leading-snug text-ink-3">
+                {PICK.recommended[lang]}{" "}
+                {p.evidence.map((e, j) => (
+                  <a key={e.url + j} href={e.url} target="_blank" rel="noreferrer" title={e.title} className="mr-1.5 inline-block rounded-full bg-accent-soft px-2 py-0.5 font-semibold text-accent-deep">
+                    {e.site}
+                  </a>
+                ))}
+              </p>
+            )}
+            <button onClick={() => play(i)} className="btn btn-ink mt-2.5 h-10 px-5 text-[14px] font-semibold">
+              {PICK.watch[lang]}
+            </button>
+          </li>
+        ))}
+      </ol>
+      {m.picks.length > 1 && (
+        <button onClick={() => play(0, true)} className="btn btn-glass mt-3 h-10 w-full text-[14px] font-semibold">
+          {PICK.previewAll[lang]}
+        </button>
+      )}
+    </div>
+  );
+}

@@ -30,6 +30,8 @@ export type DocBlock =
   | { t: "table"; head: string[]; rows: string[][]; caption?: string }
   | { t: "note"; text: string };
 export type JDoc = { title: string; subtitle?: string; kind: string; summary: string[]; blocks: DocBlock[]; sources: { title: string; url: string }[]; created: number; lang: string };
+/** a video Jagora recommends, with why, and where learners recommend it */
+export type VideoPick = { name: string; url: string; source: string; why: string; channel?: string; duration?: string; date?: string; views?: string; image?: string; evidence?: { site: string; title: string; url: string }[] };
 /** one box in a form card: she fills several at once in the chat, each goes into its own box on the page */
 export type FormField = { key: string; label: string; field: SecretField; digits?: number; profile_field?: keyof Profile };
 export type SecretField = "account" | "nin" | "bvn" | "otp" | "pin" | "password" | "phone" | "card" | "other" | "name" | "email" | "address" | "text" | "date";
@@ -78,6 +80,7 @@ export type Msg =
   /** Jagora is not sure what she means: she taps it on the live page */
   | { id: string; kind: "pointask"; question: string; status: "waiting" | "done" }
   | { id: string; kind: "scheduled"; at: number; goal: string; allow: string[]; repeat: string }
+  | { id: string; kind: "picks"; intro: string; picks: VideoPick[] }
   | { id: string; kind: "payment"; what: string; amount?: string; pay_to?: string; account?: string; bank?: string; reference?: string; status: "waiting" | "paid_by_her" | "confirmed" | "failed"; note?: string; site?: string; since: number; updated: number }
   | { id: string; kind: "result"; title: string; reference?: string; lines: [string, string][] }
   /** what Jagora did in a task: every site opened, box filled (values hidden), button pressed, approval and block,

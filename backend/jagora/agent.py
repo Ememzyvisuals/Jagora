@@ -439,6 +439,15 @@ COMMON = [
     tool("find_video", "Find a video, song, film or trailer to play for them (YouTube first). Then play the best one with "
          "play_media and its link. Never open youtube.com in the browser for this: it keeps asking the browser to prove it "
          "is not a robot. The video plays on their own device.", {"query": {"type": "string"}}, ["query"]),
+    tool("recommend_videos", "Show her your top picks (2 to 4 videos) as a card in the chat, each with why you chose it: "
+         "the facts from find_video (who made it, the sites where learners recommend it, length for her level, how recent). "
+         "She can watch one or preview them all from the card. Say the best one's reason in one short line after.",
+         {"intro": {"type": "string", "description": "one line, in her language, e.g. 'The 3 best Python courses for a "
+                    "beginner'"},
+          "picks": {"type": "array", "items": {"type": "object", "properties": {
+              "url": {"type": "string"}, "name": {"type": "string"},
+              "why": {"type": "string", "description": "one or two short sentences, in her language, from the facts only"}},
+              "required": ["url", "name", "why"]}}}, ["intro", "picks"]),
     tool("preview_videos", "Play short previews of several videos one after another (a few seconds each) so they can choose; "
          "after the last one their app asks which to watch. Use when they ask to see the options or previews.",
          {"videos": {"type": "array", "items": {"type": "object", "properties": {"url": {"type": "string"}, "name": {"type": "string"}},
@@ -607,7 +616,7 @@ HOW YOU WORK
 - Do not ask "what do you want me to do?" when the request is already clear from the conversation; only ask when two real choices remain.
 - Be quick on simple questions (dates, news, prices, results): search once, open the best official or news result, read the answer, then say it. Do not visit page after page when one already answers it.
 - You also run the Jagora app on their screen: "On the user's screen" tells you what they see (the chat, the live page, their tabs). When they ask to close, open, show, hide, switch, scroll or change something there, use app_control right away, then carry on with the task.
-- While a video plays on their screen ("Playing on her screen now"), the microphone may catch the film. Act only on words clearly meant for you (next, another one, I don't like it, pause, stop, louder); ignore anything that sounds like the film's dialogue and say nothing. When she talks, whatever plays is paused for you and plays on by itself when you are done; touch it (media_pause, stop_media, media_next) only if what she said is about it. Videos: "preview them" is preview_videos ONCE (they move on by themselves). "Play them all", "one after the other", "like episodes", "watch all 3 then I choose" is play_list ONCE (each plays to the end, the next starts by itself; when the last ends you are told, then ask which one she liked). "Full screen" is media_big on, or big: true in play_list. Everything after that you do by voice with app_control; never tell her to tap Next, Previous or anything else, and never send the same videos again (it restarts her player). You have full control of the player: whatever she asks it to do (pause, play, forward, back, a time, half way, start again, louder, softer, mute, faster, slower, fill the screen, next, previous, close, save for later), do it at once with app_control, then at most a couple of words. "Forward it" with no number is +30; "a bit" is 10 seconds. "How far am I" or "how long is left": answer from the time on her screen. "I don't like this one, find another one": the next one in the list if there is a list (media_next); otherwise find_video again for the same thing, leaving out the one she rejected. "Saved in this chat to watch later" means she can continue it: "continue" or "play my video" is media_resume.
+- While a video plays on their screen ("Playing on her screen now"), the microphone may catch the film. Act only on words clearly meant for you (next, another one, I don't like it, pause, stop, louder); ignore anything that sounds like the film's dialogue and say nothing. When she talks, whatever plays is paused for you and plays on by itself when you are done; touch it (media_pause, stop_media, media_next) only if what she said is about it. Videos: "find me the best course / video / tutorial" is find_video, then recommend_videos with your top 3 and why each (only facts from the search: who made it, where learners recommend it, length for her level); then wait for her choice. "Preview them" is preview_videos ONCE (they move on by themselves). "Play them all", "one after the other", "like episodes", "watch all 3 then I choose" is play_list ONCE (each plays to the end, the next starts by itself; when the last ends you are told, then ask which one she liked). "Full screen" is media_big on, or big: true in play_list. Everything after that you do by voice with app_control; never tell her to tap Next, Previous or anything else, and never send the same videos again (it restarts her player). You have full control of the player: whatever she asks it to do (pause, play, forward, back, a time, half way, start again, louder, softer, mute, faster, slower, fill the screen, next, previous, close, save for later), do it at once with app_control, then at most a couple of words. "Forward it" with no number is +30; "a bit" is 10 seconds. "How far am I" or "how long is left": answer from the time on her screen. "I don't like this one, find another one": the next one in the list if there is a list (media_next); otherwise find_video again for the same thing, leaving out the one she rejected. "Saved in this chat to watch later" means she can continue it: "continue" or "play my video" is media_resume.
 - Choosing with them (videos, music, films, courses, tutorials, fonts, products, schools, jobs, anything with several good options): find the options fast (find_video for anything to watch or listen to, search for the rest), give them the best 3 as ask_user choices with short titles, and WAIT for their pick. Then play it (play_media) or open its page (go_to) so they see it. If they said "just play" or named one, skip the question. Stay with them after: "next", "another one", "not this one" means the next option, or search again for better ones.
 - Show what you read: when the answer comes from a website, open that page with go_to so it is on their screen while you tell them (read_sources is for comparing several in the background). When no website is needed (a quick fact, a chat), stay on their home screen.
 - Learning (a course, a skill, an exam subject): ask their level if unknown, find good beginner playlists (find_video "<subject> full course for beginners playlist"), offer the best 3 channels as choices, then play the lessons in order with play_list and a course name, so their watching is tracked ("Her course ..." lines show minutes watched and lessons finished). Offer a short study guide (write_document: the plan, lesson by lesson, how long each day, what to practise). "Continue my course" means play_list from the next unfinished lesson. When a lesson ends you are told; offer a short practice sheet on that lesson (write_document with exercises, answers at the end), then the next lesson.
@@ -698,6 +707,7 @@ class Agent:
     _changed_any: bool = False
     _chat_note: str | None = None  # this chat's own memory
     _asked: list = field(default_factory=list)
+    _video_meta: dict = field(default_factory=dict)  # video link -> what find_video learned about it (channel, proof...)
     _app_done: dict = field(default_factory=dict)  # app action -> what she had said when it was done (once per request)
     _reached: str = ""  # the milestone this task has reached (its route is saved then)
     _bounced: dict = field(default_factory=dict)
@@ -950,7 +960,7 @@ class Agent:
         (("write_document",), r"doc|document|pdf|word|letter|cv|resume|write|summar|report|markdown|note|guide|practi|exercise|learn|course|study|plan"),
         (("picture_guide",), r"picture|draw|diagram|image|show me how|illustrat"),
         (("save_page", "page_theme"), r"save|pdf|print|download|dark|light|theme|night mode"),
-        (("play_media", "find_media", "find_video", "preview_videos", "play_list"), r"learn|course|lesson|tutorial|study|teach|class|episode|season|series|album|playlist|part \d|play|song|music|video|movie|film|watch|listen|audio|sermon|podcast|clip"),
+        (("play_media", "find_media", "find_video", "preview_videos", "play_list", "recommend_videos"), r"learn|course|lesson|tutorial|study|teach|class|episode|season|series|album|playlist|part \d|play|song|music|video|movie|film|watch|listen|audio|sermon|podcast|clip"),
         (("give_verdict", "check_link", "review_terms"), r"real|fake|scam|legit|genuine|official|safe|trust|link|terms|verify|check (this|if)"),
         (("remember_about_her",), r"remember|my name is|i am a|i live|call me|i work|i study"),
     ]
@@ -1266,12 +1276,21 @@ class Agent:
                 vids = await research.videos(str(a.get("query", "")))
                 if not vids:
                     return "no videos found; try other words", False, None
-                return ("videos. If they named one, or said just play, play the best match with play_media. Otherwise ask "
-                        "them which one with ask_user (the top 3 titles as choices) and WAIT for the answer before playing; "
-                        "if they want to see them first, use preview_videos. After it starts, stay with them: they may say "
-                        "next, another one, or that they do not like it:\n" + "\n".join(
-                    f"{i + 1}. {v['title']} | {v['url']} | {v['channel']} {v['duration']} {v['date']}".rstrip()
-                    for i, v in enumerate(vids))), False, None
+                proof = await research.video_evidence(str(a.get("query", "")), vids[:8])
+                for v in vids:
+                    self._video_meta[v["url"]] = {**v, "evidence": proof.get(v["url"], [])}
+                lines = []
+                for i, v in enumerate(vids):
+                    bits = " ".join(x for x in (v["channel"], v["duration"], v["date"], f"{v['views']} views" if v.get("views") else "") if x)
+                    ev = proof.get(v["url"])
+                    rec = ("; recommended on: " + "; ".join(f"{e['site']} (\"{e['title'][:60]}\")" for e in ev)) if ev else ""
+                    lines.append(f"{i + 1}. {v['title']} | {v['url']} | {bits}{rec}" + (f" | {v['snippet'][:120]}" if v.get("snippet") else ""))
+                return ("videos (with what learners recommend on the web). When she asks for the best course, tutorial or "
+                        "video, pick the 3 best and show them with recommend_videos: for each, why THIS one, from the facts "
+                        "here only (who made it, recommended on which sites, length right for her level, recent, structured "
+                        "in parts). If she named one or said just play, play the best match with play_media. If she wants "
+                        "to see them first, preview_videos. After it starts, stay with her: she may say next, another one, "
+                        "or that she does not like it:\n" + "\n".join(lines)), False, None
             if name == "play_list":
                 items = []
                 for v in list(a.get("videos") or [])[:30]:
@@ -1293,6 +1312,24 @@ class Agent:
                         "liked. You control it by voice with app_control (media_next, media_previous, media_pause, "
                         "media_seek, media_big...). Never tell her to tap anything. Now finish with ONE short line. Do not "
                         "call play_list, preview_videos or find_video again."), False, None
+            if name == "recommend_videos":
+                picks = []
+                for p in list(a.get("picks") or [])[:4]:
+                    m = YT_ID.search(str(p.get("url", "")))
+                    if not m:
+                        continue
+                    meta = self._video_meta.get(str(p.get("url")), {})
+                    picks.append({"name": str(p.get("name") or meta.get("title") or "Video")[:90], "url": yt_embed(m.group(1)),
+                                  "source": str(p.get("url")), "why": str(p.get("why", ""))[:300],
+                                  "channel": meta.get("channel", ""), "duration": meta.get("duration", ""),
+                                  "date": meta.get("date", ""), "views": meta.get("views", ""), "image": meta.get("image", ""),
+                                  "evidence": meta.get("evidence", [])[:3]})
+                if not picks:
+                    return "give YouTube links from find_video", False, None
+                await self.io.event("picks", {"intro": str(a.get("intro", ""))[:160], "picks": picks})
+                return ("the picks are on her screen with your reasons; she can watch one or preview all from the card. Say "
+                        "the best one's reason in ONE short line and ask which she wants, then wait. Do not play anything "
+                        "until she chooses."), False, None
             if name == "preview_videos":
                 items = []
                 for v in list(a.get("videos") or [])[:6]:

@@ -59,3 +59,30 @@ async def test_same_video_search_twice(monkeypatch):
     await a._act("find_video", {"query": "egusi soup"}, None)
     again, _, _ = await a._act("find_video", {"query": "Egusi soup "}, None)
     assert "already searched" in again and len(calls) == 1
+
+
+async def test_recommendations_carry_why_and_where_learners_recommend_it(monkeypatch):
+    from jagora import agent as agentmod
+    import dataclasses
+
+    async def videos(q):
+        return [{"title": "Python for Beginners - Full Course", "url": "https://www.youtube.com/watch?v=K5KVEU3aaeQ",
+                 "channel": "Programming with Mosh", "duration": "2:00:00", "date": "2025", "snippet": "", "image": "", "views": ""},
+                {"title": "Learn Python - Full Course for Beginners", "url": "https://www.youtube.com/watch?v=rfscVS0vtbw",
+                 "channel": "freeCodeCamp.org", "duration": "4:26:52", "date": "2018", "snippet": "", "image": "", "views": ""}]
+
+    async def serper(q, n=10):
+        return ([{"title": "Best Python course on YouTube? : r/learnpython", "url": "https://reddit.com/r/learnpython/x",
+                  "site": "reddit.com", "snippet": "Programming with Mosh is great for absolute beginners"}], "")
+    monkeypatch.setattr(agentmod.research, "videos", videos)
+    monkeypatch.setattr(agentmod.research, "serper", serper)
+    monkeypatch.setattr(agentmod, "settings", dataclasses.replace(agentmod.settings, serper_keys=["k"]))
+    io = IO()
+    a = Agent(None, None, io)
+    out, _, _ = await a._act("find_video", {"query": "python course for beginners"}, None)
+    assert 'recommended on: reddit.com ("Best Python course on YouTube?' in out
+    await a._act("recommend_videos", {"intro": "The best Python courses for a beginner", "picks": [
+        {"url": "https://www.youtube.com/watch?v=K5KVEU3aaeQ", "name": "Mosh: Python for Beginners", "why": "Two hours, made for beginners."}]}, None)
+    kind, card = io.events[-1]
+    assert kind == "picks" and card["picks"][0]["channel"] == "Programming with Mosh"
+    assert card["picks"][0]["evidence"][0]["site"] == "reddit.com" and "youtube-nocookie.com/embed/K5KVEU3aaeQ" in card["picks"][0]["url"]

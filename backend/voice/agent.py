@@ -131,8 +131,8 @@ def build_session(voice: Voice, vad, stt_vad) -> AgentSession:
         turn_handling={
             "turn_detection": "stt",
             "endpointing": {"min_delay": ENDPOINT_MIN_DELAY_S, "max_delay": ENDPOINT_MAX_DELAY_S},
-            # as Kivo: talking over Jagora for half a second cuts it off; if it was only noise it carries on
-            "interruption": {"mode": "vad", "min_duration": 0.5, "resume_false_interruption": True,
+            # talking over Jagora for 0.8 s cuts it off (0.5 s let room noise cut her); if it was only noise it carries on
+            "interruption": {"mode": "vad", "min_duration": 0.8, "resume_false_interruption": True,
                              "false_interruption_timeout": 1.2},
         },
     )

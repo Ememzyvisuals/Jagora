@@ -38,10 +38,38 @@ async def videos(query: str, limit: int = 8) -> list[dict]:
         if r.status_code != 200:
             return []
         out = [{"title": v.get("title", ""), "url": v.get("link", ""), "channel": v.get("channel", "") or v.get("source", ""),
-                "duration": v.get("duration", ""), "date": v.get("date", "")} for v in r.json().get("videos", [])]
+                "duration": v.get("duration", ""), "date": v.get("date", ""), "snippet": (v.get("snippet") or "")[:200],
+                "image": v.get("imageUrl", ""), "views": v.get("views") or v.get("viewCount") or ""}
+               for v in r.json().get("videos", [])]
         out.sort(key=lambda v: "youtube.com" not in v["url"] and "youtu.be" not in v["url"])
         return out[:limit]
     return []
+
+
+async def video_evidence(query: str, vids: list[dict]) -> dict[str, list[dict]]:
+    """Why people trust these videos: one web search for what learners recommend for this ("best ... YouTube",
+    Reddit, course lists), and for each video the pages that name its channel or its course. Real pages only."""
+    try:
+        results, _ = await serper(f"best {query} YouTube recommended reddit", 10)
+    except Exception:  # noqa: BLE001
+        return {}
+    out: dict[str, list[dict]] = {}
+    for v in vids:
+        channel = re.sub(r"[^\w ]+", " ", v.get("channel", "")).strip().lower()
+        words = [w for w in re.findall(r"[a-z0-9]{4,}", v.get("title", "").lower()) if w not in STOP_WORDS][:4]
+        hits = []
+        for r in results:
+            text = f"{r.get('title', '')} {r.get('snippet', '')}".lower()
+            if (channel and len(channel) > 3 and channel in text) or (len(words) >= 2 and sum(w in text for w in words) >= 2):
+                hits.append({"site": r.get("site") or urlparse(r.get("url", "")).netloc.replace("www.", ""), "title": r.get("title", "")[:90],
+                             "url": r.get("url", "")})
+        if hits:
+            out[v["url"]] = hits[:3]
+    return out
+
+
+STOP_WORDS = {"full", "course", "tutorial", "beginners", "beginner", "free", "with", "from", "learn", "2024", "2025", "2026",
+              "complete", "video", "hours", "hour", "this", "that", "your", "best", "easy", "step"}
 
 
 async def serper(query: str, limit: int = 10) -> tuple[list[dict], str]:

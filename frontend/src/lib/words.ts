@@ -3,7 +3,7 @@
    the same before sending (server.py shown_safe); this also repairs chats saved on the phone before that fix. */
 const TEXT = new Set(["text", "question", "detail", "name", "title", "label", "what", "note", "amount", "pay_to", "reference", "message", "summary", "subtitle", "caption", "quote"]);
 const LISTS = new Set(["choices", "reasons"]);
-const NESTED = new Set(["queue", "steps", "fields"]);
+const NESTED = new Set(["queue", "steps", "fields", "picks"]);
 
 export function asWords(v: unknown): string {
   if (v == null) return "";

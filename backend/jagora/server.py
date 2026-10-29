@@ -673,7 +673,7 @@ def shown_safe(msg: dict) -> dict:
                 v = as_words(v)
             elif k in TEXT_LISTS and isinstance(v, list):
                 v = [as_words(x) for x in v]
-            elif k in ("queue", "steps", "fields", "lines") and isinstance(v, list):
+            elif k in ("queue", "steps", "fields", "lines", "picks") and isinstance(v, list):
                 v = [fix(x) if isinstance(x, dict) else x for x in v]
             out[k] = v
         return out
@@ -696,6 +696,7 @@ class Session:
         self.money: dict[str, bool] = {}  # chat -> a payment is in progress there (the session is held for her)
         self._yes_no_again: set[str] = set()  # yes/no questions already asked a second time
         self._she_spoke_at = 0.0  # when she last started talking (her LiveKit voice)
+        self._voice_line: tuple | None = None  # (task, text, when) the line Jagora's voice is saying now
         self.browser: Browser | None = None
         self.active_task = ""
         self.since = time.time()
@@ -1073,6 +1074,7 @@ class Session:
                 was_speaking = self.voice_speaking
                 self._voice_spoke.clear()
                 if await self._to_voice({"type": "say", "text": speech.speakable(text, lang), "lang": lang}):
+                    self._voice_line = (task, text, time.time())
                     trace.write(self.user_id, "say_sent_to_voice", chars=len(text))
                     if was_speaking:
                         continue  # it queues after what it is saying now
@@ -1475,6 +1477,11 @@ class Session:
                 self._page_ready.set()
                 await self.send({"type": "orb", "state": "speaking"})
             elif state == "listening":
+                if self._voice_line and time.time() - self._she_spoke_at < 2.5 and self._voice_line[2] < self._she_spoke_at:
+                    # cut off by a sound she made (or the room): kept, so it carries on if that was not really her
+                    self._unsaid = (self._voice_line[0], self._voice_line[1], time.time())
+                    trace.write(self.user_id, "voice_cut_off", text=self._voice_line[1][:120])
+                self._voice_line = None
                 await self.send({"type": "orb", "state": "listening"})
                 await self.send({"type": "speech_end", "task": task})
         elif kind == "stall":
@@ -1606,6 +1613,9 @@ class Session:
             if msg_id:
                 await self.send({"type": "drop", "task": task, "id": msg_id})
             await self.send({"type": "sound", "do": "unduck"})
+            if self._unsaid and time.time() - self._unsaid[2] < 30:
+                trace.write(self.user_id, "voice_resumed", text=self._unsaid[1][:120])
+                self.resume(task)
             await self.settle(task)
             return
         # she has said more: anything Jagora had not said yet is out of date, so it is dropped and the answer covers
@@ -1613,10 +1623,14 @@ class Session:
         # unless what she said was about it (Jagora then pauses, closes or changes it itself)
         verdict = await self._gate(task, text)
         if verdict == "ignore" or (verdict == "unclear" and time.time() - self._asked_again < 90):
-            # not her talking to Jagora (or she was already asked to say it again): nothing happens, nothing repeats
+            # not her talking to Jagora (or she was already asked to say it again): nothing happens, nothing repeats,
+            # and what Jagora was saying when that sound cut it off is said to the end
             if msg_id:
                 await self.send({"type": "drop", "task": task, "id": msg_id})
             await self.send({"type": "sound", "do": "unduck"})
+            if self._unsaid and time.time() - self._unsaid[2] < 30:
+                trace.write(self.user_id, "voice_resumed", text=self._unsaid[1][:120])
+                self.resume(task)
             await self.settle(task)
             return
         if verdict == "unclear":
@@ -2009,6 +2023,9 @@ class WsIO:
             self.r.step_id = mid()
             await s.send({"type": "msg", "task": t, "msg": {"id": self.r.step_id, "kind": "step", "text": data["text"], "status": "doing"}})
             await s.send({"type": "orb", "state": "thinking"})
+        elif kind == "picks":
+            await self.close_step()
+            await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "picks", **data}})
         elif kind == "payment":
             await self.close_step()
             await s.keep_payment(t, data)
