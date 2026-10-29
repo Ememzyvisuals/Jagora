@@ -764,6 +764,9 @@ class Session:
         self._yes_no_again: set[str] = set()  # yes/no questions already asked a second time
         self._she_spoke_at = 0.0  # when she last started talking (her LiveKit voice)
         self._voice_line: tuple | None = None  # (task, text, when) the line Jagora's voice is saying now
+        self._voice_began = 0.0  # when the voice last started speaking
+        self._resume_times: list[float] = []  # when cut lines were carried on (two in a row at most)
+        self._resumed: set[str] = set()  # lines that are the rest of a cut line
         self.browser: Browser | None = None
         self.active_task = ""
         self.since = time.time()
@@ -1157,6 +1160,10 @@ class Session:
                             # of date, so it stays written in the chat and is not read out late over her
                             trace.write(self.user_id, "late_reply_not_spoken", text=text[:120])
                             continue
+                        if text in self._resumed:
+                            # the rest of a cut line, and the voice is gone (she ended Live): it stays in the chat
+                            trace.write(self.user_id, "resume_not_spoken", text=text[:120])
+                            continue
                         trace.write(self.user_id, "voice_did_not_speak", note="spoken through the app instead", text=text[:200])
                         await self._to_voice({"type": "hush"})
             self._speaking = (task, text, lang)
@@ -1233,12 +1240,24 @@ class Session:
         if self.voice_ws is not None:
             asyncio.ensure_future(self._to_voice({"type": "hush"}))
 
+    @staticmethod
+    def _still_to_say(text: str, seconds: float) -> str:
+        """The part of a line not yet heard after `seconds` of speaking, from the start of the sentence it was in.
+        Jagora's voice says about 10 characters a second (measured on its Yorùbá and English replies)."""
+        plain = re.sub(r"\*\*|__|`", "", text)
+        at = int(max(0.0, seconds - 0.4) * 10)
+        if at >= len(plain) - 15:
+            return ""  # all of it, or nearly, was said
+        starts = [0] + [m.end() for m in re.finditer(r"[.!?]\s+|\n+", plain) if m.end() <= at]
+        return plain[max(starts):].strip()
+
     def resume(self, task: str) -> bool:
         """Carry on with what was interrupted, if it was recent."""
         if not self._unsaid or time.time() - self._unsaid[2] > 90:
             return False
         t, text, _ = self._unsaid
         self._unsaid = None
+        self._resumed.add(text)
         self.speak(t or task, text)
         return True
 
@@ -1547,14 +1566,21 @@ class Session:
             state = str(ev.get("agent") or "")
             self.voice_speaking = state == "speaking"
             if state == "speaking":
+                self._voice_began = time.time()
                 self._voice_spoke.set()
                 self._page_ready.set()
                 await self.send({"type": "orb", "state": "speaking"})
             elif state == "listening":
                 if self._voice_line and time.time() - self._she_spoke_at < 2.5 and self._voice_line[2] < self._she_spoke_at:
                     # cut off by a sound she made (or the room): kept, so it carries on if that was not really her
-                    self._unsaid = (self._voice_line[0], self._voice_line[1], time.time())
-                    trace.write(self.user_id, "voice_cut_off", text=self._voice_line[1][:120])
+                    rest = self._still_to_say(self._voice_line[1], time.time() - max(self._voice_began, self._voice_line[2]))
+                    tries = sum(1 for t in self._resume_times if time.time() - t < 90)
+                    # what was cut is carried on from the sentence it stopped in (never from the start again), and a
+                    # line cut again and again (a TV in the room) is left in the chat after two tries
+                    self._unsaid = (self._voice_line[0], rest, time.time()) if rest and tries < 2 else None
+                    if self._unsaid:
+                        self._resume_times.append(time.time())
+                    trace.write(self.user_id, "voice_cut_off", text=self._voice_line[1][:120], rest=rest[:80], tries=tries)
                 self._voice_line = None
                 await self.send({"type": "orb", "state": "listening"})
                 await self.send({"type": "speech_end", "task": task})

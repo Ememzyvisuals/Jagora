@@ -29,7 +29,8 @@ from dotenv import load_dotenv
 from livekit.agents import Agent, AgentServer, AgentSession, JobContext, JobProcess, StopResponse, cli
 from livekit.agents import tokenize
 from livekit.agents import tts as agents_tts
-from livekit.plugins import silero
+from livekit.agents.voice import room_io
+from livekit.plugins import noise_cancellation, silero
 
 from storm import StormSTT, StormTTS
 from storm.stt import PREROLL_S
@@ -50,6 +51,8 @@ LINK_KEY = env("VOICE_LINK_SECRET")
 ASR_URL, ASR_KEY = env("STORM_ASR_WS_URL"), env("STORM_ASR_API_KEY")
 TTS_URL, TTS_KEY = env("STORM_TTS_WS_URL"), env("STORM_TTS_API_KEY")
 TTS_MIN_CHARS = int(env("TTS_MIN_CHARS", "220"))
+BVC_ON = env("VOICE_BVC", "1") != "0"  # background voice cancellation (needs LiveKit Cloud): VOICE_BVC=0 turns it off
+INTERRUPT_MODE = env("VOICE_INTERRUPT_MODE", "adaptive")  # "vad" for the old way
 # turn timing, interruptions, the ASR gate and the VADs are Kivo's (kivo-demo/agent/agent.py), which work reliably
 # a little longer than Kivo's 0.3/2.0: people pause mid-sentence (Jagora's server also joins pieces into one message)
 ENDPOINT_MIN_DELAY_S = float(env("VOICE_ENDPOINT_MIN_DELAY", "0.6"))
@@ -135,7 +138,10 @@ def build_session(voice: Voice, vad, stt_vad) -> AgentSession:
             "turn_detection": "stt",
             "endpointing": {"min_delay": ENDPOINT_MIN_DELAY_S, "max_delay": ENDPOINT_MAX_DELAY_S},
             # talking over Jagora for 0.8 s cuts it off (0.5 s let room noise cut her); if it was only noise it carries on
-            "interruption": {"mode": "vad", "min_duration": 0.8, "resume_false_interruption": True,
+            # LiveKit's own fix for false barge-ins (adaptive interruption: a model tells a real interruption from coughs,
+            # chatter, TV and "mm-hmm"; it falls back to plain voice detection if unavailable), and only once two words
+            # of it are recognised. Jagora's server also stops the voice when what she said is for it
+            "interruption": {"mode": INTERRUPT_MODE, "min_duration": 0.8, "min_words": 2, "resume_false_interruption": True,
                              "false_interruption_timeout": 1.2},
         },
     )
@@ -295,8 +301,15 @@ async def entrypoint(ctx: JobContext) -> None:
         watcher.cancel()
 
     ctx.add_shutdown_callback(stop_watcher)
-    # no extra noise filter (as Kivo): the phone's own echo cancelling and noise suppression, plus the ASR gate
-    await session.start(agent=Bridge(link), room=ctx.room)
+    # LiveKit Cloud's background voice cancellation (Krisp BVC): only the voice of the person holding the phone goes on;
+    # a TV, other people in the room and Jagora's own voice from the speaker are removed before anything hears them
+    opts = room_io.RoomOptions()
+    if BVC_ON:
+        try:
+            opts = room_io.RoomOptions(audio_input=room_io.AudioInputOptions(noise_cancellation=noise_cancellation.BVC()))
+        except Exception as e:  # noqa: BLE001
+            log.warning("background voice cancellation not available: %s", e)
+    await session.start(agent=Bridge(link), room=ctx.room, room_options=opts)
     await link.send({"type": "ready"})
 
 
