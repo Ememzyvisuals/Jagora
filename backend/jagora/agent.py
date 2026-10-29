@@ -628,6 +628,7 @@ HOW YOU WORK
 - In Do mode you press buttons yourself: never ask them to tap something on the page unless it is private (a password, a code) or a robot check. When you point at something for them (Guide mode), it must be in view on their screen.
 - If a page or PDF will not open, or the words are not on the page you are on, do not try the same thing again: open the next search result or another official source.
 - Subject combinations and admission requirements: JAMB's official brochure (ibass.jamb.gov.ng, search the school, then the course) is the official source for every Nigerian university; use it when a school's own page or PDF will not open.
+- When the answer came from an official PDF or brochure (a school's admission requirements, a JAMB brochure, a cut-off list): after show_evidence, give her that file at once with download (it is the official document, so no need to ask), and say in one short line that it lists every course with its requirements and cut-off marks, so she can check any other course herself. Do not go looking around other pages once the official document answers the question.
 - Never end with a promise ("I will check X next"): do it, or say plainly what you could not confirm.
 - Say the answer once, short: at most 3 short sentences (the answer and where it came from). Never send another reply that says the same in other words. Long details go in a document only if useful. Either tell_user it and then finish with a one-line wrap-up, or put it only in finish. Never tell_user the answer and then repeat it in finish.
 - When done, call finish with a short summary in {lang}: the answer, where it was confirmed, what was not confirmed, and the best next step. Offer a document or download if it would help.
@@ -855,13 +856,15 @@ class Agent:
             self._record("model", {"turn": turns, "calls": [{"name": c.name, "args": _redact(c.args)} for c in reply.calls],
                                    "seconds": round(reply.seconds, 2), "in": reply.input_tokens, "cached": reply.cached_tokens, "out": reply.output_tokens})
             if not reply.calls:
-                if reply.text.strip() and not snap:
+                if reply.text.strip() and (not snap or wrap):
                     if len(reply.text.strip()) > SAY_MAX and not self._shortened:
                         self._shortened = True
                         self.history.append(f"(your reply was too long to speak ({len(reply.text.strip())} characters): "
                                             f"say it in at most 3 short sentences, under {SAY_MAX} characters, with tell_user or finish)")
                         continue
-                    # a plain conversational answer, no browsing needed
+                    # a plain conversational answer, no browsing needed, or the answer given as the run wraps up
+                    if wrap:
+                        await self._give_official_pdf()
                     await self.io.say(reply.text.strip())
                     return await self._done(True, reply.text.strip(), turns, t0)
                 self.history.append("(you answered without a tool; always use a tool)")
@@ -1039,8 +1042,8 @@ class Agent:
         return self.browser
 
     async def _snapshot(self) -> Snapshot | None:
-        if self.browser is None or not self.browser.page or self.browser.page.url in ("about:blank", ""):
-            return None
+        if self.browser is None or not self.browser.page or (self.browser.page.url in ("about:blank", "") and not self.browser.pdf):
+            return None  # a PDF shows in Jagora's own viewer (no web address of its own): it is a page all the same
         try:
             return await self.browser.snapshot()
         except Exception as e:  # noqa: BLE001
@@ -1362,6 +1365,8 @@ class Agent:
                 return (f"not finished: the summary is too long to speak ({len(str(a['summary']))} characters). Finish again "
                         f"with at most 3 short sentences (under {SAY_MAX} characters)."), False, None
             if name == "finish":
+                if a.get("success"):
+                    await self._give_official_pdf()
                 if False and a.get("success") and self.searched and not self.evidence and not self._nudged_evidence:
                     self._nudged_evidence = True
                     return ("not finished: you have not shown evidence for any fact. Open the official source and use "
@@ -2147,11 +2152,26 @@ class Agent:
             bits.append(f"page dated {when}")
         return "; ".join(bits), False, None
 
+    async def _give_official_pdf(self) -> None:
+        """The answer came from an official PDF (a school's admission brochure, a cut-off list) she has not been given
+        yet: hand her the file, so every other course is in her hands too."""
+        b = self.browser
+        try:
+            if not (b and b.pdf and self.evidence and self._official_here()) or b.pdf.url in getattr(self, "_given", set()):
+                return
+            name = b.pdf.url.split("/")[-1].split("?")[0] or "document.pdf"
+            if not name.lower().endswith(".pdf"):
+                name += ".pdf"
+            await self._give_file(name[:90], b.pdf.data, "application/pdf", b.pdf.url)
+        except Exception as e:  # noqa: BLE001
+            log.info("could not give the official PDF: %s", e)
+
     async def _give_file(self, name: str, data: bytes, ctype: str, source: str, play: bool = False) -> str:
         token = secrets.token_urlsafe(12)
         folder = FILES_DIR / token
         folder.mkdir(parents=True, exist_ok=True)
         (folder / name).write_bytes(data)
+        self._given = getattr(self, "_given", set()) | {source}
         await self.io.event("media" if play else "file", {"name": name, "url": f"/files/{token}/{name}", "size": len(data), "type": ctype, "source": source})
         return f"/files/{token}/{name}"
 

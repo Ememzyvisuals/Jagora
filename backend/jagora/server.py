@@ -590,8 +590,45 @@ HEARD_FIXES = [
 ]
 
 
+def _toneless(rx: str) -> re.Pattern:
+    """A pattern that matches whatever tone marks the Yorùbá voice puts on the letters (kọ̀ǹpútà = kompuuta).
+    Each letter or [class] becomes (?:it + any marks), so a ? or * after it still applies to the whole letter."""
+    out, i = "", 0
+    marks = "[\u0300-\u036f]*"
+    while i < len(rx):
+        c = rx[i]
+        if c == "\\":
+            out += rx[i:i + 2]
+            i += 2
+        elif c == "[":
+            j = rx.index("]", i)
+            out += f"(?:{rx[i:j + 1]}{marks})"
+            i = j + 1
+        elif c.isalpha():
+            out += f"(?:{c}{marks})"
+            i += 1
+        else:
+            out += c
+            i += 1
+    return re.compile(out, re.I)
+
+
+YO_FIXES = [
+    (_toneless(r"\b(k[oọ]n?m?p[uú]t[aà]|k[oọ]ta) ?s[aá]y[eẹ]n?s?[iì]?(?!\w)"), "Computer Science"),
+    (_toneless(r"\b(j[aà]gb[oọ]|j[aà]g[oọ]r[aà]|jagoro|jagura)(?!\w)"), "Jagora"),
+    (_toneless(r"\b(j[aá]m[uù]b[uù]|j[eẹ]mb[uù]?|jamu)(?!\w)"), "JAMB"),
+    (_toneless(r"\b(d?y?[uù]n[iì]l[aá]a?(g[iìoọ]?|r[uù]|go)|unil[eẹ]gi)(?!\w)"), "UNILAG"),
+    (_toneless(r"\b(s[oọ]b[oọ]?j[eẹ]k[iì])(?!\w)"), "subject"),
+]
+
+
 def fix_heard(text: str) -> str:
-    t = text
+    import unicodedata
+
+    t = unicodedata.normalize("NFD", text)
+    for rx, said in YO_FIXES:
+        t = rx.sub(said, t)
+    t = unicodedata.normalize("NFC", t)
     for rx, name in HEARD_FIXES:
         t = rx.sub(name, t)
     if _EXAMS.search(t):
@@ -1560,8 +1597,8 @@ class Session:
         if is_stop(text) or CHECKIN.search(text) or (YES.search(text) or NO.search(text)) and len(text.split()) <= 4:
             return "act"
         r = self.runs.get(task)
-        if r and r.waiting:
-            return "act"  # she is answering a question
+        if r and r.waiting and len(text.split()) <= 6:
+            return "act"  # a short answer to Jagora's question (a long one is checked: the room can answer it too)
         try:
             convo = await db.history(self.user_id, task, 6)
         except Exception:  # noqa: BLE001
@@ -1581,7 +1618,7 @@ class Session:
             # the model thinks before it answers: it needs room for that (with 10 tokens it never answered, and every
             # message waited for the time-out)
             rep = await asyncio.wait_for(m.chat([{"role": "user", "content": prompt}], None, effort=settings.effort_fast,
-                                                max_tokens=400, kind="gate"), 4)
+                                                max_tokens=400, kind="gate"), 6)
             word = (rep.text or "").strip().upper()
         except Exception as e:  # noqa: BLE001
             trace.write(self.user_id, "voice_gate_failed", error=f"{type(e).__name__}: {str(e)[:160]}")

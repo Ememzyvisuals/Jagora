@@ -1186,6 +1186,8 @@ class Browser:
         r = await page.evaluate(MARK_JS, {"q": quote})
         if not r:
             return None
+        # the line may be further down the page: brought into view first (a picture of a spot off the screen fails)
+        await page.evaluate("() => { const m = document.querySelector('mark.__jg'); if (m) m.scrollIntoView({block: 'center'}); }")
         await asyncio.sleep(0.35)
         r = await page.evaluate("() => { const m = document.querySelectorAll('mark.__jg'); if (!m.length) return null;"
                                 "let a = m[0].getBoundingClientRect(), x1=a.left, y1=a.top, x2=a.right, y2=a.bottom;"
@@ -1198,7 +1200,10 @@ class Browser:
         clip = {"x": max(0, r["x"] - pad_x), "y": max(0, r["y"] - pad_y)}
         clip["width"] = min(vw - clip["x"], r["w"] + 2 * pad_x)
         clip["height"] = min(vh - clip["y"], r["h"] + 2 * pad_y)
-        img = await page.screenshot(type="jpeg", quality=78, clip=clip)
+        if clip["width"] < 20 or clip["height"] < 20:  # still not in view: the whole screen, with the line marked
+            img = await page.screenshot(type="jpeg", quality=78)
+        else:
+            img = await page.screenshot(type="jpeg", quality=78, clip=clip)
         return {"rect": r, "image": img, "page": None, "text": quote}
 
     async def ring(self, rect: dict | None, tone: str = "point") -> None:
