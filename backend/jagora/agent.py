@@ -272,6 +272,12 @@ def yt_embed(video_id: str) -> str:
 
 YT_ID = re.compile(r"(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/)|youtu\.be/)([\w-]{11})")
 
+# steps that only look things up (never wait for her answer): each is stopped if it takes longer than this
+STEP_LIMIT_S = 90
+NEVER_WAITS = {"search", "go_to", "new_tab", "find_text", "read_page", "page_tables", "download", "read_sources", "check_official",
+               "check_link", "find_video", "find_media", "recommend_videos", "pdf_page", "show_evidence", "save_page", "list_links",
+               "find_moments", "picture_guide", "scroll", "go_back"}
+
 FILL_TOOLS = {"ask_form", "type_text", "choose", "set_checkbox", "upload_file", "set_date", "fill_form", "drag", "use_saved_login",
               "ask_private", "hand_over"}
 
@@ -898,7 +904,18 @@ class Agent:
                 if watch:
                     await self.browser.changes()  # start clean: only what this action changes is reported
                     url_before = self.browser.page.url
-                note, replan, done = await self._act(call.name, call.args, snap)
+                if call.name in NEVER_WAITS:
+                    # looking things up never waits for her: if it hangs (a site that never answers, a browser that will
+                    # not start) the step is stopped and the run goes on, instead of rolling for ever
+                    try:
+                        note, replan, done = await asyncio.wait_for(self._act(call.name, call.args, snap), STEP_LIMIT_S)
+                    except asyncio.TimeoutError:
+                        log.warning("step %s stopped after %ss", call.name, STEP_LIMIT_S)
+                        self._record("step_timeout", {"tool": call.name, "seconds": STEP_LIMIT_S})
+                        note, replan, done = (f"{call.name} took too long (over {STEP_LIMIT_S} seconds) and was stopped. "
+                                              "Try another source or way, or tell them plainly."), True, None
+                else:
+                    note, replan, done = await self._act(call.name, call.args, snap)
                 if call.name not in ("tell_user", "update_plan", "finish", "look"):
                     self._told_since_act = False  # something new was done: a new reply may follow
                 if watch and not done:

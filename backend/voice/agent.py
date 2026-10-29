@@ -85,7 +85,10 @@ class Link:
 
     async def open(self) -> None:
         url = f"{LINK_URL}?{urlencode({'uid': self.uid, 'key': LINK_KEY})}"
-        self.ws = await self.http.ws_connect(url, heartbeat=20.0)
+        if self.ws is not None and not self.ws.closed:
+            await self.ws.close()
+        # a long heartbeat: a server busy for a few seconds (a big page, a PDF) must not count as gone
+        self.ws = await self.http.ws_connect(url, heartbeat=60.0)
 
     async def send(self, msg: dict) -> None:
         if self.ws is not None and not self.ws.closed:
@@ -195,8 +198,32 @@ async def entrypoint(ctx: JobContext) -> None:
         ctx.shutdown(reason="session closed")
 
     async def from_jagora() -> None:
-        """Jagora's server: what to say, when to be quiet, her language."""
-        assert link.ws is not None
+        """Jagora's server: what to say, when to be quiet, her language. If the line drops (the server restarted or
+        was busy for a moment), it is opened again, so the call goes on and her words still reach Jagora; only
+        Jagora's "bye" (her session closed) ends the call."""
+        tries = 0
+        while True:
+            bye = await read_link()
+            if bye:
+                break
+            tries += 1
+            if tries > 20:
+                log.warning("voice link lost for good")
+                break
+            log.warning("voice link dropped; opening it again (%d)", tries)
+            await asyncio.sleep(min(5.0, 0.5 * tries))
+            try:
+                await link.open()
+                await link.send({"type": "ready"})
+                tries = 0
+            except Exception as e:  # noqa: BLE001
+                log.warning("voice link not back yet: %s", e)
+        ctx.shutdown(reason="Jagora closed the voice link")
+
+    async def read_link() -> bool:
+        """Messages from Jagora's server until the line ends. True when Jagora said bye."""
+        if link.ws is None or link.ws.closed:
+            return False
         async for msg in link.ws:
             if msg.type != aiohttp.WSMsgType.TEXT:
                 continue
@@ -222,8 +249,8 @@ async def entrypoint(ctx: JobContext) -> None:
                 except Exception:  # noqa: BLE001
                     pass
             elif kind == "bye":
-                break
-        ctx.shutdown(reason="Jagora closed the voice link")
+                return True
+        return False
 
     reader = asyncio.create_task(from_jagora())
 
