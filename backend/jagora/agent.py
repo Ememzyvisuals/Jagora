@@ -456,7 +456,9 @@ ACT_TOOLS = [
          {"element": EL, "source": {"type": "string", "enum": ["profile", "spoken"]},
           "profile_field": {"type": "string", "enum": PROFILE_FIELDS}, "text": {"type": "string"}, "submit": {"type": "boolean",
           "description": "press Enter after typing (search boxes)"}, "ask": ASK}, ["element", "source"]),
-    tool("choose", "Pick an option in a dropdown.", {"element": EL, "option": {"type": "string"}}, ["element", "option"]),
+    tool("choose", "Pick an option in a dropdown, in ONE step: a normal one, or one the page builds itself (station, coach, "
+         "date or country lists): give the box and the option's words; it opens, finds and picks it.",
+         {"element": EL, "option": {"type": "string"}}, ["element", "option"]),
     tool("set_checkbox", "Tick or untick a checkbox, or pick a radio button.",
          {"element": EL, "checked": {"type": "boolean"}, "ask": ASK}, ["element", "checked"]),
     tool("press_key", "Press a key or a combination on the page, e.g. Enter, Escape, Tab, PageDown, Control+A, Shift+Tab.",
@@ -577,6 +579,7 @@ HOW YOU WORK
 - If you cannot tell which thing the user means on a page, use ask_point so the user taps it. For things without a number (maps, charts, canvas, images), use click_at with screenshot pixels. Use hover for hover menus, drag for sliders and drop zones, upload_file for their files, set_date for date boxes.
 - One-time codes: ask them whether to read it from their email (open their mail in a new tab, then fetch_code) or whether the user will type it (ask_private). Captchas and "are you human" checks: hand_over so the user does it on the live page.
 - Exact spellings: a name, email address, home address or username you do not already have from their saved details is never typed from what you heard (voice gets spellings wrong). Use ask_private with field name, email, address or text, and a label that guides them ("Type your full name as it is on your WAEC certificate").
+- SPEED: she is waiting; every reply of yours costs her 2 seconds. Do as much as you can in ONE reply: several calls at once when they do not need to see the page change in between (fill every box, tick, choose, then press the button; tell_user together with the next action, never alone in the middle of a task). update_plan only at the start and when a step finishes, always together with another call. Never a reply with only look or only scroll. Pick from a list with choose (one step), not by opening it and clicking.
 - She never has to type on the live page: whatever only she knows goes in a box in the chat. Never ask her HOW she wants to fill a form: send the card. Dates (date of birth, travel date) are field "date" (profile_field date_of_birth for her birthday): the card shows a calendar and the date goes into the page's date box properly. Two or more at once (passenger details, a sign-up form): ONE ask_form card; one thing: ask_private. Give profile_field for her details so the card can fill them from what she saved and offer to save new ones. Her saved details you already have go straight in with fill_form (profile_field). The page itself is only for things she must do there (a captcha, a picture check).
 - Sign-ins: if the site already shows her signed in (her sign-ins are kept between sessions), carry on. If it asks her to sign in, use use_saved_login when she saved one; otherwise email or phone and password in ONE ask_form card, and any code or "verify it's you" number with ask_private (fetch_code when it went to her email). Never make her type on the live page.
 - Money: the moment a page shows what to pay, call keep_payment (waiting) and show_evidence of it, BEFORE she leaves to pay. She may leave Jagora for her bank app; the session and this page are kept for her while she pays. When she says she has paid: keep_payment (paid_by_her), press the page's "I have paid" or check the booking, then keep_payment again with confirmed (and the reference) or failed. If "Open payments in this chat" are listed, check those first: open the site, find the booking or payment status, and tell her.
@@ -932,6 +935,8 @@ class Agent:
             return True
         if len(snap.text or "") < 400 and len(snap.elements) < 12:
             return True
+        if sum(1 for e in snap.elements if getattr(e, "state", "")) >= 12:
+            return True  # a seat map or a picker: seen at once, with no separate "look" step
         return bool(self.VISUAL.search(self._goal))
 
     def _lean(self, base: list[dict], snap: Snapshot | None) -> list[dict]:
@@ -955,6 +960,20 @@ class Agent:
             drop.add("use_saved_login")
         if not re.search(r"code|otp|token|verif", " ".join(e.label.lower() for e in boxes) + " " + said):
             drop.add("fetch_code")
+        page_words = (snap.text or "")[:2500].lower() if snap else ""
+        screen = (self.screen() if self.screen is not None else "") or ""
+        if "Playing on her screen" not in screen and "Saved in this chat to watch later" not in screen and \
+                getattr(self, "lang", "en") in ("en", "pcm") and not re.search(
+                    r"show|hide|close|remove|chat|screen|page|pause|play|stop|next|previous|back|forward|skip|rewind|volume|"
+                    r"loud|soft|mute|fast|slow|speed|full ?screen|dark|light|theme|language|yoruba|hausa|igbo|pidgin|english|"
+                    r"scroll|amina|voice|mode|delete|history|tab|continue|resume|save|live|bigger|smaller|minimi|fold", said):
+            drop.add("app_control")  # nothing about the app itself: its long description is not sent
+        if not re.search(r"pay|₦|naira|amount|ticket|book|fee|price|checkout|transfer|account|bank|wallet|invoice", said + " " + page_words):
+            drop.add("keep_payment")
+        if not boxes:
+            drop.update(("ask_form", "ask_private"))  # nothing to fill on this page
+        elif len(boxes) < 2:
+            drop.add("ask_form")
         if self._fails < 1 and not re.search(r"map|drag|slider|chart|canvas|draw", said):
             drop.update(("hover", "double_click", "right_click", "drag", "click_at"))
         return [t for t in base if t["function"]["name"] not in drop]
@@ -2402,13 +2421,22 @@ class Agent:
                     not re.search(r"\b(no|don'?t|not|change|cancel|wait)\b", ans)
         return False
 
+    MONEY_OR_FINAL = re.compile(r"\b(pay|payment|transfer|checkout|check out|buy|purchase|donate|withdraw|delete|remove|"
+                                r"cancel|final|submit application|send money)\b", re.I)
+
     async def _approve(self, a: dict, label: str, reason: str) -> bool:
+        if self._official_here() and self._doing_task() and not self.MONEY_OR_FINAL.search(f"{label} {reason}") and \
+                not a.get("ask") and "leaves" not in reason:
+            # the steps of the task she asked for on the official site (Book Now, Continue, Register): no stop for a
+            # yes on each one. Money, deleting and final submissions still wait for her
+            self._record("approved_official_step", {"label": label})
+            return True
         if self._she_just_said_yes_to(label):
             self._record("approved_before", {"label": label})
             if self.browser:
                 self.browser.allow_confirm()
             return True
-        ok, why = await self._fits_request(label, reason)
+        ok, why = (True, "") if self._official_here() else await self._fits_request(label, reason)
         if not ok:
             await self.io.event("guard", {"kind": "refused", "site": site(self.browser.page.url) if self.browser and self.browser.page else "",
                                           "text": f"offside action stopped: {label} ({why})"})
@@ -2431,14 +2459,19 @@ class Agent:
 
     def _messages(self, goal: str, snap: Snapshot | None, heard: list[str] | None = None, wrap: bool = False) -> list[dict]:
         lang = LANGS.get(self.lang, "English")
-        today = dt.datetime.now(dt.timezone(dt.timedelta(hours=1))).strftime("%A %d %B %Y, %H:%M")
-        system = SYSTEM.format(lang=lang, mode=MODE_TEXT[self.mode], today=today, services=services.directory())
+        now = dt.datetime.now(dt.timezone(dt.timedelta(hours=1)))
+        # the system part stays the same all day (the model provider can reuse it instead of reading it again each step,
+        # which is cheaper and faster); the time and the long list of official sites go with this step only
+        system = SYSTEM.format(lang=lang, mode=MODE_TEXT[self.mode], today=now.strftime("%A %d %B %Y"),
+                               services="(listed in the step message when no page is open; on a page, use the page)")
         # recent results in full, older ones shortened (long page text is only needed right after reading it)
         recent = self.history[-40:]
         done = "\n".join(f"- {h if i >= len(recent) - 6 else (h[:400] + ' [...]' if len(h) > 400 else h)}"
                          for i, h in enumerate(recent)) or "- nothing yet"
         convo = "\n".join(f"{'User' if m.get('role') == 'user' else 'You'}: {m.get('text', '')[:600]}" for m in self.conversation[-14:])
-        parts = []
+        parts = [f"Time now: {now.strftime('%H:%M')} (Nigeria)."]
+        if snap is None or not snap.url.startswith("http"):
+            parts.append("Official sites for common Nigerian services (go straight there):\n" + services.directory())
         if convo:
             parts.append(f"Earlier in this conversation:\n{convo}")
         parts.append(f"What the user wants now: {goal}")

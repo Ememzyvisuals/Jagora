@@ -337,6 +337,21 @@ SET_VALUE_JS = """(e, v) => {
   e.dispatchEvent(new Event('blur', {bubbles: true}));
 }"""
 
+# the options a home-made drop-down is showing right now (role=option, list items in an open menu)
+OPTIONS_JS = """() => {
+  const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 2 && r.height > 2 && getComputedStyle(e).visibility !== 'hidden'; };
+  let els = [...document.querySelectorAll('[role=option],[class*=option]:not([class*=options]),[role=listbox] li,ul[class*=menu] li,[class*=dropdown] li')].filter(vis);
+  return [...new Set(els.map((e) => (e.innerText || e.textContent || '').replace(/\\s+/g, ' ').trim()).filter((t) => t && t.length < 120))].slice(0, 80);
+}"""
+CLICK_OPTION_JS = """(want) => {
+  const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 2 && r.height > 2; };
+  const els = [...document.querySelectorAll('[role=option],[class*=option]:not([class*=options]),[role=listbox] li,ul[class*=menu] li,[class*=dropdown] li')].filter(vis);
+  const hit = els.find((e) => (e.innerText || e.textContent || '').replace(/\\s+/g, ' ').trim() === want);
+  if (!hit) return false;
+  for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) hit.dispatchEvent(new MouseEvent(t, {bubbles: true, cancelable: true, view: window}));
+  return true;
+}"""
+
 class Browser:
     """One browser (several tabs) per user session. `device` makes pages look the way they would on her screen:
     {"mobile": true, "w": 390, "h": 844} gives the site's phone layout, otherwise a desktop window."""
@@ -779,11 +794,34 @@ class Browser:
 
     async def choose(self, eid: int, option: str) -> str:
         loc = await self._locate(eid)
+        if not await loc.evaluate("e => e.tagName === 'SELECT'"):
+            return await self._choose_custom(loc, option)
         options: list[str] = await loc.evaluate("e => [...e.options].map(o => o.text.trim())")
         pick = best_option(option, options)
         if pick is None:
             raise ActionError(f'"{option}" is not one of the choices: {", ".join(options[:20])}')
         await loc.select_option(label=pick, timeout=5000)
+        return pick
+
+    async def _choose_custom(self, loc, option: str) -> str:
+        """A drop-down the page builds itself (react-select and the like: station, coach, date lists): open it, type
+        the words if it has a search box, and press the matching option. One step instead of three."""
+        page = self._need_page()
+        await loc.click(timeout=5000)
+        await asyncio.sleep(0.25)
+        try:
+            if await loc.evaluate("e => e.tagName === 'INPUT' || !!e.querySelector('input:not([type=hidden])')"):
+                await page.keyboard.type(option[:30], delay=15)
+                await asyncio.sleep(0.35)
+        except Exception:  # noqa: BLE001
+            pass
+        texts: list[str] = await page.evaluate(OPTIONS_JS)
+        pick = best_option(option, texts)
+        if pick is None:
+            await page.keyboard.press("Escape")
+            raise ActionError(f'"{option}" is not one of the choices: {", ".join(texts[:20]) or "none showed"}')
+        await page.evaluate(CLICK_OPTION_JS, pick)
+        await self.quiet(cap=1.5, calm_ms=250)
         return pick
 
     async def set_checked(self, eid: int, checked: bool) -> None:
