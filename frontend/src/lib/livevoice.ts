@@ -8,6 +8,10 @@ import { API, getToken } from "./account";
 import { clientLog } from "./engine/remote";
 import { useApp } from "./store";
 
+/** her microphone: the phone cancels Jagora's own voice coming out of its speaker (echo), the room's noise, and keeps only
+    a voice (voice isolation, where the phone has it), so Jagora is not cut off by itself */
+const MIC = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, voiceIsolation: true };
+
 let room: Room | null = null;
 let wanted = false; // false once she ends the call: a join still on its way is dropped when it lands
 let joining: Promise<boolean> | null = null;
@@ -77,7 +81,7 @@ export async function startLiveVoice(): Promise<boolean> {
         await rm.disconnect(); // she ended the call while it was connecting
         return false;
       }
-      await rm.localParticipant.setMicrophoneEnabled(true, { echoCancellation: true, noiseSuppression: true, autoGainControl: true });
+      await rm.localParticipant.setMicrophoneEnabled(true, MIC);
       room = rm;
       lost = false;
       clientLog("livekit_connected", { room: rm.name, others: rm.remoteParticipants.size });
@@ -128,5 +132,5 @@ export async function stopLiveVoice() {
 /** Mute her microphone without leaving (the orb tap while listening). */
 export async function setLiveMic(on: boolean) {
   clientLog("mic", { on, through: "livekit" });
-  await room?.localParticipant.setMicrophoneEnabled(on);
+  await room?.localParticipant.setMicrophoneEnabled(on, on ? MIC : undefined);
 }

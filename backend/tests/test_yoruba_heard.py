@@ -45,3 +45,11 @@ def test_old_sentence_sent_again_is_known():
     old = "Ọ̀rọ̀ mo fẹ́ dínkù. Yọ̀wọ́, mo fẹ́ dé kó bá mi wà soft dead combination fún computer science ní munilé. Yagora"
     assert _heard_before("Dọ̀rọ́, mo fẹ́ dé kó bá mi wà sọ́ Dead Combination fún Kùnkúta Sáyènsì ní Munilag", old)
     assert not _heard_before("Ó ṣe máa dán lọ, ẹ ṣé o, mo ti gbọ́ ohun tí ẹ sọ", old)
+
+
+def test_jagora_heard_through_the_speaker_is_known():
+    from jagora.server import _sounds_like
+    said = ("Mo ti rí i lójú ìwé UNILAG 2025/2026. UTME: Èdè Gẹ̀ẹ́sì, Mathematics, Physics, àti Chemistry tàbí Biology kan. "
+            "O-level: credits 5 ní Èdè Gẹ̀ẹ́sì, Mathematics, Further Mathematics, Physics, àti Chemistry tàbí Biology.")
+    assert _sounds_like("a. Biologi 1 bye ni yìdé", said) >= 0.35
+    assert _sounds_like("Ẹ jọ̀ọ́ ẹ bá mi download brochure náà", said) < 0.35

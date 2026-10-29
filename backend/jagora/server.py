@@ -672,6 +672,17 @@ def _contained(late: str, said: str) -> bool:
     return a in b or difflib.SequenceMatcher(None, a, b[-len(a) - 20:]).ratio() > 0.75
 
 
+def _sounds_like(heard: str, said: str) -> float:
+    """How much of what was heard is runs of what Jagora said (tone marks and spelling aside): 0 to 1."""
+    import difflib
+
+    x, y = _plain(heard), _plain(said)
+    if not x or not y:
+        return 0.0
+    m = difflib.SequenceMatcher(None, x, y, autojunk=False)
+    return sum(b.size for b in m.get_matching_blocks() if b.size >= 4) / len(x)
+
+
 def _heard_before(text: str, earlier: str) -> bool:
     """The voice sending again a sentence she said a while ago (it happens: an old sentence comes back as the end of a new
     one). Most of these letters, in order, are in what she said before."""
@@ -1657,7 +1668,7 @@ class Session:
             return "act"  # when unsure, do not lose her request
         verdict = "ignore" if word.startswith("IGNORE") else "unclear" if word.startswith("UNCLEAR") else "act"
         if verdict == "ignore" and len(text.split()) >= 5 and "Playing on her screen now" not in (self.screen or "") \
-                and not self.echo(text):
+                and not self.echo(text) and not (self._unsaid and time.time() - self._unsaid[2] < 20):
             # nothing is playing that Jagora knows of and these are many real words: most likely her, badly heard.
             # Silence is the worst answer: in a chat already going, Jagora works it out from the chat (and asks if it
             # still cannot); in a new one it asks her to say it again
@@ -1695,6 +1706,20 @@ class Session:
                 self.resume(task)
             await self.settle(task)
             return
+        # Jagora was talking when this was "heard" (its voice was cut by it) and the words sound like Jagora's own: the
+        # phone's microphone picked up its speaker. Not her: dropped, and Jagora says the rest of what it was saying
+        if self._unsaid and time.time() - self._unsaid[2] < 20:
+            mine = max([_sounds_like(text, self._unsaid[1])] + [_sounds_like(text, said) for at, said in self._said
+                                                                 if time.time() - at < 90] or [0.0])
+            if mine >= 0.35:
+                trace.write(self.user_id, "voice_echo_dropped", text=text[:160], like=round(mine, 2))
+                if msg_id:
+                    await self.send({"type": "drop", "task": task, "id": msg_id})
+                await self.send({"type": "sound", "do": "unduck"})
+                trace.write(self.user_id, "voice_resumed", text=self._unsaid[1][:120])
+                self.resume(task)
+                await self.settle(task)
+                return
         # she has said more: anything Jagora had not said yet is out of date, so it is dropped and the answer covers
         # everything she said. Whatever plays on her screen pauses while Jagora deals with it, and plays on after,
         # unless what she said was about it (Jagora then pauses, closes or changes it itself)
