@@ -33,3 +33,8 @@ def test_school_name_box_is_not_read_back():
     el = Element(id=2, kind="text box", tag="input", type="text", label="Institution name", group="", name="", autocomplete="",
                  placeholder="", required=False, disabled=False, href="", rect={})
     assert fields.field_kind(el) == "text"
+
+
+def test_brochure_without_its_b():
+    out = fix_heard("rókè ọ̀hún sódà tùbí lé máa ń hàn fún àwọn kọ́ọ̀sì míti bá a túfẹ́")
+    assert out.startswith("brochure") and "courses" in out

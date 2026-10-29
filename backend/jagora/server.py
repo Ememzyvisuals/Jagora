@@ -623,6 +623,8 @@ YO_FIXES = [
     (_toneless(r"\b(d[aà]n? ?l[oó]o?d[iìuù])(?!\w)"), "download"),
     (_toneless(r"\b(b[uù]?r[oọ]k[eẹaà]r?|b[uù]?r[oọ][sṣ][oọuù]r?)(?!\w)"), "brochure"),
     (_toneless(r"\b([oọ]f[iì][sṣ][aàiì]l?)(?!\w)"), "official"),
+    (_toneless(r"\br[oọ]k[eẹ](?= [oọ]h[uú]n)"), "brochure"),  # "rókè ọ̀hún": that brochure, its b lost
+    (_toneless(r"\b(k[oọ][oọ][sṣ][iì])(?!\w)"), "courses"),
     (_toneless(r"\b(k[aá]t ?[oó]f[uù]?|k[oọ]t[aà] ?f[uù])(?!\w)"), "cut-off"),
 ]
 
@@ -1635,6 +1637,13 @@ class Session:
             trace.write(self.user_id, "voice_gate_failed", error=f"{type(e).__name__}: {str(e)[:160]}")
             return "act"  # when unsure, do not lose her request
         verdict = "ignore" if word.startswith("IGNORE") else "unclear" if word.startswith("UNCLEAR") else "act"
+        if verdict == "ignore" and len(text.split()) >= 5 and "Playing on her screen now" not in (self.screen or "") \
+                and not self.echo(text):
+            # nothing is playing that Jagora knows of and these are many real words: most likely her, badly heard.
+            # Silence is the worst answer: in a chat already going, Jagora works it out from the chat (and asks if it
+            # still cannot); in a new one it asks her to say it again
+            trace.write(self.user_id, "voice_gate_overruled", text=text[:160])
+            verdict = "act" if convo else "unclear"
         trace.write(self.user_id, "voice_gate", text=text, verdict=verdict)
         return verdict
 
