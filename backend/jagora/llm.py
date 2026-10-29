@@ -71,11 +71,15 @@ class Usage:
         self.output_tokens += r.output_tokens
         if kind == "agent" and r.input_tokens > 4000:
             CACHE["seen"] += 1
-            CACHE["hits"] += 1 if r.cached_tokens > 1000 else 0
-            if CACHE["works"] is None and CACHE["seen"] >= 4:
-                CACHE["works"] = CACHE["hits"] > 0
-                log.info("provider prompt cache %s", "WORKS: keeping the start of every call identical" if CACHE["works"]
-                         else "not seen: trimming tools instead")
+            CACHE["hits"] += 1 if r.cached_tokens > 4000 else 0
+            if CACHE["seen"] >= 12:
+                # judged on the last dozen calls, again and again: a cache that starts working is used from then on
+                was = CACHE["works"]
+                CACHE["works"] = CACHE["hits"] >= 3
+                CACHE["seen"] = CACHE["hits"] = 0
+                if was != CACHE["works"]:
+                        log.info("provider prompt cache %s", "WORKS: keeping the start of every call identical" if CACHE["works"]
+                             else "not seen: trimming tools instead")
         self.seconds += r.seconds
         self.log.append({"kind": kind, "in": r.input_tokens, "cached": r.cached_tokens, "out": r.output_tokens, "thinking": r.reasoning_tokens,
                          "seconds": round(r.seconds, 2)})
@@ -111,7 +115,10 @@ class MuseSpark(Model):
         self.usage = Usage()
 
     async def chat(self, messages, tools=None, effort="low", max_tokens=4000, kind="agent") -> Reply:
-        body: dict[str, Any] = {"model": self.model, "messages": messages, "max_tokens": max_tokens}
+        body: dict[str, Any] = {"model": self.model, "messages": messages, "max_tokens": max_tokens,
+                                # the same key for calls that start the same way: Meta then sends them to the machine that
+                                # already holds that start, so it is reused (cheaper, quicker) instead of read again
+                                "extra_body": {"prompt_cache_key": f"jagora-{kind}"}}
         if not getattr(self, "open_weights", False):
             body["reasoning_effort"] = effort  # Muse Spark and Wonder think; open-weight servers may not take this
         if tools:

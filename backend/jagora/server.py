@@ -1164,6 +1164,8 @@ class Session:
         words = re.findall(r"\w+", heard.lower())
         if len(words) < 4:
             return False
+        if PAID.search(heard) and len(words) <= 8:
+            return False  # "I have sent the money": hers, even though Jagora said those words just before (it asked her to)
         for at, said in self._said:
             if time.time() - at > 60:
                 continue

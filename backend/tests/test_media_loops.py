@@ -39,7 +39,10 @@ async def test_play_list_twice_and_full_screen_twice_through_the_tools(monkeypat
     assert one.startswith("done") and two.startswith("already done")
     nxt, _, _ = await a._act("app_control", {"action": "media_next"}, None)
     nxt2, _, _ = await a._act("app_control", {"action": "media_next"}, None)
-    assert nxt.startswith("done") and nxt2.startswith("done")  # next, next: both are real moves
+    assert nxt.startswith("done") and nxt2.startswith("already done")  # once per thing she asked (no runaway skipping)
+    a._heard_all.append("next one")
+    nxt3, _, _ = await a._act("app_control", {"action": "media_next"}, None)
+    assert nxt3.startswith("done")  # she asked again: done again
 
 
 async def test_same_video_search_twice(monkeypatch):

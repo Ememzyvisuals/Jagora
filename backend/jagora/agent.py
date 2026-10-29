@@ -251,7 +251,7 @@ def wrap_soon(turns: int, max_turns: int) -> bool:
 CHANGE_TOOLS = {"click", "type_text", "choose", "set_checkbox", "press_key", "hover", "double_click", "right_click", "drag",
                 "click_at", "upload_file", "set_date", "go_back", "fill_form"}
 
-PROMISE = re.compile(r"\b(i will|i'll|let me|i am going to|i'm going to)\b[^.]{0,80}\b(check|find|look|open|confirm|search|get)\b|\bnext\.?$", re.I)
+PROMISE = re.compile(r"\b(i will|i'll|let me|i am going to|i'm going to)\b[^.]{0,80}\b(check|find|look|open|confirm|search|get|wait|fix|press|pay|bring|book|pick|continue)\b|\bnext\.?$", re.I)
 SAY_MAX = 480  # characters Jagora says in one go; longer answers are shortened (details go in a document)
 
 
@@ -363,7 +363,11 @@ COMMON = [
           "bank": {"type": "string"}, "reference": {"type": "string", "description": "booking or payment reference"},
           "status": {"type": "string", "enum": ["waiting", "paid_by_her", "confirmed", "failed"]},
           "note": {"type": "string", "description": "anything she must know, in their language (e.g. 'the account expires in 30 minutes')"}},
-         ["what", "status"]),
+         ["what", "status", "amount"]),
+    tool("wait_for_page", "Wait on this page until it changes (a payment being checked, 'processing', a result loading), up "
+         "to the given seconds, then look again. Use it instead of saying you will wait.",
+         {"seconds": {"type": "integer", "description": "5 to 90"}, "until": {"type": "string", "description": "words you "
+          "expect when it is done, e.g. 'successful' or 'ticket'"}}, ["seconds"]),
     tool("ask_form", "Several boxes she fills herself in ONE card in the chat (better than typing on the live page): e.g. a "
          "booking's passenger name, phone, email and NIN together. Each value goes straight into its box on the page; you never "
          "see private ones. Plain details (name, email, phone, address) can be saved to her details with one tick and are "
@@ -589,6 +593,7 @@ HOW YOU WORK
 - SPEED: she is waiting; every reply of yours costs her 2 seconds. Do as much as you can in ONE reply: several calls at once when they do not need to see the page change in between (fill every box, tick, choose, then press the button; tell_user together with the next action, never alone in the middle of a task). update_plan only at the start and when a step finishes, always together with another call. Never a reply with only look or only scroll. Pick from a list with choose (one step), not by opening it and clicking.
 - She never has to type on the live page: whatever only she knows goes in a box in the chat. Never ask her HOW she wants to fill a form: send the card. Dates (date of birth, travel date) are field "date" (profile_field date_of_birth for her birthday): the card shows a calendar and the date goes into the page's date box properly. Two or more at once (passenger details, a sign-up form): ONE ask_form card; one thing: ask_private. Give profile_field for her details so the card can fill them from what she saved and offer to save new ones. Her saved details you already have go straight in with fill_form (profile_field). The page itself is only for things she must do there (a captcha, a picture check).
 - Sign-ins: if the site already shows her signed in (her sign-ins are kept between sessions), carry on. If it asks her to sign in, use use_saved_login when she saved one; otherwise email or phone and password in ONE ask_form card, and any code or "verify it's you" number with ask_private (fetch_code when it went to her email). Never make her type on the live page.
+- After "I've sent the money" / "Pay" / "Submit", the page checks for a while: use wait_for_page (until words like "successful", "confirmed", "ticket"), then keep_payment with confirmed or failed and download the ticket. Never just say you will wait.
 - Money: the moment a page shows what to pay, call keep_payment (waiting) and show_evidence of it, BEFORE she leaves to pay. She may leave Jagora for her bank app; the session and this page are kept for her while she pays. When she says she has paid: keep_payment (paid_by_her), press the page's "I have paid" or check the booking, then keep_payment again with confirmed (and the reference) or failed. If "Open payments in this chat" are listed, check those first: open the site, find the booking or payment status, and tell her.
 - After a booking, payment or registration, always get the proof for her: the ticket, slip, receipt or confirmation, with download (its Download button, or page_as_pdf for a confirmation page), and say what she must bring or show.
 - Choices on a booking (date, time or train, class, coach, seat number, number of passengers, one way or return): read what the page offers and ask her with ask_user, with the options and prices as the page shows them. Never choose for her, unless she says any is fine.
@@ -693,8 +698,10 @@ class Agent:
     _changed_any: bool = False
     _chat_note: str | None = None  # this chat's own memory
     _asked: list = field(default_factory=list)
+    _app_done: dict = field(default_factory=dict)  # app action -> what she had said when it was done (once per request)
     _reached: str = ""  # the milestone this task has reached (its route is saved then)
-    _bounced: dict = field(default_factory=dict)  # addresses that sent her elsewhere (pages that need earlier steps)
+    _bounced: dict = field(default_factory=dict)
+    _last_goto: str = ""  # addresses that sent her elsewhere (pages that need earlier steps)
     _same_click: dict = field(default_factory=dict)  # label -> times pressed with nothing changing
     route_carry: dict | None = None  # this chat's route so far, across her messages (a booking takes several)  # (question, her answer) asked in this task
     _last_app: tuple = ("", "")  # the last app_control done (the same one twice in a row is refused)
@@ -794,6 +801,17 @@ class Agent:
                     self._facts = []
             t_snap = time.monotonic()
             snap = await self._snapshot()
+            if snap is not None and self._last_goto:
+                # a page that sends visitors away does it a few seconds later (after its own check): seen here
+                want, got = urlparse(self._last_goto), urlparse(snap.url)
+                if registrable(snap.url) == registrable(self._last_goto) and want.path.rstrip("/") not in ("", got.path.rstrip("/")):
+                    self._bounced[self._last_goto] = snap.url
+                    if self.route_carry is not None:
+                        self.route_carry.setdefault("bounced", {})[self._last_goto] = snap.url
+                    self.history.append(f"(the site did not keep {want.path} open: it sent you to {snap.url}. That page needs "
+                                        "the earlier steps first, like choosing the train: do them here. Do not open that "
+                                        "address again.)")
+                self._last_goto = ""
             t_snap = time.monotonic() - t_snap
             if snap:
                 self._flow.saw(site(snap.url), " ".join([snap.title, snap.text] + [f"{e.label} {e.value or ''}" for e in snap.elements]))
@@ -882,7 +900,7 @@ class Agent:
                     break
                 if self.steering and not self.steering.empty():
                     break  # the user said something: listen before the next action
-            if talk_only >= 2 and (self._changed_any or self._doing_task()) and talk_only < 4:
+            if talk_only >= 2 and (self._changed_any or self._doing_task() or PROMISE.search(self._said_last or "")) and talk_only < 4:
                 # in the middle of a task (a form, a booking): talking is not doing. Never end here, on a "I will fix
                 # it now": do that next step
                 self.history.append("(STOP TALKING. You are in the middle of her task. Do the next real step on the page "
@@ -1218,6 +1236,11 @@ class Agent:
                 act, val = str(a.get("action", "")), str(a.get("value", "") or "")
                 if act not in APP_ACTIONS:
                     return f"no such app action: {act}", True, None
+                said_now = len(self._heard_all) + len(self._asked)
+                if act != "app" and self._app_done.get(act) == said_now:
+                    return (f"already done: {act} was done once for what she asked. Do not do it again; finish with one "
+                            "short line saying what changed, and wait for her."), True, None
+                self._app_done[act] = said_now
                 key = (act, val)
                 one_shot = act in ("media_big", "media_mute", "media_unmute", "media_restart", "media_save", "stop_media",
                                    "media_pause", "media_play", "fullscreen", "show_page", "hide_page", "show_chat", "hide_chat")
@@ -1538,6 +1561,8 @@ class Agent:
 
             if name == "ask_form":
                 return await self._ask_form(snap, a)
+            if name == "wait_for_page":
+                return await self._wait_for_page(a), True, None
             if name == "keep_payment":
                 return await self._keep_payment(a)
 
@@ -1821,6 +1846,33 @@ class Agent:
         url = (b.pdf.url if b and b.pdf else (b.page.url if b and b.page else "")) or ""
         return bool(url) and guard.check(url).official
 
+    async def _wait_for_page(self, a: dict) -> str:
+        b = self.browser
+        if not b or not b.page:
+            return "no page is open"
+        secs = max(5, min(90, int(a.get("seconds") or 20)))
+        until = str(a.get("until") or "").strip().lower()
+        page = b.page
+        try:
+            before = (await page.inner_text("body", timeout=3000))[-3000:]
+        except Exception:  # noqa: BLE001
+            before = ""
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < secs:
+            await asyncio.sleep(2)
+            if self.steering and not self.steering.empty():
+                return "stopped waiting: she said something"
+            try:
+                page = b.page
+                now = (await page.inner_text("body", timeout=3000))[-3000:]
+            except Exception:  # noqa: BLE001
+                continue
+            if until and until in now.lower():
+                return f'the page now shows "{until}" (after {round(time.monotonic() - t0)} s)'
+            if not until and now != before:
+                return f"the page changed after {round(time.monotonic() - t0)} s"
+        return f"waited {secs} s: the page has not changed yet. Tell her where it stands; she can tell you to check again"
+
     def _already_playing(self, how: str, items: list[dict]) -> str:
         """The same videos sent again in this task restart her player from the beginning: refused, with what to do."""
         key = (how, tuple(i["url"] for i in items))
@@ -1935,6 +1987,9 @@ class Agent:
             return f"refused: {gate.reason}", False, None
         if gate.verdict == Verdict.CONFIRM and not await self._approve(a, url, gate.reason):
             return "the user said no; stay on this website", True, None
+        self._last_goto = url
+        if self.route_carry is not None:
+            self._bounced.update(self.route_carry.get("bounced", {}))
         if url in self._bounced:
             return (f"not opened: {url} sent you back to {self._bounced[url]} before. That page only opens through the "
                     "site's own steps: go through them from where you are (the remembered route shows them)."), False, None
@@ -1950,6 +2005,8 @@ class Agent:
             want, got = urlparse(url), urlparse(b.page.url)
             if want.path.rstrip("/") not in ("", got.path.rstrip("/")) and registrable(b.page.url) == registrable(url):
                 self._bounced[url] = b.page.url
+                if self.route_carry is not None:
+                    self.route_carry.setdefault("bounced", {})[url] = b.page.url
                 return (f"the site did not open {want.path}: it sent you to {b.page.url} instead (that page needs the "
                         "earlier steps first, like choosing the train). Do those steps on this page; do not open that "
                         "address again."), True, None
