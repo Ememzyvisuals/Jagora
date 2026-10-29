@@ -619,6 +619,11 @@ YO_FIXES = [
     (_toneless(r"\b(j[aá]m[uù]b[uù]|j[eẹ]mb[uù]?|jamu)(?!\w)"), "JAMB"),
     (_toneless(r"\b(d?y?[uù]n[iì]l[aá]a?(g[iìoọ]?|r[uù]|go)|unil[eẹ]gi)(?!\w)"), "UNILAG"),
     (_toneless(r"\b(s[oọ]b[oọ]?j[eẹ]k[iì])(?!\w)"), "subject"),
+    # English words the Yorùbá recogniser spells by sound: "dán lóòdì" is download, "brókè" brochure, "ọ̀físà" official
+    (_toneless(r"\b(d[aà]n? ?l[oó]o?d[iìuù])(?!\w)"), "download"),
+    (_toneless(r"\b(b[uù]?r[oọ]k[eẹaà]r?|b[uù]?r[oọ][sṣ][oọuù]r?)(?!\w)"), "brochure"),
+    (_toneless(r"\b([oọ]f[iì][sṣ][aàiì]l?)(?!\w)"), "official"),
+    (_toneless(r"\b(k[aá]t ?[oó]f[uù]?|k[oọ]t[aà] ?f[uù])(?!\w)"), "cut-off"),
 ]
 
 
@@ -626,8 +631,9 @@ def fix_heard(text: str) -> str:
     import unicodedata
 
     t = unicodedata.normalize("NFD", text)
-    for rx, said in YO_FIXES:
-        t = rx.sub(said, t)
+    if re.search(r"[\u0300-\u036f]", t):  # Yorùbá words (tone marks): English said in them is spelled by sound
+        for rx, said in YO_FIXES:
+            t = rx.sub(said, t)
     t = unicodedata.normalize("NFC", t)
     for rx, name in HEARD_FIXES:
         t = rx.sub(name, t)
@@ -1596,6 +1602,8 @@ class Session:
         Jagora already answered), or UNCLEAR (for Jagora, but the words make no sense)."""
         if is_stop(text) or CHECKIN.search(text) or (YES.search(text) or NO.search(text)) and len(text.split()) <= 4:
             return "act"
+        if time.time() - self._asked_again < 60:
+            return "act"  # Jagora asked her to say it again: this is her saying it again
         r = self.runs.get(task)
         if r and r.waiting and len(text.split()) <= 6:
             return "act"  # a short answer to Jagora's question (a long one is checked: the room can answer it too)
@@ -1607,6 +1615,9 @@ class Session:
         prompt = (f"Jagora is a voice assistant. Her microphone is open in a room in Nigeria. This was just heard "
                   f"(speech recognition, language {self.lang}): \"{text}\"\n\nThe chat so far:\n{lines or '(nothing yet)'}\n\n"
                   f"Her screen now:\n{(self.screen or '')[:900]}\n\nJagora is {'working on a task' if r and r.busy else 'not busy'}.\n\n"
+                  "Speech recognition for Yorùbá, Hausa and Igbo spells English words by their sound and mishears some words "
+                  "(\"dán lóòdì\" is download, \"brókè\" is brochure): judge by what she most likely said. A request "
+                  "after Jagora has just answered (download it, more about it, another one) is for Jagora.\n\n"
                   "Is this her talking to Jagora? Reply with one word:\n"
                   "ACT - a request, question or answer for Jagora (even short, even repeated on purpose, or asking Jagora "
                   "to repeat or say more)\n"

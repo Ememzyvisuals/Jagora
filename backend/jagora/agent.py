@@ -26,6 +26,7 @@ import datetime as dt
 import json
 import logging
 import re
+import unicodedata
 import secrets
 from urllib.parse import urlparse
 import time
@@ -256,9 +257,12 @@ SAY_MAX = 480  # characters Jagora says in one go; longer answers are shortened 
 
 
 def _same_news(a: str, b: str) -> bool:
-    """Does the summary mostly repeat what she was just told? (shared words, any order)"""
-    wa, wb = set(re.findall(r"\w{3,}", (a or "").lower())), set(re.findall(r"\w{3,}", (b or "").lower()))
-    return bool(wa and wb) and len(wa & wb) / max(1, min(len(wa), len(wb))) >= 0.45
+    """Is the new text (b) mostly what she was already told (a)? Shared words, any order, counted over the NEW text, so
+    a short greeting that named the course does not swallow the real answer later. Tone marks stay part of the word."""
+    def words(t: str) -> set[str]:
+        return set(re.findall(r"[^\W\d_][^\W_\u0300-\u036f]*(?:[\u0300-\u036f]+[^\W_]*)*", unicodedata.normalize("NFD", (t or "").lower()))) - {""}
+    wa, wb = {w for w in words(a) if len(w) >= 3}, {w for w in words(b) if len(w) >= 3}
+    return bool(wa and wb) and len(wa & wb) / len(wb) >= 0.6
 
 
 def yt_embed(video_id: str) -> str:
@@ -629,6 +633,7 @@ HOW YOU WORK
 - If a page or PDF will not open, or the words are not on the page you are on, do not try the same thing again: open the next search result or another official source.
 - Subject combinations and admission requirements: JAMB's official brochure (ibass.jamb.gov.ng, search the school, then the course) is the official source for every Nigerian university; use it when a school's own page or PDF will not open.
 - When the answer came from an official PDF or brochure (a school's admission requirements, a JAMB brochure, a cut-off list): after show_evidence, give her that file at once with download (it is the official document, so no need to ask), and say in one short line that it lists every course with its requirements and cut-off marks, so she can check any other course herself. Do not go looking around other pages once the official document answers the question.
+- When she asks for the brochure, the document or "all the courses": give her the official file. If the answer came from a web page (JAMB's ibass brochure page), get the school's own admission requirements PDF from its official site (search "<school> admission requirements pdf", open the .edu.ng result) and download it; if there is none, download the official page itself with page_as_pdf. Then say in one line what is in it.
 - Never end with a promise ("I will check X next"): do it, or say plainly what you could not confirm.
 - Say the answer once, short: at most 3 short sentences (the answer and where it came from). Never send another reply that says the same in other words. Long details go in a document only if useful. Either tell_user it and then finish with a one-line wrap-up, or put it only in finish. Never tell_user the answer and then repeat it in finish.
 - When done, call finish with a short summary in {lang}: the answer, where it was confirmed, what was not confirmed, and the best next step. Offer a document or download if it would help.
@@ -856,14 +861,14 @@ class Agent:
             self._record("model", {"turn": turns, "calls": [{"name": c.name, "args": _redact(c.args)} for c in reply.calls],
                                    "seconds": round(reply.seconds, 2), "in": reply.input_tokens, "cached": reply.cached_tokens, "out": reply.output_tokens})
             if not reply.calls:
-                if reply.text.strip() and (not snap or wrap):
+                if reply.text.strip() and (not snap or wrap or self.evidence):
                     if len(reply.text.strip()) > SAY_MAX and not self._shortened:
                         self._shortened = True
                         self.history.append(f"(your reply was too long to speak ({len(reply.text.strip())} characters): "
                                             f"say it in at most 3 short sentences, under {SAY_MAX} characters, with tell_user or finish)")
                         continue
                     # a plain conversational answer, no browsing needed, or the answer given as the run wraps up
-                    if wrap:
+                    if wrap or self.evidence:
                         await self._give_official_pdf()
                     await self.io.say(reply.text.strip())
                     return await self._done(True, reply.text.strip(), turns, t0)
@@ -1794,7 +1799,7 @@ class Agent:
         value = fields.check(kind, said)
         if not value.ok:
             return f'not typed: "{value.shown}": {value.problem}. Explain it to them simply and ask again.', False, None
-        if kind in fields.READ_BACK and a.get("source") != "profile":
+        if kind in fields.READ_BACK and a.get("source") != "profile" and not searching:
             question = SAY["readback"].get(self.lang, SAY["readback"]["en"]).format(x=value.shown)
             if not await self.io.confirm(question, value.shown):
                 return "the user said that is not right; ask them to say it again", True, None
@@ -2132,10 +2137,15 @@ class Agent:
         quote = str(a.get("quote", "")).strip()
         if len(quote) < 3:
             return "give the exact words from the page to highlight", False, None
+        shown = getattr(self, "_shown_quotes", set())
+        qkey = re.sub(r"\W+", " ", quote).strip().lower()
+        if qkey in shown:
+            return "already shown to her; do not show it again. Tell her the answer or finish.", False, None
         got = await b.highlight(quote, a.get("near_page"), show=bool(a.get("on_page")))
         if not got:
             return (f'"{quote[:80]}" is not on this {"document" if b.pdf else "page"}. Use find_text to get the exact words, '
                     "then show_evidence with those words."), False, None
+        self._shown_quotes = shown | {qkey}
         url = b.pdf.url if b.pdf else b.page.url
         v = guard.check(url)
         when = await b.page_date()

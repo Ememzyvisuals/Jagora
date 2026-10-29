@@ -52,6 +52,9 @@ def field_kind(el: Element) -> str:
     words = " ".join([el.label, el.name, el.placeholder]).lower()
     for kind, pattern in _RULES:
         if re.search(pattern, words):
+            if kind == "name" and re.search(r"institution|school|universit|college|polytechnic|course|programme|program|subject|"
+                                            r"company|business|organi[sz]ation|product|item|city|state|town|station|bank|event|file", words):
+                return "text"  # the name of a school or a course, not her own name: nothing personal to read back
             return kind
     if t == "number":
         return "number"
