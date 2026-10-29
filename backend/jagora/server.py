@@ -94,8 +94,46 @@ def _model():
 
 # ---- app ------------------------------------------------------------------------------------------------------------
 
+LOOP_BEAT = {"t": time.monotonic()}
+STALL_DUMP_S, STALL_EXIT_S = 15.0, 75.0
+
+
+async def _heartbeat() -> None:
+    while True:
+        LOOP_BEAT["t"] = time.monotonic()
+        await asyncio.sleep(1.0)
+
+
+def _stall_watchdog() -> None:
+    """A thread outside the event loop. If the loop stops turning (something in it blocks: then sign-in, the log
+    download and every session freeze), the stack of every thread is written to the log once, so the exact line is
+    known, and after a longer freeze the process exits so Docker restarts it at once instead of hanging for an hour."""
+    import faulthandler
+    import sys
+    import threading
+
+    def run() -> None:
+        dumped = False
+        while True:
+            time.sleep(2.0)
+            stuck = time.monotonic() - LOOP_BEAT["t"]
+            if stuck > STALL_DUMP_S and not dumped:
+                dumped = True
+                print(f"EVENT LOOP STALLED for {stuck:.0f}s; where every thread is:", file=sys.stderr, flush=True)
+                faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+            elif stuck < 3:
+                dumped = False
+            if stuck > STALL_EXIT_S:
+                print(f"EVENT LOOP STALLED for {stuck:.0f}s: restarting the backend", file=sys.stderr, flush=True)
+                os._exit(3)
+
+    threading.Thread(target=run, name="stall-watchdog", daemon=True).start()
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
+    asyncio.create_task(_heartbeat())
+    _stall_watchdog()
     if INGESTED:
         log.info("secrets.txt merged into .env: %s", ", ".join(INGESTED))  # names only
     await db.start()
