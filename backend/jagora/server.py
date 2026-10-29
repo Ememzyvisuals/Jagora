@@ -517,7 +517,7 @@ async def voice_link(ws: WebSocket):
         return
     await ws.accept()
     s = SESSIONS.get(uid)
-    for _ in range(16):  # her app may still be connecting: wait a few seconds for her session
+    for _ in range(60):  # her app may still be connecting (or reconnecting on a weak line): wait up to 30 s for her session
         if s is not None:
             break
         await asyncio.sleep(0.5)

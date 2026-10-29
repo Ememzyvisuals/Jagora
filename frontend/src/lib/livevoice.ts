@@ -8,9 +8,9 @@ import { API, getToken } from "./account";
 import { clientLog } from "./engine/remote";
 import { useApp } from "./store";
 
-/** her microphone: the phone cancels Jagora's own voice coming out of its speaker (echo), the room's noise, and keeps only
-    a voice (voice isolation, where the phone has it), so Jagora is not cut off by itself */
-const MIC = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, voiceIsolation: true };
+/** her microphone: the phone cancels Jagora's own voice coming out of its speaker (echo) and the room's noise. Voice
+    isolation is not asked for: on a quiet earphone microphone it took her own words away */
+const MIC = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
 
 let room: Room | null = null;
 let wanted = false; // false once she ends the call: a join still on its way is dropped when it lands

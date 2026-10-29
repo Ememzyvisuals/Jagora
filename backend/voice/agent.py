@@ -51,7 +51,9 @@ LINK_KEY = env("VOICE_LINK_SECRET")
 ASR_URL, ASR_KEY = env("STORM_ASR_WS_URL"), env("STORM_ASR_API_KEY")
 TTS_URL, TTS_KEY = env("STORM_TTS_WS_URL"), env("STORM_TTS_API_KEY")
 TTS_MIN_CHARS = int(env("TTS_MIN_CHARS", "220"))
-BVC_ON = env("VOICE_BVC", "1") != "0"  # background voice cancellation (needs LiveKit Cloud): VOICE_BVC=0 turns it off
+# background voice cancellation (needs LiveKit Cloud). Off by default: with a quiet earphone microphone it removed her
+# own voice too (her sentences came out as "alpha"). VOICE_BVC=1 turns it on for a speaker-phone recording
+BVC_ON = env("VOICE_BVC", "0") == "1"
 INTERRUPT_MODE = env("VOICE_INTERRUPT_MODE", "adaptive")  # "vad" for the old way
 # turn timing, interruptions, the ASR gate and the VADs are Kivo's (kivo-demo/agent/agent.py), which work reliably
 # a little longer than Kivo's 0.3/2.0: people pause mid-sentence (Jagora's server also joins pieces into one message)
