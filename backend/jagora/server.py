@@ -581,6 +581,12 @@ HEARD_FIXES = [
     (re.compile(r"\b(o ?a ?u|oh a you)\b(?= (cut|admission|school|course|ile))", re.I), "OAU"),
     (re.compile(r"\b(neco|neko|necko)\b", re.I), "NECO"),
     (re.compile(r"\b(waec|wayek|wake|way ec|w a e c)\b(?= (result|exam|certificate|scratch|card|gce|subject))", re.I), "WAEC"),
+    # how the Yorùbá voice hears English words people say inside Yorùbá (from real sessions)
+    (re.compile(r"\b(k[ọo]p[ùu]t[àa]|k[ọo]mp[ùu]t[àa]|k[ọo]ta) ?s[áa]y[ẹe]n[sś]?\b", re.I), "Computer Science"),
+    (re.compile(r"\b(j[àa]gb[ọo]|j[àa]g[ọo]r[àa]|jagoro|jagura)[\u0300\u0301]?(?!\w)", re.I), "Jagora"),
+    (re.compile(r"\b(j[áa]m[ùu]b[ùu]|j[ẹe]mb[ùu]?|jamu)\b", re.I), "JAMB"),
+    (re.compile(r"\b(y[ùu]n[ìi]l[áa][àa]g[ìi]?|unil[ẹe]gi)\b", re.I), "UNILAG"),
+    (re.compile(r"\b(s[ọo]b[ọo]j[ẹe]k[ìi]|s[ọo]bj[ẹe]k[ìi])\b", re.I), "subject"),
 ]
 
 
@@ -591,6 +597,24 @@ def fix_heard(text: str) -> str:
     if _EXAMS.search(t):
         t = re.sub(r"\b(jam|jamb|jab|jam b|jumb)\b", "JAMB", t, flags=re.I)
     return t
+
+
+def _plain(t: str) -> str:
+    import unicodedata
+    t = unicodedata.normalize("NFD", t.lower())
+    return re.sub(r"\W+", " ", "".join(c for c in t if unicodedata.category(c) != "Mn")).strip()
+
+
+def _similar(a: str, b: str) -> bool:
+    """The same piece heard twice, tone marks and spelling aside ("Mbẹ mọ" / "Mpẹ́mọ̀, sọ ló")."""
+    import difflib
+
+    x, y = _plain(a), _plain(b)
+    if not x or not y:
+        return False
+    if x.startswith(y[: max(3, len(y) // 2)]) or y.startswith(x[: max(3, len(x) // 2)]):
+        return True
+    return difflib.SequenceMatcher(None, x, y).ratio() >= 0.6
 
 
 def _contained(late: str, said: str) -> bool:
@@ -1416,7 +1440,7 @@ class Session:
                 await self.silence(task)  # "stop" while Jagora talks: quiet at once
                 return
             self._wait_more()  # she is still talking
-            self._partial = text
+            self._partial = self._merge_piece(text)
             await self._show_turn(task)
         elif kind == "words":
             text = str(ev.get("text") or "").strip()
@@ -1432,7 +1456,11 @@ class Session:
                 await self.silence(task)
                 return
             self._wait_more()
+            # earlier pieces of this sentence the final words do not cover are kept in front of them (the voice in
+            # Yorùbá sends pieces of a long sentence one by one, and sometimes ends only the last one)
+            self._turn.extend(p for p in self._pieces if not _similar(p, text) and not _contained(p, text))
             self._turn.append(text)
+            self._pieces = []
             self._partial = ""
             await self._show_turn(task)
             self._flush_later(task, TURN_GAP)
@@ -1465,6 +1493,20 @@ class Session:
     voice_speaking = False
     _hearing_task = ""
     _partial = ""  # words showing now, not yet ended by the voice
+    _pieces: list = []  # the pieces those words came in (a new piece is added, a corrected one replaces its older form)
+
+    def _merge_piece(self, text: str) -> str:
+        """The voice's words so far, from pieces that may each be a correction of an earlier one or a new part of a
+        long sentence. Only replacing the shown words with the newest piece lost everything she said before it."""
+        pieces = list(self._pieces)
+        for i, p in enumerate(pieces):
+            if _similar(p, text) or _contained(p, text) or _contained(text, p):
+                pieces[i] = text if len(text) >= len(p) * 0.6 else p
+                break
+        else:
+            pieces.append(text)
+        self._pieces = pieces[-12:]
+        return " ".join(self._pieces)
     _asked_again = 0.0  # when she was last asked to say it again (never twice in a row)
     _flushed: tuple[str, float] | None = None  # a message taken from the words showing, before the voice ended it
     _flush: asyncio.Task | None = None
@@ -1484,6 +1526,7 @@ class Session:
         self._wait_more()
         self._turn.clear()
         self._partial = ""
+        self._pieces = []
         self._hearing = ""
 
     async def _show_turn(self, task: str) -> None:
@@ -1548,6 +1591,7 @@ class Session:
         msg_id = self._hearing if self._hearing and self._hearing_task == task else None
         self._turn.clear()
         self._partial = ""
+        self._pieces = []
         self._hearing = ""
         if not text:
             return
