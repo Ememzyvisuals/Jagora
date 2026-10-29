@@ -823,6 +823,7 @@ class Session:
         self._she_spoke_at = 0.0  # when she last started talking (her LiveKit voice)
         self._voice_line: tuple | None = None  # (task, text, when) the line Jagora's voice is saying now
         self._voice_began = 0.0  # when the voice last started speaking
+        self._last_photo_bytes = 0  # size of the last page photo sent (paces the next one)
         self._resume_times: list[float] = []  # when cut lines were carried on (two in a row at most)
         self._resumed: set[str] = set()  # lines that are the rest of a cut line
         self.browser: Browser | None = None
@@ -1072,7 +1073,7 @@ class Session:
             self.stream["skipped_no_task"] += 1
         self._latest_jpeg = base64.b64decode(jpeg)
         now = time.monotonic()
-        if self._frame_busy or now - self._last_frame < lite.FRAME_GAP["lite" if self.lite else "full"] or not self.active_task:
+        if self._frame_busy or now - self._last_frame < self._photo_gap() or not self.active_task:
             if not self._frame_busy:
                 asyncio.get_running_loop().call_later(lite.FRAME_GAP["full"], self._resend_latest)
             return
@@ -1081,11 +1082,19 @@ class Session:
 
     def _resend_latest(self) -> None:
         # the newest picture after a burst, so the view always ends on the page as it is now
-        if not self.video and self.viewing and self._latest_jpeg and not self._frame_busy and time.monotonic() - self._last_frame >= lite.FRAME_GAP["lite" if self.lite else "full"]:
+        if not self.video and self.viewing and self._latest_jpeg and not self._frame_busy and time.monotonic() - self._last_frame >= self._photo_gap():
             self._last_frame = time.monotonic()
             asyncio.ensure_future(self._send_photo(self._latest_jpeg))
 
+    def _photo_gap(self) -> float:
+        """Seconds before the next photo of the page: never faster than the frame cap, and slow enough that the
+        pictures stay within a byte budget. Without it a computer screen sent ~1 MB a second of photos, her line
+        filled up, and the chat steps and replies arrived long after Jagora had said them."""
+        mode = "lite" if self.lite else "full"
+        return max(lite.FRAME_GAP[mode], self._last_photo_bytes / lite.PHOTO_BUDGET[mode])
+
     async def _send_photo(self, jpeg: bytes) -> None:
+        self._last_photo_bytes = len(jpeg)
         self._frame_busy = True
         try:
             await self.send_bytes(b"\x01" + jpeg)

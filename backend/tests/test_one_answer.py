@@ -37,3 +37,15 @@ async def test_after_she_speaks_a_new_answer_may_be_given():
     a._heard_since_told = True
     note, _, _ = await a._act("tell_user", {"message": SECOND}, None)
     assert note == "told them"
+
+
+async def test_question_after_the_answer_does_not_repeat_it():
+    io = IO()
+    a = Agent(None, None, io)
+    told = ("I don check am o. For tomorrow 30-Oct, from Agege to Moniya (Ibadan), all 3 trains don full, morning 8:06, "
+            "afternoon 14:01, evening 16:21, no seat remain for First, Business, or Standard.")
+    await a._act("tell_user", {"message": told}, None)
+    q = ("For tomorrow 30-Oct, all 3 trains from Agege to Moniya (Ibadan) don full o, no seat remain for First, Business, "
+         "Standard. Make I check another date abi make I check from Ebute Metta?")
+    note, _, _ = await a._act("ask_user", {"question": q, "choices": ["Another date", "Ebute Metta"]}, None)
+    assert note.startswith("not asked")

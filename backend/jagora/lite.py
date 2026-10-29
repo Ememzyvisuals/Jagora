@@ -19,7 +19,7 @@ import struct
 
 SCREENCAST = {
     # photos (old phones without a video decoder): sharp at the page's own width, sent as fast as her link allows
-    "full": {"format": "jpeg", "quality": 70, "maxWidth": 1440, "maxHeight": 1600},
+    "full": {"format": "jpeg", "quality": 60, "maxWidth": 1440, "maxHeight": 1600},
     "lite": {"format": "jpeg", "quality": 42, "maxWidth": 412, "maxHeight": 900},
     # video (video.py): Chrome only signals that the page changed; the frame itself is a full-sharpness screenshot
     "signal": {"format": "jpeg", "quality": 20, "maxWidth": 240, "maxHeight": 520},
@@ -28,6 +28,8 @@ SCREENCAST = {
     # video in data saver: the screencast frame itself is the source, at the page's width
     "vlite": {"format": "jpeg", "quality": 75, "maxWidth": 412, "maxHeight": 900},
 }
+# bytes a second the page photos may use, so chat messages and voice never queue behind pictures
+PHOTO_BUDGET = {"full": 260_000, "lite": 60_000}
 FRAME_GAP = {"full": 0.08, "lite": 0.5}  # photos: at most ~12 a second, or 2 in data saver
 VIDEO_GAP = {"full": 1 / 10, "lite": 1 / 5}  # video frames: at most 8 a second, or 5 in data saver (a one-core budget)
 

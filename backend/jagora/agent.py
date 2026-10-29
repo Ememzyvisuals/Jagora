@@ -1305,6 +1305,12 @@ class Agent:
                 await self.io.event("app", {"action": act, "value": val})
                 return f"done on their screen: {act} {val}".strip(), True, None
             if name == "ask_user":
+                q = str(a.get("question", ""))
+                if self._said_last and not self._heard_since_told and (len(q) >= LONG_REPLY or _same_news(self._said_last, q)) \
+                        and len(q) > 60:
+                    # she was just told what was found: the question must not say it all again
+                    return ("not asked: your question repeats what you just told her. Ask only the question, in one short "
+                            "sentence (the choices carry the options)."), False, None
                 answer = await self.io.ask(a.get("question", ""), list(a.get("choices") or []))
                 self._flow.heard(str(answer))
                 self._asked.append((str(a.get("question", "")), str(answer)))
