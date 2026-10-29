@@ -60,7 +60,7 @@ function ContinueWatching({ task }: { task: Task }) {
     <motion.div {...enter} className="flex items-center gap-2">
       <button onClick={go} className="glass min-w-0 flex-1 rounded-[18px] px-4 py-3 text-left transition active:scale-[.99]">
         <span className="block text-[14px] font-bold text-ink">{CONTINUE[lang]} · {clock(r.at)}{r.length ? ` / ${clock(r.length)}` : ""}</span>
-        <span className="mt-0.5 block truncate text-[13px] font-semibold text-ink/70">{r.name}</span>
+        <span className="mt-0.5 block truncate text-[13px] font-semibold text-ink-2">{r.name}</span>
         {pct > 0 && (
           <span className="mt-2 block h-1 overflow-hidden rounded-full bg-ink/10">
             <span className="block h-full rounded-full bg-ink/70" style={{ width: `${pct}%` }} />

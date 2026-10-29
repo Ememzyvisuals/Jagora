@@ -57,8 +57,8 @@
   --font-display: "Jagora Sans", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 
   --color-ink: #0e0f12;
-  --color-ink-2: #4b4a50;
-  --color-ink-3: #8b8a91;
+  --color-ink-2: #2c2b31;
+  --color-ink-3: #55545b;
   --color-accent: #1d63ed;
   --color-accent-deep: #154bb8;
   --color-accent-soft: #e4ecff;
@@ -103,8 +103,8 @@ body {
   --color-white: #23262d;
   --color-paper: #15171c;
   --color-ink: #eceef2;
-  --color-ink-2: #b3b6be;
-  --color-ink-3: #848891;
+  --color-ink-2: #d2d5db;
+  --color-ink-3: #a9adb5;
   --color-accent: #4f86f7;
   --color-accent-deep: #2f6be6;
   --color-accent-soft: #1e2a45;
