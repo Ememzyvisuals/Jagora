@@ -100,8 +100,16 @@ STALL_DUMP_S, STALL_EXIT_S = 15.0, 75.0
 
 
 async def _heartbeat() -> None:
+    import faulthandler
+    import sys
+
+    # A C-level timer, outside Python's lock: when one call holds that lock (a runaway regex, a stuck C library), the
+    # watchdog thread below cannot run either, so this timer is what writes where it froze and exits for a restart.
+    hard = "pytest" not in sys.modules and os.environ.get("JAGORA_WATCHDOG", "1") != "0"
     while True:
         LOOP_BEAT["t"] = time.monotonic()
+        if hard:
+            faulthandler.dump_traceback_later(STALL_EXIT_S + 15, exit=True, file=sys.stderr)  # each beat resets it
         await asyncio.sleep(1.0)
 
 
