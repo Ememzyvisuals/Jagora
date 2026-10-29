@@ -758,9 +758,16 @@ def _heard_before(text: str, earlier: str) -> bool:
     return sum(b.size for b in difflib.SequenceMatcher(None, x, y).get_matching_blocks()) / len(x) >= 0.8
 
 
+COMMAND_WORD = re.compile(r"(?i)continue|resume|play|pause|stop|next|previous|back|louder|quieter|mute|unmute|"
+                          r"repeat|again|yes|no|okay|ok|cancel|skip|full ?screen|bigger|smaller|close|save|"
+                          r"tẹ̀síwájú|dúró|bẹ́ẹ̀ni|rárá|ci gaba|tsaya|ee|mba|gaba|continue")
+
+
 def is_noise(text: str) -> bool:
     """A scrap the microphone caught (one word, a cough read as a word): not something to act on mid-task."""
     words = re.findall(r"\w+", text)
+    if len(words) == 1 and COMMAND_WORD.fullmatch(words[0]):
+        return False  # "continue", "pause", "next": one word, but a real request
     return len(words) < 2 or len("".join(words)) < 5
 
 SEND_WAIT = 6.0  # seconds a message may wait on her connection before the connection counts as gone
