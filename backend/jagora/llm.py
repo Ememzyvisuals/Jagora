@@ -20,6 +20,11 @@ log = logging.getLogger("jagora.llm")
 
 # USD per million tokens for muse-spark-1.3 (Meta Model API pricing)
 PRICE_IN, PRICE_OUT = 1.25, 4.25
+PRICE_CACHED = 0.15  # input the provider already holds from an earlier call with the same beginning (88% cheaper)
+
+# Does the provider reuse the unchanging start of each call (system part and tool list)? Learned from real calls:
+# None until known. When it does, Jagora keeps that start identical on every step; when it does not, it trims tools.
+CACHE = {"works": None, "seen": 0, "hits": 0}
 
 
 class LLMError(Exception):
@@ -42,6 +47,7 @@ class Reply:
     output_tokens: int = 0
     reasoning_tokens: int = 0
     seconds: float = 0.0
+    cached_tokens: int = 0
 
 
 @dataclass
@@ -49,19 +55,29 @@ class Usage:
     calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    cached_tokens: int = 0
     seconds: float = 0.0
     log: list[dict] = field(default_factory=list)
 
     @property
     def dollars(self) -> float:
-        return (self.input_tokens * PRICE_IN + self.output_tokens * PRICE_OUT) / 1e6
+        fresh = max(0, self.input_tokens - self.cached_tokens)
+        return (fresh * PRICE_IN + self.cached_tokens * PRICE_CACHED + self.output_tokens * PRICE_OUT) / 1e6
 
     def add(self, r: Reply, kind: str) -> None:
         self.calls += 1
         self.input_tokens += r.input_tokens
+        self.cached_tokens += r.cached_tokens
         self.output_tokens += r.output_tokens
+        if kind == "agent" and r.input_tokens > 4000:
+            CACHE["seen"] += 1
+            CACHE["hits"] += 1 if r.cached_tokens > 1000 else 0
+            if CACHE["works"] is None and CACHE["seen"] >= 4:
+                CACHE["works"] = CACHE["hits"] > 0
+                log.info("provider prompt cache %s", "WORKS: keeping the start of every call identical" if CACHE["works"]
+                         else "not seen: trimming tools instead")
         self.seconds += r.seconds
-        self.log.append({"kind": kind, "in": r.input_tokens, "out": r.output_tokens, "thinking": r.reasoning_tokens,
+        self.log.append({"kind": kind, "in": r.input_tokens, "cached": r.cached_tokens, "out": r.output_tokens, "thinking": r.reasoning_tokens,
                          "seconds": round(r.seconds, 2)})
 
 
@@ -136,4 +152,5 @@ def parse(r: dict, seconds: float) -> Reply:
     u = r.get("usage") or {}
     return Reply(text=msg.get("content") or "", calls=calls, finish=choice.get("finish_reason") or "",
                  input_tokens=u.get("prompt_tokens", 0), output_tokens=u.get("completion_tokens", 0),
-                 reasoning_tokens=(u.get("completion_tokens_details") or {}).get("reasoning_tokens", 0), seconds=seconds)
+                 reasoning_tokens=(u.get("completion_tokens_details") or {}).get("reasoning_tokens", 0), seconds=seconds,
+                 cached_tokens=int((u.get("prompt_tokens_details") or {}).get("cached_tokens") or u.get("cached_tokens") or 0))

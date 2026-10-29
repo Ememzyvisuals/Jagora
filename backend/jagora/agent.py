@@ -39,6 +39,7 @@ from jagora.flow import Flow
 from jagora.browser import ActionError, Browser, Element, Snapshot
 from jagora.config import FILES_DIR, settings
 from jagora.guard import guard, registrable
+from jagora import llm
 from jagora.llm import Model, image_part, tool
 from jagora import muse
 from jagora import sam as sam_mod
@@ -234,6 +235,12 @@ def _goal_key(goal: str) -> str:
     """The task in a form that matches when it is asked again (numbers, emails and punctuation folded)."""
     g = re.sub(r"\S+@\S+", " ", goal.lower())
     return re.sub(r"[^a-z\u00c0-\u024f\u1e00-\u1eff]+", " ", g).strip()[:80]
+
+
+PAGE_ONLY = {"click", "type_text", "choose", "set_checkbox", "press_key", "point_at", "hand_over", "ask_private", "ask_form",
+             "find_text", "list_links", "pdf_page", "show_evidence", "scroll", "go_back", "switch_tab", "close_tab",
+             "read_page", "page_tables", "find_media", "use_saved_login", "page_theme", "save_page", "fetch_code",
+             "hover", "double_click", "right_click", "drag", "click_at", "upload_file", "set_date", "ask_point", "review_terms"}
 
 
 def wrap_soon(turns: int, max_turns: int) -> bool:
@@ -813,7 +820,7 @@ class Agent:
             log.info("timing turn %d: page read %.1fs, thinking %.1fs -> %s", turns, t_snap, reply.seconds,
                      ", ".join(c.name for c in reply.calls) or "text")
             self._record("model", {"turn": turns, "calls": [{"name": c.name, "args": _redact(c.args)} for c in reply.calls],
-                                   "seconds": round(reply.seconds, 2), "in": reply.input_tokens, "out": reply.output_tokens})
+                                   "seconds": round(reply.seconds, 2), "in": reply.input_tokens, "cached": reply.cached_tokens, "out": reply.output_tokens})
             if not reply.calls:
                 if reply.text.strip() and not snap:
                     if len(reply.text.strip()) > SAY_MAX and not self._shortened:
@@ -890,8 +897,13 @@ class Agent:
         base = GUIDE_TOOLS + [t for t in ACT_TOOLS if t["function"]["name"] in GUIDE_READ] if self.mode == "guide" else DO_TOOLS
         if self.screen is not None:  # the app is open on their screen: Jagora can drive it too
             base = base + [APP_TOOL]
+        if llm.CACHE["works"] is not False and not self._goal.lower().startswith("read this news story"):
+            # the provider keeps the unchanging start of each call (system part + tool list) and bills it at about a
+            # tenth of the price, and answers sooner. So the full tool list is sent the same way on every step, in every
+            # language: cheaper than a shorter list that changes (a changed list is read again at full price).
+            return base
         if snap is None:  # no page open yet: page tools make no sense
-            page_only = {"click", "type_text", "choose", "set_checkbox", "press_key", "point_at", "hand_over", "ask_private", "ask_form",
+            page_only = PAGE_ONLY | {"click", "type_text", "choose", "set_checkbox", "press_key", "point_at", "hand_over", "ask_private", "ask_form",
                          "find_text", "list_links", "pdf_page", "show_evidence", "scroll", "go_back", "switch_tab", "close_tab",
                          "read_page", "page_tables", "find_media", "use_saved_login", "page_theme", "save_page", "fetch_code",
                          "hover", "double_click", "right_click", "drag", "click_at", "upload_file", "set_date", "ask_point",
@@ -1165,6 +1177,8 @@ class Agent:
 
     async def _act(self, name: str, a: dict[str, Any], snap: Snapshot | None) -> tuple[str, bool, tuple[bool, str] | None]:
         """Returns (what happened, whether to look at the page again before going on, (success, summary) when finished)."""
+        if snap is None and name in PAGE_ONLY:
+            return f"{name} needs a web page, and none is open: open one first (go_to or search)", False, None
         try:
             if a.get("step"):
                 await self.io.event("step", {"text": str(a["step"])[:120]})
@@ -2463,15 +2477,13 @@ class Agent:
         # the system part stays the same all day (the model provider can reuse it instead of reading it again each step,
         # which is cheaper and faster); the time and the long list of official sites go with this step only
         system = SYSTEM.format(lang=lang, mode=MODE_TEXT[self.mode], today=now.strftime("%A %d %B %Y"),
-                               services="(listed in the step message when no page is open; on a page, use the page)")
+                               services=services.directory())
         # recent results in full, older ones shortened (long page text is only needed right after reading it)
         recent = self.history[-40:]
         done = "\n".join(f"- {h if i >= len(recent) - 6 else (h[:400] + ' [...]' if len(h) > 400 else h)}"
                          for i, h in enumerate(recent)) or "- nothing yet"
         convo = "\n".join(f"{'User' if m.get('role') == 'user' else 'You'}: {m.get('text', '')[:600]}" for m in self.conversation[-14:])
         parts = [f"Time now: {now.strftime('%H:%M')} (Nigeria)."]
-        if snap is None or not snap.url.startswith("http"):
-            parts.append("Official sites for common Nigerian services (go straight there):\n" + services.directory())
         if convo:
             parts.append(f"Earlier in this conversation:\n{convo}")
         parts.append(f"What the user wants now: {goal}")
