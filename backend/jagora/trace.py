@@ -102,3 +102,20 @@ def download(uid: str, minutes: float = 0) -> str:
         detail = json.dumps(e, ensure_ascii=False, default=str)
         out.append(f"{stamp}{gap} | {kind} | {detail}")
     return "\n".join(out) + "\n"
+
+
+def await_chain(task) -> str:
+    """Where a pending asyncio task is stuck: every coroutine it is awaiting, down to the innermost one, with file and
+    line (Task.print_stack shows only the outer frame of a suspended coroutine)."""
+    out = [repr(task)[:200]]
+    c = task.get_coro() if hasattr(task, "get_coro") else task
+    depth = 0
+    while c is not None and depth < 40:
+        f = getattr(c, "cr_frame", None) or getattr(c, "gi_frame", None) or getattr(c, "ag_frame", None)
+        if f is not None:
+            out.append(f"  {f.f_code.co_filename}:{f.f_lineno} in {f.f_code.co_name}")
+        nxt = getattr(c, "cr_await", None) or getattr(c, "gi_yieldfrom", None) or getattr(c, "ag_await", None)
+        if nxt is None and f is None:
+            out.append(f"  waiting on {repr(c)[:200]}")
+        c, depth = nxt, depth + 1
+    return "\n".join(out) + "\n"

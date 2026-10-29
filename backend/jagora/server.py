@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import re
+from jagora.trace import await_chain
 import secrets
 import time
 import uuid
@@ -1041,14 +1042,19 @@ class Session:
     async def get_browser(self) -> Browser:
         if self.browser is None:
             b = Browser(self.device)
-            try:
-                # Chrome normally starts in about 2 s; one that never does must not leave her task waiting for ever
-                self.browser = await asyncio.wait_for(b.start(load_signins(self.user_id)), 45)
-            except asyncio.TimeoutError:
+            # Chrome normally starts in about 2 s; one that never does must not leave her task waiting for ever
+            starting = asyncio.ensure_future(b.start(load_signins(self.user_id)))
+            done, _ = await asyncio.wait({starting}, timeout=45)
+            if not done:
+                import io as _io
+                where = _io.StringIO()
+                where.write(await_chain(starting))
+                log.warning("BROWSER START STUCK for 45s; it was waiting here:\n%s", where.getvalue()[-4000:])
                 trace.write(self.user_id, "browser_start_timed_out")
-                with contextlib.suppress(Exception):
-                    await asyncio.wait_for(b.close(), 8)
-                raise RuntimeError("the browser did not start; try again in a moment") from None
+                starting.cancel()
+                asyncio.ensure_future(asyncio.wait_for(b.close(), 8))
+                raise RuntimeError("the browser did not start; try again in a moment")
+            self.browser = starting.result()
             uid = self.user_id
             self.browser.on_log = lambda what, **d: trace.write(uid, "browser_" + what, **d)
             trace.write(uid, "browser_started", viewport=self.browser.viewport, mobile=self.browser.mobile,

@@ -26,6 +26,7 @@ import datetime as dt
 import json
 import logging
 import re
+from jagora.trace import await_chain
 import unicodedata
 import secrets
 from urllib.parse import urlparse
@@ -273,7 +274,7 @@ def yt_embed(video_id: str) -> str:
 YT_ID = re.compile(r"(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/)|youtu\.be/)([\w-]{11})")
 
 # steps that only look things up (never wait for her answer): each is stopped if it takes longer than this
-STEP_LIMIT_S = 90
+STEP_LIMIT_S = 60
 LONG_REPLY = 150  # a reply this long is the answer itself: said once per request
 NEVER_WAITS = {"search", "go_to", "new_tab", "find_text", "read_page", "page_tables", "download", "read_sources", "check_official",
                "check_link", "find_video", "find_media", "recommend_videos", "pdf_page", "show_evidence", "save_page", "list_links",
@@ -911,10 +912,20 @@ class Agent:
                 if call.name in NEVER_WAITS:
                     # looking things up never waits for her: if it hangs (a site that never answers, a browser that will
                     # not start) the step is stopped and the run goes on, instead of rolling for ever
-                    try:
-                        note, replan, done = await asyncio.wait_for(self._act(call.name, call.args, snap), STEP_LIMIT_S)
-                    except asyncio.TimeoutError:
-                        log.warning("step %s stopped after %ss", call.name, STEP_LIMIT_S)
+                    # asyncio.wait, not wait_for: wait_for would itself wait for a stuck step to finish being cancelled
+                    step = asyncio.ensure_future(self._act(call.name, call.args, snap))
+                    finished, _ = await asyncio.wait({step}, timeout=STEP_LIMIT_S)
+                    if finished:
+                        note, replan, done = step.result()
+                    else:
+                        import io as _io
+                        where = _io.StringIO()
+                        where.write(await_chain(step))
+                        for t in asyncio.all_tasks():  # what everything else is waiting on, for the log
+                            if t is not step and not t.done() and "browser" in repr(t.get_coro()).lower():
+                                where.write(await_chain(t))
+                        log.warning("STEP STUCK: %s stopped after %ss; it was waiting here:\n%s", call.name, STEP_LIMIT_S, where.getvalue()[-6000:])
+                        step.cancel()
                         self._record("step_timeout", {"tool": call.name, "seconds": STEP_LIMIT_S})
                         note, replan, done = (f"{call.name} took too long (over {STEP_LIMIT_S} seconds) and was stopped. "
                                               "Try another source or way, or tell them plainly."), True, None
