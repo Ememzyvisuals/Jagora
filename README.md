@@ -36,6 +36,7 @@
 
 ## Contents
 
+1. [Demos](#demos)
 1. [Why Jagora](#why-jagora)
 2. [From demo to browser](#from-demo-to-browser)
 3. [What it does](#what-it-does)
@@ -50,6 +51,18 @@
 12. [Privacy](#privacy)
 13. [Credits](#credits)
 14. [License](#license)
+
+## Demos
+
+Full recordings of four real tasks on live websites. Speech plays at real speed; only the waits while Jagora works
+are sped up (4x, marked on screen). Nothing is cut. Click a title to watch.
+
+| Demo | Language | What happens |
+|---|---|---|
+| [UNILAG exam requirements, with proof](docs/demos/jagora-yoruba-unilag.mp4) | Yorùbá | The user asks for the UTME subjects for Computer Science at UNILAG. Jagora finds the official page, reads the answer, and draws a picture guide. |
+| [A train ticket on the real NRC site](docs/demos/jagora-pidgin-train-booking.mp4) | Pidgin | Jagora books Agege to Moniya, asks which train and which seat, and stops at payment for the user's yes. |
+| [Is this SMS a scam?](docs/demos/jagora-pidgin-scam-sms.mp4) | Pidgin | The user sends a screenshot of an SMS. Jagora reads it with Muse Wonder, checks it against the official NIMC site, and says what to do. |
+| [Learn Python by voice](docs/demos/jagora-english-python-course.mp4) | English | A beginner asks for one good Python course, skips through it by voice, and saves it to continue later. |
 
 ---
 
