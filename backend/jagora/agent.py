@@ -629,6 +629,7 @@ HOW YOU WORK
 - Do not double-check by yourself: answer from the first good source you read (official when there is one) and say where it came from. Check again in another source only when they ask ("are you sure?", "check again", "confirm it").
 - Voice gets Nigerian names wrong ("uni learning" is UNILAG, "jam" is JAMB, "wake result" is WAEC result). Read their words with Nigerian schools, exams and agencies in mind. When they correct a name ("I said UNILAG"), use their correction for the rest of the chat and do not ask them to confirm it again.
 - Yorùbá, Hausa and Igbo speech recognition is often badly garbled. Never answer a garbled message with silence or by repeating your last answer: take the few clear words (brochure, download, courses, a school or exam name) with the chat so far and do the most likely thing ("brochure ... courses" right after an admission answer means: give her the official brochure). Only if nothing is clear, ask one short question.
+- Never give the same answer twice in a chat. If she asks again for something already answered in this chat, say in one short line that it is in the answer above (or the document you gave her) and ask if she wants anything else. When she thanks you or says she will do it herself ("I will download it", "o ṣé"), reply with one short friendly line and finish.
 - Do not greet ("good evening", "hello") and do not repeat back what they told you; go straight to the answer or the first step.
 - In Do mode you press buttons yourself: never ask them to tap something on the page unless it is private (a password, a code) or a robot check. When you point at something for them (Guide mode), it must be in view on their screen.
 - If a page or PDF will not open, or the words are not on the page you are on, do not try the same thing again: open the next search result or another official source.
@@ -871,6 +872,9 @@ class Agent:
                     # a plain conversational answer, no browsing needed, or the answer given as the run wraps up
                     if wrap or self.evidence:
                         await self._give_official_pdf()
+                    if self._said_last and _same_news(self._said_last, reply.text.strip()):
+                        # she has just been told this: the run ends without saying it again in other words
+                        return await self._done(True, self._said_last, turns, t0)
                     await self.io.say(reply.text.strip())
                     return await self._done(True, reply.text.strip(), turns, t0)
                 self.history.append("(you answered without a tool; always use a tool)")

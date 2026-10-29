@@ -38,3 +38,10 @@ def test_school_name_box_is_not_read_back():
 def test_brochure_without_its_b():
     out = fix_heard("rókè ọ̀hún sódà tùbí lé máa ń hàn fún àwọn kọ́ọ̀sì míti bá a túfẹ́")
     assert out.startswith("brochure") and "courses" in out
+
+
+def test_old_sentence_sent_again_is_known():
+    from jagora.server import _heard_before
+    old = "Ọ̀rọ̀ mo fẹ́ dínkù. Yọ̀wọ́, mo fẹ́ dé kó bá mi wà soft dead combination fún computer science ní munilé. Yagora"
+    assert _heard_before("Dọ̀rọ́, mo fẹ́ dé kó bá mi wà sọ́ Dead Combination fún Kùnkúta Sáyènsì ní Munilag", old)
+    assert not _heard_before("Ó ṣe máa dán lọ, ẹ ṣé o, mo ti gbọ́ ohun tí ẹ sọ", old)

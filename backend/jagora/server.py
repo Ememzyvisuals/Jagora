@@ -672,6 +672,17 @@ def _contained(late: str, said: str) -> bool:
     return a in b or difflib.SequenceMatcher(None, a, b[-len(a) - 20:]).ratio() > 0.75
 
 
+def _heard_before(text: str, earlier: str) -> bool:
+    """The voice sending again a sentence she said a while ago (it happens: an old sentence comes back as the end of a new
+    one). Most of these letters, in order, are in what she said before."""
+    import difflib
+
+    x, y = _plain(text), _plain(earlier)
+    if len(x.split()) < 5 or not y:
+        return False
+    return sum(b.size for b in difflib.SequenceMatcher(None, x, y).get_matching_blocks()) / len(x) >= 0.8
+
+
 def is_noise(text: str) -> bool:
     """A scrap the microphone caught (one word, a cough read as a word): not something to act on mid-task."""
     words = re.findall(r"\w+", text)
@@ -1505,6 +1516,13 @@ class Session:
                 self._reset_turn()
                 await self.silence(task)
                 return
+            if time.time() - self._asked_again > 60 and any(time.time() - t < 300 and _heard_before(text, said)
+                                                             for t, said in self._sent_turns):
+                # an old sentence of hers sent again by the voice (she did not say it again: it is already answered)
+                trace.write(self.user_id, "voice_words_old_again", text=text[:160])
+                if self._turn or self._pieces or self._partial:
+                    self._flush_later(task, TURN_GAP)
+                return
             self._wait_more()
             # earlier pieces of this sentence the final words do not cover are kept in front of them (the voice in
             # Yorùbá sends pieces of a long sentence one by one, and sometimes ends only the last one)
@@ -1562,6 +1580,7 @@ class Session:
             pieces.append(text)
         self._pieces = pieces[-12:]
         return " ".join(self._pieces)
+    _sent_turns: list = []  # (when, what) she said lately, so an old sentence the voice sends again is not taken as new
     _asked_again = 0.0  # when she was last asked to say it again (never twice in a row)
     _flushed: tuple[str, float] | None = None  # a message taken from the words showing, before the voice ended it
     _flush: asyncio.Task | None = None
@@ -1663,6 +1682,7 @@ class Session:
         if not text:
             return
         trace.write(self.user_id, "voice_message", text=text, from_partial=from_partial)
+        self._sent_turns = [x for x in self._sent_turns if time.time() - x[0] < 300][-8:] + [(time.time(), text)]
         self._flushed = (text, time.time()) if from_partial else None
         if is_noise(text):
             # a scrap the room made (a word from the TV, a cough heard as a word): not her, so nothing happens

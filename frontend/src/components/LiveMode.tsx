@@ -6,6 +6,7 @@
 
    Speech-to-text: with the backend, her audio goes to STORM ASR (Yorùbá, Hausa, Igbo, Pidgin, English). Without it
    (demo), the browser's own recognizer handles English and Pidgin. */
+import { Rich } from "./Rich";
 import { Microphone, MicrophoneSlash, Minus, X } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -21,7 +22,30 @@ import { browserRecognizer } from "./Composer";
 import { Glass } from "./glass/Glass";
 import { Orb } from "./Orb";
 
-const SAY: Record<"listen" | "think" | "work" | "speak" | "paused" | "hint" | "end" | "live" | "hide" | "lost" | "again" | "parked", Record<Lang, string>> = {
+/** two short soft notes: the voice line is open and Jagora can hear her now */
+function readyTone() {
+  try {
+    const ctx = new AudioContext();
+    [660, 880].forEach((f, i) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.frequency.value = f;
+      const t = ctx.currentTime + i * 0.14;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.12, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      o.connect(g).connect(ctx.destination);
+      o.start(t);
+      o.stop(t + 0.18);
+    });
+    setTimeout(() => void ctx.close(), 800);
+  } catch {
+    /* no sound: the words on screen still say it */
+  }
+}
+
+const SAY: Record<"joining" | "listen" | "think" | "work" | "speak" | "paused" | "hint" | "end" | "live" | "hide" | "lost" | "again" | "parked", Record<Lang, string>> = {
+  joining: { en: "Connecting… one moment", pcm: "I dey connect… small time", yo: "Ẹ dúró díẹ̀, mo ń so pọ̀…", ha: "Ina haɗawa… ɗan lokaci", ig: "Ana m ejikọ… nwa oge" },
   listen: { en: "Listening…", pcm: "I dey hear you…", yo: "Mo ń gbọ́ yín…", ha: "Ina sauraro…", ig: "Ana m ege ntị…" },
   work: { en: "Working on the page…", pcm: "I dey work for the page…", yo: "Mo ń ṣiṣẹ́ lórí ojú-ìwé náà…", ha: "Ina aiki a shafin…", ig: "Ana m arụ ọrụ na peeji ahụ…" },
   think: { en: "Thinking…", pcm: "I dey think…", yo: "Mo ń ronú…", ha: "Ina tunani…", ig: "Ana m eche echiche…" },
@@ -96,6 +120,8 @@ export function LiveMode() {
   // the speech detector (lib/turns.ts); null while loading, false if it could not load (then the old way is used)
   const listener = useRef<Listener | null>(null);
   const [smart, setSmart] = useState<boolean | null>(null);
+  // the voice line is still connecting: she is told to wait, so her first words are not spoken into nothing
+  const [joining, setJoining] = useState(false);
 
   // Jagora's latest reply, shown as a caption
   const reply = [...(task?.messages ?? [])].reverse().find((m) => m.kind === "agent" || m.kind === "confirm" || m.kind === "choice");
@@ -202,7 +228,10 @@ export function LiveMode() {
     let gone = false;
     let viaLiveKit = false;
     // first choice: Jagora's voice on LiveKit (as in Kivo); it hears her turns and her cutting in by itself
+    setJoining(true);
     void startHandsFree().then((ok) => {
+      setJoining(false);
+      if (!gone && ok) readyTone(); // she hears when Jagora can hear her: nothing she says is lost to the connecting
       if (gone || !ok || !throughLiveKit()) return startListener();
       viaLiveKit = true;
       setSmart(true);
@@ -327,8 +356,8 @@ export function LiveMode() {
   // while Jagora works, the caption says what it is doing right now (its latest step)
   const lastStep = [...(task?.messages ?? [])].reverse().find((m) => m.kind === "step");
   const doing = lastStep && "text" in lastStep ? lastStep.text : "";
-  const label = lost ? SAY.lost[lang] : parked ? SAY.parked[lang] : muted ? SAY.paused[lang] : phase === "speak" ? SAY.speak[lang] : phase === "work" ? doing || SAY.work[lang] : phase === "think" ? SAY.think[lang] : SAY.listen[lang];
-  const orbState = phase === "speak" ? "speaking" : phase === "work" ? "working" : phase === "think" ? "thinking" : muted ? "idle" : "listening";
+  const label = joining ? SAY.joining[lang] : lost ? SAY.lost[lang] : parked ? SAY.parked[lang] : muted ? SAY.paused[lang] : phase === "speak" ? SAY.speak[lang] : phase === "work" ? doing || SAY.work[lang] : phase === "think" ? SAY.think[lang] : SAY.listen[lang];
+  const orbState = joining ? "idle" : phase === "speak" ? "speaking" : phase === "work" ? "working" : phase === "think" ? "thinking" : muted ? "idle" : "listening";
 
   return (
     <AnimatePresence>
@@ -401,7 +430,7 @@ export function LiveMode() {
                   // Jagora's latest reply: never more than a few lines on screen (it scrolls if longer), so the orb and
                   // the buttons always stay in view
                   <div className="no-scrollbar mx-auto mt-3 max-h-[7.6em] overflow-y-auto text-[16px] font-semibold leading-snug text-ink [mask-image:linear-gradient(to_bottom,black_80%,transparent)] sm:text-[17px]">
-                    {replyText}
+                    <Rich text={replyText} />
                   </div>
                 ) : (
                   !heard && <p className="text-[15.5px] leading-snug text-ink-2">{SAY.hint[lang]}</p>
