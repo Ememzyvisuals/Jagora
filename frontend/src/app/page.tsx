@@ -152,7 +152,7 @@ export default function Landing() {
                 <button
                   type="button"
                   key={a.lang}
-                  onClick={() => go(a.text)}
+                  onClick={() => setText(a.text)}
                   className={`shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-semibold transition ${i === k ? "bg-ink text-paper" : "bg-white/60 text-ink hover:bg-white"}`}
                 >
                   {a.lang}
