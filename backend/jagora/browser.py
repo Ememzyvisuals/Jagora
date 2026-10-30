@@ -342,7 +342,8 @@ def screen_colours(raw: bytes, els: list, dsf: float = 1.0) -> None:
             if x1 - x0 < 3 or y1 - y0 < 3:
                 continue
             box = img[y0:y1, x0:x1].reshape(-1, 3)
-            strong = box[(box[:, 1] > 90) & (box[:, 2] > 70)]  # saturated and not dark
+            # coloured and not dark: a light red outline on white (a common "taken" look) is only ~30% saturated
+            strong = box[(box[:, 1] > 55) & (box[:, 2] > 70)]
             if len(strong) < max(4, 0.015 * len(box)):
                 look = "grey"
             else:

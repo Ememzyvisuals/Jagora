@@ -109,3 +109,22 @@ async def test_seat_colours_read_from_the_screen():
         grouped = text.split("Numbered boxes grouped by look")[1].split("\n")[0]
         assert [g for g in grouped.split("|") if "LIKELY TAKEN" in g and "46" in g]
         assert [g for g in grouped.split("|") if "LIKELY SELECTED NOW" in g and "41" in g]
+
+
+# NRC from Emmanuel's photo: free seats have a thin dark-grey outline, taken ones a thin LIGHT red one, his pick turns green
+SEATS4 = "<style>.s{cursor:pointer;width:34px;height:38px;display:inline-block;margin:3px;position:relative;text-align:center;line-height:38px;font-size:10px}" \
+         ".s:before{content:'';position:absolute;inset:3px;border:2px solid #6b6f76;border-radius:5px}.t:before{border-color:#e8a0a0}" \
+         ".k:before{border-color:#43a047}</style><p>Selected Available Not Available</p>" + "".join(
+    f'<div class="s{" t" if i in (1, 3, 4, 46) else " k" if i == 41 else ""}">{i}</div>' for i in range(1, 50))
+
+
+async def test_light_red_outline_reads_as_taken():
+    async with Browser() as b:
+        await b.page.set_content(f"<!doctype html><div style='width:240px'>{SEATS4}</div>")
+        snap = await b.snapshot()
+        seats = {e.label: e for e in snap.elements if e.label.isdigit()}
+        assert "red on screen" in seats["46"].state, seats["46"].state
+        assert "grey on screen" in seats["2"].state, seats["2"].state
+        grouped = snap.describe().split("Numbered boxes grouped by look")[1].split("\n")[0]
+        taken = " ".join(g for g in grouped.split("|") if "LIKELY TAKEN" in g)
+        assert "46" in taken and "4" in taken and "2," not in taken

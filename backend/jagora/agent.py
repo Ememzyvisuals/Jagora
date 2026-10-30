@@ -766,6 +766,7 @@ class Agent:
     _last_goto: str = ""  # addresses that sent her elsewhere (pages that need earlier steps)
     _same_click: dict = field(default_factory=dict)  # label -> times pressed with nothing changing
     _label_run: tuple = ("", 0)  # the small box pressed last, and how many times in a row
+    _seat_line: str = ""  # the last seat-map reading, logged when it changes
     route_carry: dict | None = None  # this chat's route so far, across her messages (a booking takes several)  # (question, her answer) asked in this task
     _last_app: tuple = ("", "")  # the last app_control done (the same one twice in a row is refused)
     _video_searches: set = field(default_factory=set)  # video searches already made in this task
@@ -2894,7 +2895,12 @@ class Agent:
         parts.append(f"What has happened in this task:\n{done}")
         if snap:
             dims = f"{self.browser.viewport['width'] * self.browser.dsf} x {self.browser.viewport['height'] * self.browser.dsf}" if self.browser else ""
-            parts.append(f"The page now (screenshot {dims} pixels):\n{snap.describe()}")
+            described = snap.describe()
+            parts.append(f"The page now (screenshot {dims} pixels):\n{described}")
+            seat_line = next((ln for ln in described.split("\n") if ln.startswith("Numbered boxes grouped by look")), "")
+            if seat_line and seat_line != getattr(self, "_seat_line", ""):
+                self._seat_line = seat_line
+                self._record("seat_map", {"line": seat_line[:1500]})  # what Jagora believed about the seats, for the log
         else:
             parts.append("No web page is open. If their request needs the web, search or open an address. If it is just "
                          "conversation, answer with tell_user then finish.")
