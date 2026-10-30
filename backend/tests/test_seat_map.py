@@ -53,3 +53,37 @@ def test_her_yes_to_pressing_it_is_not_asked_again():
     assert a._she_just_said_yes_to("Find My Train")
     a._asked.append(("Should I press Book Now?", "No, wait"))
     assert not a._she_just_said_yes_to("Book Now")
+
+
+# the NRC map from the 30 Oct test: every seat box looks the same; only the seat drawing inside is red (taken) or grey
+ICON = '<svg width="26" height="26" viewBox="0 0 24 24"><path d="M5 4h14v14H5z" fill="none" stroke="{c}" stroke-width="2"/></svg>'
+SEATS2 = "".join(
+    f'<div style="cursor:pointer;width:34px;height:40px;display:inline-block;margin:2px" onclick="this.dataset.s=1">{ICON.format(c="#e5484d" if i in (10, 20, 46) else "#9aa0a6")}<span>{i}</span></div>'
+    for i in range(40, 50)) + "".join(
+    f'<div style="cursor:pointer;width:34px;height:40px;display:inline-block;margin:2px">{ICON.format(c="#e5484d" if i in (10, 20) else "#9aa0a6")}<span>{i}</span></div>'
+    for i in (10, 20, 21, 22))
+
+
+async def test_seats_drawn_as_pictures_get_their_colour():
+    async with Browser() as b:
+        await b.page.set_content(f"<!doctype html><div style='width:300px'>{SEATS2}</div>")
+        snap = await b.snapshot()
+        seats = {e.label: e for e in snap.elements if e.label.isdigit()}
+        assert "red lines" in seats["46"].state and "red lines" not in seats["41"].state
+        text = snap.describe()
+        grouped = text.split("Numbered boxes grouped by look")[1].split("\n")[0]
+        red = [g for g in grouped.split("|") if "red lines" in g][0]
+        assert "46" in red and "10" in red and "20" in red and "41" not in red
+
+
+async def test_a_seat_pressed_three_times_is_called_taken():
+    async with Browser() as b:
+        await b.page.set_content(f"<!doctype html><div style='width:300px'>{SEATS2}</div>")
+        a = Agent(None, b, IO())
+        for _ in range(2):
+            snap = await b.snapshot()
+            out, ok, _ = await a._act("click", {"element": next(e.id for e in snap.elements if e.label == "46")}, snap)
+            assert out.startswith('clicked "46"')
+        snap = await b.snapshot()
+        out, ok, _ = await a._act("click", {"element": next(e.id for e in snap.elements if e.label == "46")}, snap)
+        assert out.startswith('not pressed again: "46"') and "taken" in out

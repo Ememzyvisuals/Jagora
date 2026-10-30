@@ -125,7 +125,26 @@
     const look = [colourName(cs.backgroundColor) && `${colourName(cs.backgroundColor)} fill`,
                   cs.borderStyle !== "none" && Number.parseFloat(cs.borderWidth) > 0 && colourName(cs.borderColor) && `${colourName(cs.borderColor)} border`]
       .filter(Boolean);
-    return [...words, ...look].join(", ");
+    // seat maps often draw the seat as a picture or an SVG inside the box: its file name and line colour carry the state
+    const inner = [];
+    for (const c of [...el.querySelectorAll("img,svg,path,rect,circle,use,i,span")].slice(0, 8)) {
+      const icl = `${c.className && c.className.baseVal !== undefined ? c.className.baseVal : c.className || ""} ${c.getAttribute("src") || ""} ${c.getAttribute("alt") || ""} ${c.getAttribute("href") || ""}`;
+      for (const w of icl.match(STATE_WORDS) || []) inner.push(w.toLowerCase());
+      if (c.tagName && c.tagName.toLowerCase() === "img") {
+        const f = (c.getAttribute("src") || "").split("/").pop().split("?")[0].replace(/\.(png|svg|jpe?g|webp|gif)$/i, "");
+        if (f && f.length <= 30) inner.push(`picture ${f}`);
+      } else if (c.namespaceURI === "http://www.w3.org/2000/svg") {
+        const ccs = getComputedStyle(c);
+        const st = ccs.stroke && ccs.stroke !== "none" && colourName(ccs.stroke), fl = ccs.fill && ccs.fill !== "none" && colourName(ccs.fill);
+        if (st) inner.push(`${st} lines`);
+        if (fl && fl !== "black") inner.push(`${fl} shape`);
+      }
+    }
+    if (el.namespaceURI === "http://www.w3.org/2000/svg") {
+      const st = cs.stroke && cs.stroke !== "none" && colourName(cs.stroke);
+      if (st) inner.push(`${st} lines`);
+    }
+    return [...new Set([...words, ...look, ...inner])].join(", ");
   }
 
   const out = [];
@@ -185,7 +204,8 @@
     out.push({
       id: n, kind: "button", tag: el.tagName.toLowerCase(), type: "", label: txt, group: "", name: "", autocomplete: "",
       placeholder: "", required: false, disabled: off, href: "",
-      state: stateOf(el, cs),
+      // a number inside a seat box: the box around it carries the drawing and its colour
+      state: stateOf(el, cs) || (el.parentElement && el.parentElement.childElementCount <= 3 ? stateOf(el.parentElement, getComputedStyle(el.parentElement)) : ""),
       rect: { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) },
     });
   }

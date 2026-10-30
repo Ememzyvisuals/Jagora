@@ -654,7 +654,7 @@ HOW YOU WORK
 - After a booking, payment or registration, always get the proof for her: the ticket, slip, receipt or confirmation, with download (its Download button, or page_as_pdf for a confirmation page), and say what she must bring or show.
 - Choices on a booking (date, time or train, class, coach, seat number, number of passengers, one way or return): read what the page offers and ask her with ask_user, with the options and prices as the page shows them. Never choose for her, unless she says any is fine.
 - Her decisions are read back before you act on them: a seat number, a date, a time or train, how many people, an amount. When she SAYS one (the voice often mishears numbers: "3" can come out as "63" or "3663"), ask once with ask_user, short, with the exact value: "Seat 63, is that right?" choices "Yes", "No, another one". Always do this when it changes something she chose before, or when the number looks odd (repeated digits, more digits than the page has). If she typed it or tapped it on a card, no read-back is needed.
-- Seats: read the seat map from "Small boxes" and the "Numbered boxes grouped by look" line (one group is the free seats: match it to the page's legend; groups marked LIKELY TAKEN are not free). Your choices must be real free seat numbers from that group, never examples like "Seat 1, Seat 2, Seat 10" you did not see as free. (each seat has a number to click, and its state is what the page itself says: booked, reserved, disabled, selected, its colours); if the states are only colours, look at the page's own legend (e.g. "red = booked") and go by it. Offer ONLY the seats still open, never booked or disabled ones; say how many are open and, if useful, which are by the window. The moment she picks one, select it on the page at once, then look again to confirm it is now hers (selected or held in her name) before going on. If someone took it meanwhile, tell her plainly and offer the nearest open seats. Seats go fast: never leave her choice waiting. You press the seats yourself (click its number, or click_at its spot on the picture); never ask her to tap a seat or a button. Several passengers: pick one open seat for each. When she says "book it", carry on through passenger details and on to the payment page without stopping, and only ask her for what only she can give.
+- Seats: read the seat map from "Small boxes" and the "Numbered boxes grouped by look" line (one group is the free seats: match it to the page's legend; groups marked LIKELY TAKEN are not free). Your choices must be real free seat numbers from that group, never examples like "Seat 1, Seat 2, Seat 10" you did not see as free. If every seat looks the same in the text, use look to see the map and the legend colours (e.g. red outline = not available) before you offer any seat. If she names a seat that is taken, say so at once and offer free ones near it; never press a taken seat. (each seat has a number to click, and its state is what the page itself says: booked, reserved, disabled, selected, its colours); if the states are only colours, look at the page's own legend (e.g. "red = booked") and go by it. Offer ONLY the seats still open, never booked or disabled ones; say how many are open and, if useful, which are by the window. The moment she picks one, select it on the page at once, then look again to confirm it is now hers (selected or held in her name) before going on. If someone took it meanwhile, tell her plainly and offer the nearest open seats. Seats go fast: never leave her choice waiting. You press the seats yourself (click its number, or click_at its spot on the picture); never ask her to tap a seat or a button. Several passengers: pick one open seat for each. When she says "book it", carry on through passenger details and on to the payment page without stopping, and only ask her for what only she can give.
 - Private values (account number, NIN, BVN, card, OTP, PIN, password): use ask_private. Never type them yourself, never ask them to say them aloud, never repeat them.
 - Submitting, paying, sending, agreeing to terms, or leaving the website needs their yes: write the yes/no question in `ask`, in {lang}. If the user says no, do not try again; ask what they want.
 - Jagora's guard blocks adult, phishing and fake sites, closes ads and pop-ups and stops redirect tricks. If a page was blocked, tell them briefly and find a safe source.
@@ -765,6 +765,7 @@ class Agent:
     _bounced: dict = field(default_factory=dict)
     _last_goto: str = ""  # addresses that sent her elsewhere (pages that need earlier steps)
     _same_click: dict = field(default_factory=dict)  # label -> times pressed with nothing changing
+    _label_run: tuple = ("", 0)  # the small box pressed last, and how many times in a row
     route_carry: dict | None = None  # this chat's route so far, across her messages (a booking takes several)  # (question, her answer) asked in this task
     _last_app: tuple = ("", "")  # the last app_control done (the same one twice in a row is refused)
     _video_searches: set = field(default_factory=set)  # video searches already made in this task
@@ -1866,6 +1867,19 @@ class Agent:
         self._trail_add("clicked", f'"{el.label[:60]}" on {self._here()}')
         if el.href and site(el.href) and site(el.href) != self.home_site and not self._doing_task():
             self.home_site = site(el.href)  # she is browsing: the site she is on now is the one that counts
+        short = (el.label or "").strip()
+        if 0 < len(short) <= 4:
+            # the same small box pressed again and again (a seat map redraws itself, so its number changes each time):
+            # a taken seat looks pressed but never becomes hers
+            last, n = self._label_run
+            self._label_run = (short, n + 1 if last == short else 1)
+            if self._label_run[1] >= 3:
+                self._label_run = (short, 0)
+                return (f'not pressed again: "{short}" was pressed 3 times in a row and it never became selected. It is most '
+                        "likely taken (check the seat map's colours against the page's legend: Selected / Available / Not "
+                        "available). Tell her plainly that this one is taken and offer up to 6 seats that are really free."), False, None
+        else:
+            self._label_run = ("", 0)
         if getattr(el, "state", "") or len(el.label or "") <= 3:
             # a seat or a small box: did pressing it change it? (pressed again and again with nothing changing = stuck)
             now = await self.browser.state_of(el.id)
