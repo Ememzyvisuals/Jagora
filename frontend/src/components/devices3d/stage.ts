@@ -232,6 +232,77 @@ class Screen {
   }
 }
 
+/** The sky caught on the back of the black lid: brighter at the top edge, a soft diagonal sweep, dark below. */
+function lidSheenTex() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const g = c.getContext("2d")!;
+  const v = g.createLinearGradient(0, 0, 0, 256);
+  v.addColorStop(0, "rgba(190,215,255,0.30)");
+  v.addColorStop(0.18, "rgba(170,200,250,0.10)");
+  v.addColorStop(0.6, "rgba(150,180,240,0.02)");
+  v.addColorStop(1, "rgba(150,180,240,0)");
+  g.fillStyle = v;
+  g.fillRect(0, 0, 256, 256);
+  const d = g.createLinearGradient(0, 0, 256, 256);
+  d.addColorStop(0.25, "rgba(255,255,255,0)");
+  d.addColorStop(0.42, "rgba(220,235,255,0.12)");
+  d.addColorStop(0.55, "rgba(255,255,255,0)");
+  g.fillStyle = d;
+  g.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/** The Jagora sticker on the back of the lid: the orb with the name under it, like a maker's logo. */
+function emblemTex() {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 640;
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  const draw = () => {
+    const g = c.getContext("2d")!;
+    g.clearRect(0, 0, 512, 640);
+    const cx = 256, cy = 230, r = 190;
+    // the orb: deep blue at the edge, violet and sky blue swirling in, a bright soft top-left light
+    const base = g.createRadialGradient(cx - 50, cy - 60, 10, cx, cy, r);
+    base.addColorStop(0, "#f4f8ff");
+    base.addColorStop(0.28, "#9cc4ff");
+    base.addColorStop(0.62, "#3f74f0");
+    base.addColorStop(0.88, "#2b3fc4");
+    base.addColorStop(1, "#1d2a8c");
+    g.beginPath();
+    g.arc(cx, cy, r, 0, Math.PI * 2);
+    g.fillStyle = base;
+    g.fill();
+    g.save();
+    g.clip();
+    const vio = g.createRadialGradient(cx + 80, cy + 70, 0, cx + 80, cy + 70, r * 0.8);
+    vio.addColorStop(0, "rgba(140,90,255,0.75)");
+    vio.addColorStop(1, "rgba(140,90,255,0)");
+    g.fillStyle = vio;
+    g.fillRect(0, 0, 512, 512);
+    const rim = g.createRadialGradient(cx, cy, r * 0.8, cx, cy, r);
+    rim.addColorStop(0, "rgba(255,255,255,0)");
+    rim.addColorStop(1, "rgba(220,235,255,0.55)");
+    g.fillStyle = rim;
+    g.fillRect(0, 0, 512, 512);
+    g.restore();
+    g.fillStyle = "#eef3fb";
+    g.font = '700 116px "Jagora Sans", "Inter Variable", system-ui, sans-serif';
+    g.textAlign = "center";
+    g.textBaseline = "alphabetic";
+    g.fillText("Jagora", cx, 600);
+    t.needsUpdate = true;
+  };
+  draw();
+  document.fonts?.load('700 116px "Jagora Sans"').then(draw, () => {});
+  return t;
+}
+
 /* ---------- materials (standard PBR: one specular layer, cheaper than clearcoat, same look) ---------- */
 
 /** A soft diagonal light band, the glare on a real screen's glass. */
@@ -264,12 +335,15 @@ function materials() {
     flash: new THREE.MeshStandardMaterial({ color: 0xf3ead2, metalness: 0, roughness: 0.3, emissive: 0x3a3426 }),
     silver: new THREE.MeshPhysicalMaterial({ color: 0x1d1e22, metalness: 0.85, roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.15, envMapIntensity: 1.5 }), // black too
     alu: new THREE.MeshPhysicalMaterial({ color: 0x1a1b1f, metalness: 0.6, roughness: 0.34, clearcoat: 0.35, clearcoatRoughness: 0.3, envMapIntensity: 1.3 }), // satin black
+    lidBack: new THREE.MeshPhysicalMaterial({ color: 0x111215, metalness: 0.45, roughness: 0.24, clearcoat: 1, clearcoatRoughness: 0.035, envMapIntensity: 2.4 }), // the lid catches the sky like real black plastic
     edge: new THREE.MeshStandardMaterial({ color: 0xf2f5f9, metalness: 1, roughness: 0.12, envMapIntensity: 1.6 }),
     hingeM: new THREE.MeshStandardMaterial({ color: 0x141518, metalness: 0.7, roughness: 0.3 }),
     camRing: new THREE.MeshStandardMaterial({ color: 0x1a1d22, metalness: 0.4, roughness: 0.3 }),
     graphite: new THREE.MeshPhysicalMaterial({ color: 0x1d1e22, metalness: 0.85, roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.15, envMapIntensity: 1.5 }), // black rails
     graphiteBack: new THREE.MeshPhysicalMaterial({ color: 0x141518, metalness: 0.1, roughness: 0.3, clearcoat: 0.9, clearcoatRoughness: 0.2 }), // black glass back
     glare: new THREE.MeshBasicMaterial({ map: glareTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.55 }),
+    emblem: new THREE.MeshStandardMaterial({ map: emblemTex(), transparent: true, metalness: 0.2, roughness: 0.25, envMapIntensity: 1.4 }),
+    lidSheen: new THREE.MeshBasicMaterial({ map: lidSheenTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.5 }),
     aluPad: new THREE.MeshPhysicalMaterial({ color: 0x0d0e10, metalness: 0.2, roughness: 0.1, clearcoat: 1, clearcoatRoughness: 0.05 }), // black glass trackpad
     silverBack: new THREE.MeshPhysicalMaterial({ color: 0x141518, metalness: 0.1, roughness: 0.3, clearcoat: 0.9, clearcoatRoughness: 0.2 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x000000, metalness: 0, roughness: 0.06, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, envMapIntensity: 1.3 }),
@@ -337,7 +411,7 @@ function buildLaptop(m: Mats, shots: Shot[]) {
   const hinge = new THREE.Group();
   hinge.position.set(0, top + 0.008, -D / 2 + 0.035);
   body.add(hinge);
-  const lid = new THREE.Mesh((SHELLS ? fit(SHELLS.lid, W, LH, LT) : slab(W, LH, LT, R, 0.012, 20)).translate(0, LH / 2, -LT / 2), m.alu);
+  const lid = new THREE.Mesh((SHELLS ? fit(SHELLS.lid, W, LH, LT) : slab(W, LH, LT, R, 0.012, 20)).translate(0, LH / 2, -LT / 2), m.lidBack);
   const bezel = new THREE.Mesh(face(W - 0.04, LH - 0.04, R - 0.02), m.black);
   bezel.position.set(0, LH / 2, 0.0006);
   const SW = W - 0.2, SH = SW / shots[0].aspect, sy = LH - 0.085 - SH / 2;
@@ -354,7 +428,15 @@ function buildLaptop(m: Mats, shots: Shot[]) {
   glass.position.set(0, LH / 2, 0.0022);
   const glare = new THREE.Mesh(face(W - 0.04, LH - 0.04, R - 0.02), m.glare);
   glare.position.set(0, LH / 2, 0.0026);
-  hinge.add(lid, bezel, holder, glass, glare);
+  // the back of the lid catches the sky, so it reads as real glossy black, not a flat grey cut-out
+  const sheen = new THREE.Mesh(face(W - 0.06, LH - 0.06, R - 0.03), m.lidSheen);
+  sheen.rotation.y = PI;
+  sheen.position.set(0, LH / 2, -LT - 0.003);
+  // the Jagora orb and name, centred on the back of the lid
+  const emblem = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.7), m.emblem);
+  emblem.rotation.y = PI;
+  emblem.position.set(0, LH * 0.55, -LT - 0.0015);
+  hinge.add(lid, bezel, holder, glass, glare, emblem, sheen);
   // the hinge barrel between lid and base
   const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, W * 0.86, 24).rotateZ(PI / 2), m.hingeM);
   barrel.position.set(0, top + 0.012, -D / 2 + 0.03);
@@ -490,8 +572,12 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
   renderer.toneMappingExposure = 1.05;
   renderer.setClearColor(0x000000, 0);
   const cv = renderer.domElement;
-  cv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;outline:none";
-  cv.tabIndex = 0;
+  // the canvas reaches past its box (up to the page edges), so a device turning round is never cut by the box;
+  // her hands stay on the box itself, so nothing outside it is blocked
+  cv.style.cssText = "position:absolute;left:0;top:0;display:block;pointer-events:none;outline:none";
+  el.style.touchAction = "pan-y";
+  el.tabIndex = 0; // the box takes focus, so the arrow keys turn the devices after a click
+  el.style.outline = "none";
   el.appendChild(cv);
   const lost = (e: Event) => {
     e.preventDefault();
@@ -629,16 +715,24 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
   /* camera framing: fit the scene into the box at any width */
   function fit() {
     const w = el.clientWidth || 1, h = el.clientHeight || 1;
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h;
+    const r = el.getBoundingClientRect();
+    const bx = Math.round(clamp(Math.min(r.left, window.innerWidth - r.right), 0, w * 0.3)), by = Math.round(h * 0.14);
+    const W = w + 2 * bx, H = h + 2 * by;
+    renderer.setSize(W, H, false);
+    cv.style.width = `${W}px`;
+    cv.style.height = `${H}px`;
+    cv.style.transform = `translate(${-bx}px, ${-by}px)`;
+    camera.aspect = W / H;
     const tan = Math.tan((camera.fov * PI) / 360);
-    const dist = Math.max(frame.h / 2 / tan, frame.w / 2 / (tan * camera.aspect)) * 1.04;
+    // framed for the box, drawn on the bigger canvas: the devices keep exactly their size and place
+    const dist = Math.max((frame.h * H) / h / 2 / tan, (frame.w * W) / w / 2 / (tan * camera.aspect)) * 1.04;
     camera.position.set(0, Math.sin(elev) * dist, Math.cos(elev) * dist);
     camera.lookAt(0, 0, 0);
     camera.updateProjectionMatrix();
   }
   const ro = new ResizeObserver(() => fit());
   ro.observe(el);
+  window.addEventListener("resize", fit);
 
   /* ---------- her hands: drag to turn, tap to spin, hover to lift ---------- */
   const ray = new THREE.Raycaster();
@@ -687,7 +781,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
       if (!grab.moved && grab.part.act < 0 && Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) {
         grab.moved = true;
         grab.part.held = true;
-        cv.setPointerCapture(e.pointerId);
+        el.setPointerCapture(e.pointerId);
       }
       if (grab.moved) {
         const now = performance.now();
@@ -704,7 +798,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
     if (e.pointerType === "mouse") {
       const p = hit(e);
       for (const q of parts) q.hover = q === p ? 1 : 0;
-      cv.style.cursor = p ? "grab" : "";
+      el.style.cursor = p ? "grab" : "";
     }
   };
   const onUp = (e: PointerEvent) => {
@@ -721,11 +815,11 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
   const onLeave = () => {
     for (const q of parts) q.hover = 0;
   };
-  cv.addEventListener("pointerdown", onDown);
-  cv.addEventListener("pointermove", onMoveCv);
-  cv.addEventListener("pointerup", onUp);
-  cv.addEventListener("pointercancel", onUp);
-  cv.addEventListener("pointerleave", onLeave);
+  el.addEventListener("pointerdown", onDown);
+  el.addEventListener("pointermove", onMoveCv);
+  el.addEventListener("pointerup", onUp);
+  el.addEventListener("pointercancel", onUp);
+  el.addEventListener("pointerleave", onLeave);
 
   /* ---------- keyboard: the same key goes down on the laptop ---------- */
   const onKey = (e: KeyboardEvent) => {
@@ -741,14 +835,14 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
       if (!kb) continue;
       for (const i of kb.byKey.get(k) || []) kb.pressed.set(i, now);
     }
-    if (document.activeElement === cv && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    if (document.activeElement === el && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
       for (const p of parts) {
         p.yaw += e.key === "ArrowLeft" ? -0.25 : 0.25;
         p.letGo = 0;
       }
       e.preventDefault();
     }
-    if (document.activeElement === cv && (e.key === "Enter" || e.key === " ")) {
+    if (document.activeElement === el && (e.key === "Enter" || e.key === " ")) {
       for (const p of parts) if (p.act < 0) p.act = 0;
       e.preventDefault();
     }
@@ -789,7 +883,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
     const D = window.DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
     if (!fine && D?.requestPermission) D.requestPermission().catch(() => {}); // iPhones ask once, on her first touch
   };
-  cv.addEventListener("pointerdown", askTilt, { once: true });
+  el.addEventListener("pointerdown", askTilt, { once: true });
 
   let visible = false, started = -1, last = 0, raf = 0, shown = false;
   const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting), { threshold: 0.05 });
@@ -849,6 +943,14 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
         }
       }
       p.body.rotation.y += p.yaw + spinYaw;
+      if (p.kind === "laptop") {
+        // turned round with the lid open, the lid swings toward her and looks bigger: hold it back a little so
+        // the laptop keeps its size the whole way round
+        const open = clamp((PI / 2 - p.hinge!.rotation.x) / (PI / 2 + 0.3));
+        const away = ((1 - Math.cos(p.yaw + spinYaw)) / 2) * open;
+        p.body.position.z = -1.1 * away;
+        p.body.scale.setScalar(1 - 0.1 * away);
+      }
       p.body.rotation.x += p.pitch;
       if (!reduce) p.body.rotation.z += Math.sin(t * 0.6 + p.phase) * 0.012;
       const bob = reduce ? 0 : Math.sin(t * 0.9 + p.phase) * 0.035;
@@ -883,6 +985,15 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
     window.removeEventListener("deviceorientation", onTilt);
     window.removeEventListener("keydown", onKey);
     cv.removeEventListener("webglcontextlost", lost);
+    window.removeEventListener("resize", fit);
+    el.removeEventListener("pointerdown", onDown);
+    el.removeEventListener("pointermove", onMoveCv);
+    el.removeEventListener("pointerup", onUp);
+    el.removeEventListener("pointercancel", onUp);
+    el.removeEventListener("pointerleave", onLeave);
+    el.removeEventListener("pointerdown", askTilt);
+    el.style.cursor = "";
+    el.removeAttribute("tabindex");
     const geos = new Set<THREE.BufferGeometry>(), mats = new Set<THREE.Material>(), texs = new Set<THREE.Texture>();
     three.traverse((o) => {
       const mesh = o as THREE.Mesh;
