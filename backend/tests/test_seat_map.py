@@ -72,7 +72,7 @@ async def test_seats_drawn_as_pictures_get_their_colour():
         assert "red lines" in seats["46"].state and "red lines" not in seats["41"].state
         text = snap.describe()
         grouped = text.split("Numbered boxes grouped by look")[1].split("\n")[0]
-        red = [g for g in grouped.split("|") if "red lines" in g][0]
+        red = " ".join(g.split("]")[1] for g in grouped.split("|") if "red" in g.split("]")[0])
         assert "46" in red and "10" in red and "20" in red and "41" not in red
 
 
@@ -87,3 +87,25 @@ async def test_a_seat_pressed_three_times_is_called_taken():
         snap = await b.snapshot()
         out, ok, _ = await a._act("click", {"element": next(e.id for e in snap.elements if e.label == "46")}, snap)
         assert out.startswith('not pressed again: "46"') and "taken" in out
+
+
+# colour only on screen (a pseudo-element outline the page script cannot be asked about): read it from the screenshot
+SEATS3 = "<style>.s{cursor:pointer;width:40px;height:44px;display:inline-block;margin:3px;position:relative;text-align:center;line-height:44px}" \
+         ".s:before{content:'';position:absolute;inset:2px;border:4px solid #9aa0a6;border-radius:6px}.t:before{border-color:#e5484d}" \
+         ".k:before{border-color:#2e9e44}</style>" + "".join(
+    f'<div class="s{" t" if i in (45, 46, 47) else " k" if i == 41 else ""}">{i}</div>' for i in range(40, 52))
+
+
+async def test_seat_colours_read_from_the_screen():
+    async with Browser() as b:
+        await b.page.set_content(f"<!doctype html><div style='width:400px'>{SEATS3}</div>")
+        snap = await b.snapshot()
+        seats = {e.label: e for e in snap.elements if e.label.isdigit()}
+        assert "red on screen" in seats["46"].state, seats["46"].state
+        assert "green on screen" in seats["41"].state
+        assert "grey on screen" in seats["43"].state
+        await b.page.evaluate("document.body.insertAdjacentHTML('afterbegin', '<p>Selected Available Not Available</p>')")
+        text = (await b.snapshot()).describe()
+        grouped = text.split("Numbered boxes grouped by look")[1].split("\n")[0]
+        assert [g for g in grouped.split("|") if "LIKELY TAKEN" in g and "46" in g]
+        assert [g for g in grouped.split("|") if "LIKELY SELECTED NOW" in g and "41" in g]

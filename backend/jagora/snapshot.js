@@ -197,6 +197,10 @@
     const r = visible(el);
     if (!r) continue;
     const off = cs.cursor === "not-allowed" || el.getAttribute("aria-disabled") === "true" || cs.pointerEvents === "none";
+    // a number inside a seat box: the box around it carries the drawing and its colour (and its size on screen)
+    const own = stateOf(el, cs), box = el.parentElement && el.parentElement.childElementCount <= 3 && el.parentElement !== document.body ? el.parentElement : null;
+    const boxR = box && !own ? box.getBoundingClientRect() : null;
+    const useBox = boxR && boxR.width <= 110 && boxR.height <= 110;
     n += 1;
     extra += 1;
     el.setAttribute(MARK, String(n));
@@ -204,9 +208,9 @@
     out.push({
       id: n, kind: "button", tag: el.tagName.toLowerCase(), type: "", label: txt, group: "", name: "", autocomplete: "",
       placeholder: "", required: false, disabled: off, href: "",
-      // a number inside a seat box: the box around it carries the drawing and its colour
-      state: stateOf(el, cs) || (el.parentElement && el.parentElement.childElementCount <= 3 ? stateOf(el.parentElement, getComputedStyle(el.parentElement)) : ""),
-      rect: { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) },
+      state: own || (useBox ? stateOf(box, getComputedStyle(box)) : ""),
+      rect: useBox ? { x: Math.round(boxR.left), y: Math.round(boxR.top), w: Math.round(boxR.width), h: Math.round(boxR.height) }
+                   : { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) },
     });
   }
 
