@@ -10,7 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export type Scene = "hero" | "phones" | "safety";
 
-export function Devices3D({ scene, className = "", fallback }: { scene: Scene; className?: string; fallback: ReactNode }) {
+export function Devices3D({ scene, className = "", fallback, placeholder }: { scene: Scene; className?: string; fallback: ReactNode; placeholder?: ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<"idle" | "ready" | "failed">("idle");
 
@@ -62,9 +62,14 @@ export function Devices3D({ scene, className = "", fallback }: { scene: Scene; c
 
   if (state === "failed") return <>{fallback}</>;
   return (
+    <div className={`relative ${className}`}>
+      {/* the still render of the same devices holds the place (and the LCP) until the 3D is ready */}
+      {placeholder && (
+        <div className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-700 ${state === "ready" ? "opacity-0" : "opacity-100"}`}>{placeholder}</div>
+      )}
     <div
       ref={box}
-      className={`relative select-none transition-opacity duration-700 ${state === "ready" ? "opacity-100" : "opacity-0"} ${className}`}
+      className={`absolute inset-0 select-none transition-opacity duration-700 ${state === "ready" ? "opacity-100" : "opacity-0"}`}
       role="img"
       aria-label={
         scene === "phones"
@@ -74,5 +79,6 @@ export function Devices3D({ scene, className = "", fallback }: { scene: Scene; c
             : "Jagora on a laptop and a phone. Drag to turn them, tap to spin them round."
       }
     />
+    </div>
   );
 }

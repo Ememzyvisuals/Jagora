@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Backdrop } from "@/components/glass/Backdrop";
 import { CloudWordmark } from "@/components/glass/CloudWordmark";
+import { Devices3D } from "@/components/Devices3D";
 import { DeviceRender } from "@/components/landing/DeviceRender";
 import { CardStack } from "@/components/CardStack";
 import { Orb } from "@/components/Orb";
@@ -161,12 +162,11 @@ export default function Landing() {
         </div>
 
         <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1.1, delay: 0.3 }} className="wrap relative pb-20">
-          <DeviceRender
-            name="hero"
-            w={1740}
-            h={1020}
-            className="mx-auto max-w-[1300px]"
-            alt="A laptop and a phone with Jagora open: Jagora filling a registration form on the live page, with the conversation beside it"
+          <Devices3D
+            scene="hero"
+            className="aspect-[5/4] w-full sm:aspect-[16/9]"
+            placeholder={<DeviceRender name="hero" w={1740} h={1040} className="w-full max-w-[1300px]" alt="" eager />}
+            fallback={<DeviceRender name="hero" w={1740} h={1040} className="mx-auto max-w-[1300px]" alt="A laptop and a phone with Jagora open: Jagora filling a registration form on the live page, with the conversation beside it" />}
           />
         </motion.div>
       </section>
@@ -222,12 +222,11 @@ export default function Landing() {
               </ul>
             </motion.div>
             <motion.div {...rise} data-amina="phones">
-              <DeviceRender
-                name="phones"
-                w={910}
-                h={960}
-                className="mx-auto max-w-[560px]"
-                alt="Two phones with Jagora: one filling a form, one showing a research document ready as PDF, Word or Markdown"
+              <Devices3D
+                scene="phones"
+                className="aspect-[1/1] w-full"
+                placeholder={<DeviceRender name="phones" w={910} h={980} className="w-[86%]" alt="" />}
+                fallback={<DeviceRender name="phones" w={910} h={980} className="mx-auto max-w-[560px]" alt="Two phones with Jagora: one filling a form, one showing a research document ready as PDF, Word or Markdown" />}
               />
             </motion.div>
           </div>

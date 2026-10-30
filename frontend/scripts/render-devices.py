@@ -1,5 +1,6 @@
 """Photoreal, brandless devices for the Jagora landing page, modelled and rendered with Blender (bpy, Cycles CPU).
-   python3 devices.py <hero|phones> <width> <samples> <out.png>
+   python3 render-devices.py <hero|phones> <width> <samples> <out.png>
+   python3 render-devices.py export 0 0 <out_dir>     the device shells as GLB for the interactive three.js scene
    Units: 1 = 1 cm. The background is transparent with a shadow catcher, so the PNG sits on the sky page."""
 import bpy, bmesh, math, sys
 from mathutils import Vector
@@ -317,6 +318,38 @@ def camera(loc, target, lens=50):
     sc.camera = c
     return c
 
+if SCENE == "export":
+    # one GLB per shell, centred, in Blender's own axes (Z up, export_yup off): the scene places them itself
+    import os
+    os.makedirs(OUT, exist_ok=True)
+    parts = {
+        "laptop-base": lambda: slab("laptop-base", 30.4, 21.3, 1.05, 1.1, bevel=0.22, mat=ALU),
+        "laptop-lid": lambda: slab("laptop-lid", 30.4, 20.4, 0.48, 1.1, bevel=0.16, mat=ALU),
+        "phone-body": lambda: slab("phone-body", 7.16, 15.5, 0.78, 1.05, bevel=0.2, mat=GRAPHITE, bevel_seg=6),
+    }
+    for name, make in parts.items():
+        bpy.ops.object.select_all(action="DESELECT")
+        ob = make()
+        ob.location = (0, 0, -ob.dimensions.z / 2 if False else 0)
+        bpy.context.view_layer.objects.active = ob
+        ob.select_set(True)
+        bpy.ops.object.modifier_apply(modifier="bevel")
+        me = ob.data
+        # centre it on its own middle (the slab is built from z=0 up)
+        zs = [v.co.z for v in me.vertices]
+        mid = (min(zs) + max(zs)) / 2
+        for v in me.vertices:
+            v.co.z -= mid
+        kw = dict(filepath=os.path.join(OUT, name + ".glb"), use_selection=True, export_format="GLB", export_yup=False, export_apply=True, export_materials="NONE", export_normals=True, export_texcoords=False)
+        try:
+            bpy.ops.export_scene.gltf(**kw, export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=7)
+        except Exception as e:  # no Draco library: plain GLB
+            print("draco off:", e)
+            bpy.ops.export_scene.gltf(**kw)
+        bpy.data.objects.remove(ob)
+        print("exported", name)
+    sys.exit(0)
+
 studio()
 if SCENE == "hero":
     L = laptop("desktop-register")
@@ -327,17 +360,17 @@ if SCENE == "hero":
     P.rotation_euler = (math.radians(80), 0, math.radians(-12))
     P.location = (17.5, -9.5, 7.75 * math.sin(math.radians(78)) * 0 + 0.0)
     # lift so its bottom edge touches the table: the body is centred on its origin in Y, so move up by half its height
-    P.location.z = 15.5 / 2 * math.sin(math.radians(80)) + 0.05
+    P.location.z = 15.5 / 2 * math.sin(math.radians(80)) + 0.9
     sc.render.resolution_x = WIDTH
     sc.render.resolution_y = int(WIDTH * 0.6)
     camera((4, -84, 40), (4, 0, 9), lens=55)
 elif SCENE == "phones":
     A = phone("phone-register", "graphite")
     A.rotation_euler = (math.radians(82), 0, math.radians(8))
-    A.location = (-4.6, 0, 15.5 / 2 * math.sin(math.radians(82)) + 0.05)
+    A.location = (-4.6, 0, 15.5 / 2 * math.sin(math.radians(82)) + 0.9)
     B = phone("phone-doc", "silver")
     B.rotation_euler = (math.radians(82), 0, math.radians(-8))
-    B.location = (4.8, 4.5, 15.5 / 2 * math.sin(math.radians(82)) + 0.05)
+    B.location = (4.8, 4.5, 15.5 / 2 * math.sin(math.radians(82)) + 0.9)
     sc.render.resolution_x = WIDTH
     sc.render.resolution_y = WIDTH
     camera((0, -40, 13), (0, 2.5, 8.2), lens=55)

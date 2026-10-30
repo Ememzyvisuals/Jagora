@@ -17,6 +17,41 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+
+/* The device shells (laptop base, laptop lid, phone body) are modelled in Blender (scripts/render-devices.py export)
+   and loaded as small GLB files; everything else (keys, screens, cameras, buttons) is built here so all the old
+   animations keep working. If the files cannot load, the same shapes are built procedurally. */
+type Shells = { base: THREE.BufferGeometry; lid: THREE.BufferGeometry; phone: THREE.BufferGeometry };
+let SHELLS: Shells | null = null;
+let shellsLoading: Promise<Shells | null> | null = null;
+function loadShells(): Promise<Shells | null> {
+  if (SHELLS) return Promise.resolve(SHELLS);
+  if (shellsLoading) return shellsLoading;
+  const L = new GLTFLoader();
+  const one = (n: string) =>
+    L.loadAsync(`/devices3d/${n}.glb`).then((g) => {
+      let geo: THREE.BufferGeometry | null = null;
+      g.scene.traverse((o) => {
+        const me = o as THREE.Mesh;
+        if (me.isMesh && !geo) geo = me.geometry.clone().scale(0.1, 0.1, 0.1); // Blender centimetres to scene decimetres
+      });
+      if (!geo) throw new Error("no mesh in " + n);
+      return geo as THREE.BufferGeometry;
+    });
+  shellsLoading = Promise.all([one("laptop-base"), one("laptop-lid"), one("phone-body")])
+    .then(([base, lid, phone]) => (SHELLS = { base, lid, phone }))
+    .catch(() => null);
+  return shellsLoading;
+}
+/** a Blender shell fitted to the size the scene wants (it is centred, flat in XY, thickness along Z) */
+function fit(geo: THREE.BufferGeometry, w: number, h: number, d: number) {
+  const g = geo.clone();
+  g.computeBoundingBox();
+  const b = g.boundingBox!;
+  g.scale(w / (b.max.x - b.min.x), h / (b.max.y - b.min.y), d / (b.max.z - b.min.z));
+  return g;
+}
 
 export type Scene = "hero" | "phones" | "safety";
 
@@ -220,23 +255,23 @@ function glareTex() {
 function materials() {
   return {
     metal: new THREE.MeshStandardMaterial({ color: 0x1f2a3d, metalness: 0.86, roughness: 0.3 }),
-    well: new THREE.MeshStandardMaterial({ color: 0x161b22, metalness: 0.3, roughness: 0.75 }),
+    well: new THREE.MeshStandardMaterial({ color: 0x08090b, metalness: 0.2, roughness: 0.7 }),
     key: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.6 }),
     pad: new THREE.MeshStandardMaterial({ color: 0x2a3446, metalness: 0.75, roughness: 0.18 }),
     black: new THREE.MeshStandardMaterial({ color: 0x040507, metalness: 0.1, roughness: 0.12 }),
     back: new THREE.MeshStandardMaterial({ color: 0x27324a, metalness: 0.3, roughness: 0.48 }),
     lens: new THREE.MeshStandardMaterial({ color: 0x06080b, metalness: 0.3, roughness: 0.04 }),
     flash: new THREE.MeshStandardMaterial({ color: 0xf3ead2, metalness: 0, roughness: 0.3, emissive: 0x3a3426 }),
-    silver: new THREE.MeshPhysicalMaterial({ color: 0xd3d9e1, metalness: 0.95, roughness: 0.2, clearcoat: 0.6, clearcoatRoughness: 0.15, envMapIntensity: 1.4 }),
-    alu: new THREE.MeshPhysicalMaterial({ color: 0xcfd4dc, metalness: 0.92, roughness: 0.32, clearcoat: 0.25, clearcoatRoughness: 0.4, envMapIntensity: 1.25 }),
+    silver: new THREE.MeshPhysicalMaterial({ color: 0x1d1e22, metalness: 0.85, roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.15, envMapIntensity: 1.5 }), // black too
+    alu: new THREE.MeshPhysicalMaterial({ color: 0x1a1b1f, metalness: 0.6, roughness: 0.34, clearcoat: 0.35, clearcoatRoughness: 0.3, envMapIntensity: 1.3 }), // satin black
     edge: new THREE.MeshStandardMaterial({ color: 0xf2f5f9, metalness: 1, roughness: 0.12, envMapIntensity: 1.6 }),
-    hingeM: new THREE.MeshStandardMaterial({ color: 0x8d939d, metalness: 0.9, roughness: 0.38 }),
+    hingeM: new THREE.MeshStandardMaterial({ color: 0x141518, metalness: 0.7, roughness: 0.3 }),
     camRing: new THREE.MeshStandardMaterial({ color: 0x1a1d22, metalness: 0.4, roughness: 0.3 }),
-    graphite: new THREE.MeshPhysicalMaterial({ color: 0x3b3f47, metalness: 0.95, roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.15, envMapIntensity: 1.4 }),
-    graphiteBack: new THREE.MeshPhysicalMaterial({ color: 0x23262c, metalness: 0.2, roughness: 0.35, clearcoat: 0.8, clearcoatRoughness: 0.25 }),
+    graphite: new THREE.MeshPhysicalMaterial({ color: 0x1d1e22, metalness: 0.85, roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.15, envMapIntensity: 1.5 }), // black rails
+    graphiteBack: new THREE.MeshPhysicalMaterial({ color: 0x141518, metalness: 0.1, roughness: 0.3, clearcoat: 0.9, clearcoatRoughness: 0.2 }), // black glass back
     glare: new THREE.MeshBasicMaterial({ map: glareTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.55 }),
-    aluPad: new THREE.MeshStandardMaterial({ color: 0xc3c9d2, metalness: 0.7, roughness: 0.2 }),
-    silverBack: new THREE.MeshStandardMaterial({ color: 0xcdd7e3, metalness: 0.25, roughness: 0.32 }),
+    aluPad: new THREE.MeshPhysicalMaterial({ color: 0x0d0e10, metalness: 0.2, roughness: 0.1, clearcoat: 1, clearcoatRoughness: 0.05 }), // black glass trackpad
+    silverBack: new THREE.MeshPhysicalMaterial({ color: 0x141518, metalness: 0.1, roughness: 0.3, clearcoat: 0.9, clearcoatRoughness: 0.2 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x000000, metalness: 0, roughness: 0.06, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, envMapIntensity: 1.3 }),
   };
 }
@@ -256,11 +291,11 @@ const KEY_BASE = new THREE.Color(0x0d1014);
 const KEY_LIT = new THREE.Color(0x4d8dff);
 
 function buildLaptop(m: Mats, shots: Shot[]) {
-  const W = 3.04, D = 2.15, BT = 0.065, R = 0.13;
+  const W = 3.04, D = 2.15, BT = 0.1, R = 0.13;
   const body = new THREE.Group();
   const top = BT / 2;
 
-  body.add(new THREE.Mesh(slab(W, D, BT, R, 0.026, 20).rotateX(-PI / 2), m.alu)); // brushed aluminium, like a real laptop
+  body.add(new THREE.Mesh((SHELLS ? fit(SHELLS.base, W, D, BT) : slab(W, D, BT, R, 0.026, 20)).rotateX(-PI / 2), m.alu)); // satin black body
 
   // keyboard: six rows of real keys, set in a dark well
   const kbW = 2.7, u = kbW / 14.5, gap = 0.026;
@@ -298,11 +333,11 @@ function buildLaptop(m: Mats, shots: Shot[]) {
   body.add(pad);
 
   // the lid on its hinge
-  const LH = 2.06, LT = 0.035;
+  const LH = 2.06, LT = 0.046;
   const hinge = new THREE.Group();
   hinge.position.set(0, top + 0.008, -D / 2 + 0.035);
   body.add(hinge);
-  const lid = new THREE.Mesh(slab(W, LH, LT, R, 0.012, 20).translate(0, LH / 2, -LT / 2), m.alu);
+  const lid = new THREE.Mesh((SHELLS ? fit(SHELLS.lid, W, LH, LT) : slab(W, LH, LT, R, 0.012, 20)).translate(0, LH / 2, -LT / 2), m.alu);
   const bezel = new THREE.Mesh(face(W - 0.04, LH - 0.04, R - 0.02), m.black);
   bezel.position.set(0, LH / 2, 0.0006);
   const SW = W - 0.2, SH = SW / shots[0].aspect, sy = LH - 0.085 - SH / 2;
@@ -319,9 +354,7 @@ function buildLaptop(m: Mats, shots: Shot[]) {
   glass.position.set(0, LH / 2, 0.0022);
   const glare = new THREE.Mesh(face(W - 0.04, LH - 0.04, R - 0.02), m.glare);
   glare.position.set(0, LH / 2, 0.0026);
-  // the chamfered lid edge catches the light: a thin bright rim just inside the outline of the lid's back
-  const rim = new THREE.Mesh(slab(W + 0.006, LH + 0.006, 0.006, R + 0.003, 0.003, 20).translate(0, LH / 2, -LT - 0.001), m.edge);
-  hinge.add(lid, rim, bezel, holder, glass, glare);
+  hinge.add(lid, bezel, holder, glass, glare);
   // the hinge barrel between lid and base
   const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, W * 0.86, 24).rotateZ(PI / 2), m.hingeM);
   barrel.position.set(0, top + 0.012, -D / 2 + 0.03);
@@ -342,7 +375,7 @@ function buildPhone(m: Mats, shots: Shot[], style: "graphite" | "silver" = "grap
   const SW = W - 2 * bz, SH = SW / shots[0].aspect, H = SH + 2 * bz, T = 0.078, R = 0.1;
   const frameM = droid ? m.silver : m.graphite, backM = droid ? m.silverBack : m.graphiteBack;
   const body = new THREE.Group();
-  body.add(new THREE.Mesh(slab(W, H, T, R, 0.02, 20), frameM));
+  body.add(new THREE.Mesh(SHELLS ? fit(SHELLS.phone, W, H, T) : slab(W, H, T, R, 0.02, 20), frameM));
 
   const back = new THREE.Mesh(face(W - 0.03, H - 0.03, R - 0.015), backM);
   back.rotation.y = PI;
@@ -449,7 +482,7 @@ type Part = {
 };
 
 export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail: () => void): () => void {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = Math.min(window.devicePixelRatio || 1, Math.min(window.screen.width, window.screen.height) >= 700 ? 2 : 1.5); // phones: a little lighter
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
   renderer.setPixelRatio(dpr);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -541,12 +574,13 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
   const first = async (names: string[], kind: Kind) => [await loadShot(names[0], kind, kind !== "laptop" || big, aniso)];
 
   const ready = (async () => {
+    await loadShells(); // the Blender shells (small GLBs); falls back to built shapes if they cannot load
     const want = SHOTS[scene];
     if (scene === "hero") {
       const [lap, ph] = await Promise.all([first(want.laptop, "laptop"), first(want.phone, "phone")]);
       if (!alive) return;
       const L = laptopPart(lap, [-0.5, 0, 0], [0, -0.22, 0], -0.32);
-      const P = phonePart(ph, [1.72, 0.86, 1.0], [-0.04, -0.42, -0.05], 1.3, -1.16, 0.5);
+      const P = phonePart(ph, [1.72, 0.86, 1.0], [-0.04, -0.18, -0.03], 1.3, -1.16, 0.5);
       parts.push(L, P);
       later.push({ screen: L.screen, names: want.laptop, kind: "laptop" }, { screen: P.screen, names: want.phone, kind: "phone" });
       world.position.set(-0.15, -0.8, -0.3);
@@ -555,8 +589,8 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
     } else if (scene === "phones") {
       const [a, b] = await Promise.all([first(want.a, "phone"), first(want.b, "android")]);
       if (!alive) return;
-      const A = phonePart(a, [-0.46, 0.06, 0.1], [0.06, 0.4, 0.16], 1, -1.0, 0, 1.1);
-      const B = phonePart(b, [0.5, 0.3, -0.25], [0.02, -0.42, -0.14], 1, -1.24, 0.25, -1.1, "silver");
+      const A = phonePart(a, [-0.46, 0.06, 0.1], [0.04, 0.16, 0.06], 1, -1.0, 0, 1.1);
+      const B = phonePart(b, [0.5, 0.3, -0.25], [0.02, -0.16, -0.05], 1, -1.24, 0.25, -1.1, "silver");
       parts.push(A, B);
       later.push({ screen: A.screen, names: want.a, kind: "phone" });
       frame = { w: 2.25, h: 2.35 };
