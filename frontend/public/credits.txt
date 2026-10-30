@@ -1,0 +1,18 @@
+Photos of people on the Jagora landing page
+
+Each photo is used under its site's free licence (Unsplash License or Pexels License).
+
+people-06.webp: Ayodeji Fatunla, Pexels, Pexels License, https://www.pexels.com/photo/nigerian-man-in-traditional-yoruba-attire-36690235/
+phone-01.webp: Muhammad-Taha Ibrahim, Pexels, Pexels License, https://www.pexels.com/photo/man-making-a-call-on-smartphone-outdoors-37529290/
+phone-02.webp: Darkshade Photos, Pexels, Pexels License, https://www.pexels.com/photo/elegant-nigerian-woman-with-smartphone-indoors-31826822/
+phone-03.webp: from the PlotWeaver photo set (person-02-hausa), cleared for use by PlotWeaver
+phone-04.webp: Ninthgrid, Pexels, Pexels License, https://www.pexels.com/photo/smiling-woman-with-smartphone-in-lagos-30677594/
+phone-07.webp: Ninthgrid, Pexels, Pexels License, https://www.pexels.com/photo/smiling-couple-using-smartphone-in-lagos-30678206/
+portrait-01.webp: Blessing Olarewaju, Unsplash, Unsplash License, https://unsplash.com/photos/a-woman-standing-in-front-of-a-building-_PZ6HHGyB_o
+portrait-03.webp: Taiye Salawu, Pexels, Pexels License, https://www.pexels.com/photo/elegant-nigerian-gele-portrait-in-studio-38284843/
+portrait-05.webp: Chiamaka Uchenna, Pexels, Pexels License, https://www.pexels.com/photo/elegant-portrait-of-nigerian-woman-in-traditional-attire-29113028/
+portrait-06.webp: Kayode Balogun, Pexels, Pexels License, https://www.pexels.com/photo/man-in-white-hat-11572516/
+portrait-07.webp: Unsplash photographer, Unsplash, Unsplash License, https://unsplash.com/photos/man-in-traditional-nigerian-attire-DdNa5AdiRdo
+portrait-08.webp: Ab Pixels, Pexels, Pexels License, https://www.pexels.com/photo/nigerian-woman-in-traditional-ankara-attire-portrait-34249461/
+
+Earth imagery: NASA Blue Marble (public domain), via the three-globe package (MIT).

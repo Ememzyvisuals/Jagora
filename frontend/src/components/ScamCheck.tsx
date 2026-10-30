@@ -4,7 +4,7 @@
    Pidgin with the reasons it found. The message, sender and link are made up for illustration. */
 import { ChatText, Clock, Key, LinkBreak, WarningOctagon } from "@phosphor-icons/react";
 import { motion, useReducedMotion } from "motion/react";
-import { Mark } from "./Brand";
+import { Orb } from "./Orb";
 
 const REASONS = [
   { icon: LinkBreak, text: "bvn-unlock.top is not your bank's website" },
@@ -44,7 +44,7 @@ export function ScamCheck() {
         className="relative -mt-6 ml-auto w-[92%] rounded-[28px] bg-white p-5 shadow-[0_30px_70px_-30px_rgba(10,30,70,.45),0_2px_6px_rgba(10,30,70,.06)] ring-1 ring-black/5 sm:p-6 2xl:p-8 dark:bg-[#20232a]"
       >
         <div className="flex items-center gap-2.5">
-          <Mark size={30} />
+          <Orb size={30} />
           <span className="font-display text-[17px] font-bold tracking-[-0.02em] text-ink 2xl:text-[19px]">Jagora</span>
           <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[var(--color-danger-soft)] px-3 py-1 text-[13px] font-bold text-[var(--color-danger)] 2xl:text-[14.5px]">
             <WarningOctagon size={16} /> Scam

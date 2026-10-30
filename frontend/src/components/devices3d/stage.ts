@@ -212,6 +212,8 @@ function materials() {
     lens: new THREE.MeshStandardMaterial({ color: 0x06080b, metalness: 0.3, roughness: 0.04 }),
     flash: new THREE.MeshStandardMaterial({ color: 0xf3ead2, metalness: 0, roughness: 0.3, emissive: 0x3a3426 }),
     silver: new THREE.MeshStandardMaterial({ color: 0xb9c4d2, metalness: 0.9, roughness: 0.24 }),
+    alu: new THREE.MeshStandardMaterial({ color: 0xcfd4dc, metalness: 0.88, roughness: 0.34 }),
+    aluPad: new THREE.MeshStandardMaterial({ color: 0xc3c9d2, metalness: 0.7, roughness: 0.2 }),
     silverBack: new THREE.MeshStandardMaterial({ color: 0xcdd7e3, metalness: 0.25, roughness: 0.32 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x000000, metalness: 0, roughness: 0.06, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, envMapIntensity: 1.3 }),
   };
@@ -236,7 +238,7 @@ function buildLaptop(m: Mats, shots: Shot[]) {
   const body = new THREE.Group();
   const top = BT / 2;
 
-  body.add(new THREE.Mesh(slab(W, D, BT, R, 0.026, 20).rotateX(-PI / 2), m.metal));
+  body.add(new THREE.Mesh(slab(W, D, BT, R, 0.026, 20).rotateX(-PI / 2), m.alu)); // brushed aluminium, like a real laptop
 
   // keyboard: six rows of real keys, set in a dark well
   const kbW = 2.7, u = kbW / 14.5, gap = 0.026;
@@ -269,7 +271,7 @@ function buildLaptop(m: Mats, shots: Shot[]) {
   byKey.set("ArrowDown", byKey.get("ArrowUp")!);
   body.add(keys);
 
-  const pad = new THREE.Mesh(face(1.32, 0.72, 0.05).rotateX(-PI / 2), m.pad);
+  const pad = new THREE.Mesh(face(1.32, 0.72, 0.05).rotateX(-PI / 2), m.aluPad);
   pad.position.set(0, top + 0.0007, kbBack + kbD + 0.11 + 0.36);
   body.add(pad);
 
@@ -278,7 +280,7 @@ function buildLaptop(m: Mats, shots: Shot[]) {
   const hinge = new THREE.Group();
   hinge.position.set(0, top + 0.008, -D / 2 + 0.035);
   body.add(hinge);
-  const lid = new THREE.Mesh(slab(W, LH, LT, R, 0.012, 20).translate(0, LH / 2, -LT / 2), m.metal);
+  const lid = new THREE.Mesh(slab(W, LH, LT, R, 0.012, 20).translate(0, LH / 2, -LT / 2), m.alu);
   const bezel = new THREE.Mesh(face(W - 0.04, LH - 0.04, R - 0.02), m.black);
   bezel.position.set(0, LH / 2, 0.0006);
   const SW = W - 0.2, SH = SW / shots[0].aspect, sy = LH - 0.085 - SH / 2;
