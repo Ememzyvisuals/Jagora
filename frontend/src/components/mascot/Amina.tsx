@@ -3,7 +3,8 @@
 /* Amina on the page. One small transparent canvas that moves around the screen:
    - she peeks over the ask box in the hero, in from the screen edges at the card stack, the phones, the safety
      list and the languages (saying hello in each one), and sits on the Meta logo in the footer, legs swinging;
-   - she follows the cursor with her eyes, waves when tapped, hops on a double tap, gets dizzy when tapped a lot,
+   - she follows the cursor with her eyes, gets dizzy the moment she is tapped or clicked (head rolling, stars round
+     her head, then she shakes it off),
      can be picked up and dropped with the mouse (then walks back), sways when the page is scrolled fast, leans with
      the phone, points at the main buttons, stretches and checks the time when nobody moves, and waves on return.
    Places on the page are marked with data-amina="hero|cards|phones|safety|languages", the seat with
@@ -65,9 +66,10 @@ function Stage({ app }: { app: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   const cvs = useRef<HTMLCanvasElement>(null);
   const bubble = useRef<HTMLDivElement>(null);
+  const starBox = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = box.current!, canvas = cvs.current!, bub = bubble.current!;
+    const el = box.current!, canvas = cvs.current!, bub = bubble.current!, stars = starBox.current!;
     let stage: AminaStage | null = null;
     let dead = false;
     let raf = 0;
@@ -100,12 +102,13 @@ function Stage({ app }: { app: boolean }) {
     let pos = { x: -999, y: -999 }; // container top-left, viewport px
     let drag: { on: boolean; sx: number; sy: number; px: number; py: number; moved: boolean } | null = null;
     let walkBack = 0;
-    let taps: number[] = [];
     let lastLine: Element | null = null;
     let scale = 1;
     let seatStage: "drop" | "land" | "sat" = "drop";
     let landAt = 0;
     let flat: SVGElement | null = null;
+    let clipLine = Infinity; // she is cut off below this line (peeking over the ask box): taps below it are not on her
+    let dizzyUntil = 0; // the head roll with stars, then a shake to shake it off
     const gap = () => performance.now() + (app ? 90_000 + Math.random() * 90_000 : 30_000 + Math.random() * 40_000);
     let nextVisit = gap();
     const busy = () => app && useApp.getState().tasks.some((t) => t.status === "working" || t.status === "waiting");
@@ -128,7 +131,7 @@ function Stage({ app }: { app: boolean }) {
       if (stage) stage.talk = true;
     };
     const react = (g: Gesture, ms: number, mood: "happy" | "fun" | "calm" = "happy") => {
-      if (!stage) return;
+      if (!stage || dizzyUntil) return; // nothing interrupts a dizzy spell
       stage.play(g);
       stage.mood = mood;
       gestureUntil = performance.now() + ms;
@@ -341,6 +344,7 @@ function Stage({ app }: { app: boolean }) {
       const small = innerWidth < 640;
       let tx = 0, ty = 0, clip = "none";
       scale = 1;
+      clipLine = Infinity;
       stage.yaw = 0;
       stage.leanTo = 0;
       if (sp.kind === "over" || sp.kind === "corner") {
@@ -349,6 +353,7 @@ function Stage({ app }: { app: boolean }) {
         ty = line - (small ? 44 : 62) * e + 150 * (1 - e);
         const cut = Math.max(0, pos.y + H - line);
         clip = `inset(0 0 ${cut}px 0)`;
+        clipLine = line;
         stage.yaw = -0.15;
         el.style.opacity = "1";
       } else if (sp.kind === "edgeL" || sp.kind === "edgeR") {
@@ -446,6 +451,14 @@ function Stage({ app }: { app: boolean }) {
       }
       // gestures and idle life
       const t = performance.now();
+      if (dizzyUntil && t > dizzyUntil) {
+        // shake it off
+        dizzyUntil = 0;
+        stage.play("shake", true);
+        stage.mood = "happy";
+        gestureUntil = t + 900;
+        speak(["I'm okay!", "Phew!", "Ó dáa!", "I dey alright!"][Math.floor(Math.random() * 4)], 1500);
+      }
       if (gestureUntil && t > gestureUntil) {
         gestureUntil = 0;
         stage.play(spot && !calm ? (spot.kind === "seat" ? "none" : spot.gesture) : "none");
@@ -493,9 +506,23 @@ function Stage({ app }: { app: boolean }) {
           const bx = pos.x + hp.x * scale + (right ? -bw - 34 : 34);
           bub.style.transform = `translate3d(${Math.round(Math.max(8, Math.min(innerWidth - bw - 8, bx)))}px, ${Math.round(pos.y + hp.y * scale - 46)}px, 0)`;
         } else bub.style.opacity = "0";
+        // dizzy stars circling over her head
+        if (dizzyUntil) {
+          const hp = stage.screenOf("head")!;
+          const cx = pos.x + hp.x * scale, cy = pos.y + (hp.y - H * 0.1) * scale;
+          const rx = W * 0.2 * scale, ry = rx * 0.32;
+          stars.style.display = "block";
+          [...stars.children].forEach((n, i) => {
+            const a = t / 190 + (i * Math.PI * 2) / 3;
+            const z = Math.sin(a);
+            (n as HTMLElement).style.transform = `translate3d(${(cx + Math.cos(a) * rx).toFixed(1)}px, ${(cy + z * ry).toFixed(1)}px, 0) translate(-50%, -50%) scale(${(0.8 + z * 0.25).toFixed(2)}) rotate(${((t / 4) % 360).toFixed(0)}deg)`;
+            (n as HTMLElement).style.opacity = clipLine < cy ? "0" : z < -0.2 ? "0.55" : "1";
+          });
+        } else stars.style.display = "none";
       } else {
         el.style.display = "none";
         bub.style.opacity = "0";
+        stars.style.display = "none";
         // off screen: no drawing, just a quiet check a few times a second whether it is time to visit
         raf = window.setTimeout(() => (raf = requestAnimationFrame((n) => loop(n, now))), 350) as unknown as number;
         return;
@@ -505,10 +532,35 @@ function Stage({ app }: { app: boolean }) {
 
     /* --- the visitor --- */
     const local = (x: number, y: number) => ({ x: (x - pos.x) / scale, y: (y - pos.y) / scale });
-    const onHer = (x: number, y: number) => {
+    /** is this point on her? Her body, or a generous box round her head and upper body (bigger for a finger), but
+        never the part of the page she is hidden behind and never off the screen */
+    const onHer = (x: number, y: number, touch = false) => {
       if (!stage || !spot || phase < 0.6) return false;
+      if (y >= clipLine || x < 0 || y < 0 || x > innerWidth || y > innerHeight) return false;
       const p = local(x, y);
-      return p.x >= 0 && p.y >= 0 && p.x <= W && p.y <= H && stage.hit(p.x, p.y);
+      if (p.x >= 0 && p.y >= 0 && p.x <= W && p.y <= H && stage.hit(p.x, p.y)) return true;
+      const hd = stage.screenOf("head"), hp = stage.screenOf("hips");
+      if (!hd || !hp) return false;
+      const pad = touch ? 40 : 16;
+      const l = pos.x + Math.min(hd.x, hp.x) * scale - pad, r = pos.x + Math.max(hd.x, hp.x) * scale + pad;
+      const top = pos.y + hd.y * scale - pad - 18 * scale, bottom = pos.y + hp.y * scale + (touch ? 30 : 10) * scale;
+      return x >= l && x <= r && y >= top && y <= bottom;
+    };
+    /** a tap or click on her: dizzy at once */
+    const dizzy = () => {
+      if (!stage) return;
+      const t = performance.now();
+      if (dizzyUntil > t) return; // already spinning
+      if (dir === -1) dir = 1; // tapped as she was going: she stays for it
+      stage.play("dizzy", true);
+      stage.mood = "fun";
+      dizzyUntil = t + 2500;
+      gestureUntil = t + 3400;
+      holdUntil = Math.max(holdUntil, t + 5200);
+      speak(["Whoa!", "Ah ah!", "Wahala!", "Ewo!"][Math.floor(Math.random() * 4)], 1400);
+      try {
+        navigator.vibrate?.(12);
+      } catch {}
     };
     const onMove = (e: PointerEvent) => {
       lastMove = performance.now();
@@ -530,10 +582,13 @@ function Stage({ app }: { app: boolean }) {
       }
       if (e.pointerType === "mouse") document.documentElement.style.cursor = onHer(e.clientX, e.clientY) ? "pointer" : "";
     };
+    let tapAt = 0;
     const onDown = (e: PointerEvent) => {
-      if (!onHer(e.clientX, e.clientY)) return;
+      if (!onHer(e.clientX, e.clientY, e.pointerType !== "mouse")) return;
       e.preventDefault();
       e.stopPropagation();
+      tapAt = performance.now();
+      dizzy();
       drag = { on: e.pointerType === "mouse" && spot?.kind !== "seat", sx: e.clientX, sy: e.clientY, px: pos.x, py: pos.y, moved: false };
     };
     const onUp = (e: PointerEvent) => {
@@ -547,22 +602,12 @@ function Stage({ app }: { app: boolean }) {
         holdUntil = Math.max(holdUntil, performance.now() + 5000);
         return;
       }
-      if (!onHer(e.clientX, e.clientY)) return;
-      const t = performance.now();
-      taps = [...taps.filter((x) => t - x < 3000), t];
-      const quick = taps.filter((x) => t - x < 700).length;
-      if (taps.length >= 5) {
-        taps = [];
-        react("dizzy", 2200, "fun");
-        speak("Whoa, I'm dizzy!", 2000);
-      } else if (quick >= 2) react("hop", 1600, "fun");
-      else {
-        react(spot?.kind === "seat" ? "hello" : "wave", 1800, "happy");
-        if (!say) speak(["Hi! I'm Amina.", "Ẹ n lẹ́!", "Sannu!", "Ndeewo!", "How far?"][Math.floor(Math.random() * 5)], 1800);
-      }
+      // the tap itself was handled the moment it landed (onDown)
     };
     const onClick = (e: MouseEvent) => {
-      if (onHer(e.clientX, e.clientY)) {
+      // the click that follows a tap on her never reaches the page under her
+      if (performance.now() - tapAt < 800 || onHer(e.clientX, e.clientY)) {
+        tapAt = 0;
         e.preventDefault();
         e.stopPropagation();
       }
@@ -655,6 +700,13 @@ function Stage({ app }: { app: boolean }) {
         aria-live="polite"
         className="pointer-events-none fixed left-0 top-0 z-[61] max-w-[220px] rounded-[18px] bg-ink px-3.5 py-2 text-[14px] font-semibold leading-snug text-paper opacity-0 shadow-lg transition-opacity duration-300"
       />
+      <div ref={starBox} aria-hidden="true" className="pointer-events-none fixed left-0 top-0 z-[61] hidden">
+        {[0, 1, 2].map((i) => (
+          <svg key={i} viewBox="0 0 24 24" className="absolute left-0 top-0 h-[18px] w-[18px] drop-shadow-[0_1px_2px_rgba(10,30,70,.35)]">
+            <path d="M12 2.5l2.7 6.1 6.6.6-5 4.4 1.5 6.5L12 16.7 6.2 20.1l1.5-6.5-5-4.4 6.6-.6z" fill="#ffd166" stroke="#c98a12" strokeWidth="1.4" strokeLinejoin="round" />
+          </svg>
+        ))}
+      </div>
     </>
   );
 }

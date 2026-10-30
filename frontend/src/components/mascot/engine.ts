@@ -11,7 +11,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 
 export type Base = "stand" | "sit" | "walk" | "dangle";
-export type Gesture = "none" | "wave" | "pointL" | "pointR" | "shush" | "watch" | "hop" | "dizzy" | "stretch" | "wrist" | "bounce" | "hello";
+export type Gesture = "none" | "wave" | "pointL" | "pointR" | "shush" | "watch" | "hop" | "dizzy" | "stretch" | "wrist" | "bounce" | "hello" | "shake";
 
 type R = [number, number, number];
 type Pose = { [bone: string]: R | number | undefined; lift?: number };
@@ -93,8 +93,19 @@ function gesturePose(g: Gesture, t: number, base: Base): Pose {
     }
     case "wrist":
       return { leftUpperArm: [0.7, 0, 1.0], leftLowerArm: [0, -1.7, 0], neck: [-0.38, 0.3, 0] };
-    case "dizzy":
-      return { neck: [Math.sin(t * 9) * 0.25, 0, Math.cos(t * 9) * 0.25], spine: [0, 0, Math.sin(t * 4.5) * 0.12] };
+    case "dizzy": {
+      // the head rolls round and round from the first frame, the body sways and the arms wobble for balance
+      const a = t * 8.5, k = Math.min(1, 0.55 + t * 2);
+      return {
+        neck: [Math.sin(a) * 0.36 * k, 0, Math.cos(a) * 0.36 * k], spine: [0, 0, Math.sin(a * 0.5) * 0.14 * k], chest: [0, 0, Math.sin(a * 0.5 + 0.6) * 0.08 * k],
+        leftUpperArm: [0, 0, seated ? 0.9 : 0.75 + Math.sin(a) * 0.12], rightUpperArm: [0, 0, seated ? -0.9 : -0.75 + Math.cos(a) * 0.12],
+      };
+    }
+    case "shake": {
+      // shaking it off: a quick no-no of the head that settles
+      const d = Math.exp(-t * 3.2);
+      return { neck: [0, Math.sin(t * 17) * 0.42 * d, Math.sin(t * 17 + 1) * 0.06 * d] };
+    }
     case "hop":
     case "bounce":
       return { lift: Math.abs(Math.sin(t * (seated ? 8 : 7))) * (seated ? 0.05 : 0.09), leftUpperArm: [0, 0, seated ? 0.8 : 0.6], rightUpperArm: [0, 0, seated ? -0.8 : -0.6] };
@@ -246,8 +257,14 @@ export class AminaStage {
     this.camera.updateProjectionMatrix();
   }
 
-  /** start a gesture now (the old one fades out first) */
-  play(g: Gesture) {
+  /** start a gesture (the old one fades out first); `now` switches at once with no fade, for an instant reaction */
+  play(g: Gesture, now = false) {
+    if (now) {
+      this.gesture = this.nextGesture = g;
+      this.gT = 0;
+      this.gWeight = 1;
+      return;
+    }
     if (g === this.gesture && this.gWeight > 0.5) return;
     this.nextGesture = g;
   }
@@ -283,7 +300,7 @@ export class AminaStage {
     const sk = this.sitK * this.sitK * (3 - 2 * this.sitK);
     const bp = this.base === "sit" || sk > 0.001 ? mix(basePose(this.base === "sit" ? "stand" : this.base, this.t), basePose("sit", this.t), sk) : basePose(this.base, this.t);
     const gp = gesturePose(this.gesture, this.gT, this.base);
-    const k = 1 - Math.exp(-dt * 10);
+    const k = 1 - Math.exp(-dt * (this.gesture === "dizzy" || this.gesture === "shake" ? 22 : 10)); // the dizzy roll starts at once
     for (const name of BONES) {
       const node = vrm.humanoid.getNormalizedBoneNode(name);
       if (!node) continue;
