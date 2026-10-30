@@ -20,6 +20,8 @@ import { motion } from "motion/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { Backdrop } from "@/components/glass/Backdrop";
+import { CloudWordmark } from "@/components/glass/CloudWordmark";
 import { Devices3D } from "@/components/Devices3D";
 import { CardStack } from "@/components/CardStack";
 import { Orb } from "@/components/Orb";
@@ -75,10 +77,11 @@ export default function Landing() {
   };
 
   return (
-    <div className="relative min-h-dvh overflow-x-clip bg-[linear-gradient(180deg,#eaf5ff_0%,#f6fbff_30%,#e3f1ff_62%,#cfe7fc_100%)] text-ink">
-      {/* hero: the sky with clouds, fading into the clean blue of the rest of the page */}
+    <div className="relative min-h-dvh overflow-x-clip text-ink">
+      <Backdrop />
+
+      {/* hero */}
       <section className="relative">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[115%] bg-[url(/sky/sky-phone.webp)] bg-cover bg-top sm:bg-[url(/sky/sky-desktop.webp)] [mask-image:linear-gradient(180deg,#000_55%,transparent)]" />
         {/* the top bar: the portfolio's liquid glass, fixed at the top, the page scrolling under it */}
         <header className="fixed inset-x-0 top-0 z-50 px-3 pt-[max(10px,env(safe-area-inset-top))] sm:px-4 sm:pt-[max(14px,env(safe-area-inset-top))]">
           <nav className="liquid-glass mx-auto flex w-full max-w-[1180px] items-center gap-3 rounded-[20px] py-2 pl-3 pr-2 2xl:max-w-[1400px]">
@@ -102,9 +105,7 @@ export default function Landing() {
           <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9 }}>
             <Orb size={150} halo />
           </motion.div>
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }} className="mt-1 font-display text-[30px] font-bold tracking-[-0.04em] text-ink sm:text-[36px]">
-            Jagora
-          </motion.p>
+          <CloudWordmark width={320} className="-mt-4" />
           <motion.h1
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -128,7 +129,7 @@ export default function Landing() {
             transition={{ duration: 0.9, delay: 0.2, ease: [0.2, 0.7, 0.2, 1] }}
             onSubmit={(e) => (e.preventDefault(), go())}
             data-amina="hero"
-            className="mt-9 w-full max-w-[680px] rounded-[30px] bg-white/90 p-2.5 text-left shadow-[0_30px_70px_-30px_rgba(9,40,110,.55)] ring-1 ring-white backdrop-blur-xl 2xl:max-w-[860px]"
+            className="liquid-glass glass-strong mt-9 w-full max-w-[680px] rounded-[30px] p-2.5 text-left 2xl:max-w-[860px]"
           >
             <div className="flex items-center gap-2">
               <label className="relative min-w-0 flex-1 pl-4">
@@ -150,7 +151,7 @@ export default function Landing() {
                   type="button"
                   key={a.lang}
                   onClick={() => setText(a.text)}
-                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-bold transition ${i === k ? "bg-ink text-paper" : "bg-[#e8f1ff] text-ink hover:bg-[#d9e8ff]"}`}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-bold transition ${i === k ? "bg-ink text-paper" : "bg-white/70 text-ink hover:bg-white"}`}
                 >
                   {a.lang}
                 </button>
@@ -171,7 +172,7 @@ export default function Landing() {
       {/* the people: the real Earth, with the Nigerians Jagora is built for */}
       <section id="languages" className="relative py-20 md:py-28">
         <div className="wrap grid items-center gap-10 md:grid-cols-[1fr_1.05fr] xl:gap-20">
-          <motion.div {...rise}>
+          <motion.div {...rise} className="liquid-glass glass-strong rounded-[32px] p-6 sm:p-9">
             <p className="text-[15px] font-bold uppercase tracking-[0.08em] text-accent">Built for Nigeria</p>
             <h2 className="mt-3 max-w-[14ch] font-display text-[38px] font-bold leading-[1.02] tracking-[-0.04em] sm:text-[56px] xl:text-[72px] 2xl:text-[84px]">Tens of millions of Nigerians.</h2>
             <p className="mt-5 max-w-[34rem] text-[17.5px] font-medium leading-relaxed text-ink sm:text-[19px] xl:text-[20px]">
@@ -179,7 +180,7 @@ export default function Landing() {
             </p>
             <ul data-amina="languages" className="mt-7 grid gap-2.5">
               {LANGS.map(([name, line, code], i) => (
-                <motion.li key={name} {...rise} transition={{ ...rise.transition, delay: i * 0.05 }} data-amina-say={line} data-amina-lang={code} className="flex items-baseline justify-between gap-4 rounded-[18px] bg-white/80 px-5 py-3.5 ring-1 ring-black/5">
+                <motion.li key={name} {...rise} transition={{ ...rise.transition, delay: i * 0.05 }} data-amina-say={line} data-amina-lang={code} className="flex items-baseline justify-between gap-4 rounded-[18px] bg-white/75 px-5 py-3.5 ring-1 ring-white">
                   <span className="font-display text-[18px] font-bold leading-snug tracking-[-0.015em] sm:text-[21px]">{line}</span>
                   <span className="shrink-0 text-[14px] font-bold text-accent">{name}</span>
                 </motion.li>
@@ -188,13 +189,13 @@ export default function Landing() {
           </motion.div>
           <div className="mx-auto w-full max-w-[720px] px-6 sm:px-10">
             <PeopleGlobe />
-            <p className="mt-6 text-center text-[14px] font-semibold text-ink-2">Drag the Earth to spin it</p>
+            <p className="mx-auto mt-6 w-fit rounded-full bg-white/75 px-4 py-1.5 text-center text-[14px] font-bold text-ink backdrop-blur">Drag the Earth to spin it</p>
           </div>
         </div>
       </section>
 
       {/* what it does */}
-      <section id="powers" className="relative bg-white/70 py-20 md:py-28">
+      <section id="powers" className="relative bg-[var(--color-white)]/85 py-20 backdrop-blur-xl md:py-28">
         <div className="wrap">
           <motion.div {...rise} className="max-w-[40rem]">
             <p className="text-[15px] font-bold uppercase tracking-[0.08em] text-accent">What Jagora does</p>
@@ -238,7 +239,7 @@ export default function Landing() {
 
       {/* start */}
       <section className="relative px-5 py-14 sm:px-0 md:py-28">
-        <motion.div {...rise} className="relative mx-auto flex max-w-[1400px] flex-col items-center overflow-hidden rounded-[28px] bg-[url(/sky/sky-phone.webp)] bg-cover bg-center px-5 py-10 text-center shadow-[0_40px_90px_-40px_rgba(9,40,110,.5)] sm:rounded-[36px] sm:bg-[url(/sky/sky-desktop.webp)] sm:px-12 sm:py-16">
+        <motion.div {...rise} className="liquid-glass mx-auto flex max-w-[1400px] flex-col items-center rounded-[28px] px-5 py-8 text-center sm:rounded-[36px] sm:px-12 sm:py-12">
           <div className="-my-4 scale-[0.7] sm:my-0 sm:scale-100">
             <Orb size={120} />
           </div>
@@ -250,7 +251,7 @@ export default function Landing() {
         </motion.div>
       </section>
 
-      <p className="wrap pb-6 text-center text-[13px] font-semibold text-ink-2">
+      <p className="wrap pb-6 text-center text-[13px] font-bold text-ink">
         Photos: Unsplash and Pexels. Earth: NASA Blue Marble. <a href="/credits.txt" className="underline underline-offset-2">Full credits</a>
       </p>
       <SiteFooter />
