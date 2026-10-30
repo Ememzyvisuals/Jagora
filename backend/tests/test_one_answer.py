@@ -49,3 +49,30 @@ async def test_question_after_the_answer_does_not_repeat_it():
          "Standard. Make I check another date abi make I check from Ebute Metta?")
     note, _, _ = await a._act("ask_user", {"question": q, "choices": ["Another date", "Ebute Metta"]}, None)
     assert note.startswith("not asked")
+
+
+async def test_the_same_video_is_not_played_again_and_is_named_right(monkeypatch):
+    from jagora import agent as ag
+    sent = []
+
+    class IOm:
+        async def event(self, k, d): sent.append((k, d))
+        async def say(self, t): pass
+
+    class B:
+        page = type("P", (), {"url": "https://www.premiumtimesng.com/"})()
+        pdf = None
+
+    a = ag.Agent(None, B(), IOm())
+
+    async def eb(): return a.browser
+    monkeypatch.setattr(a, "_ensure_browser", eb)
+
+    async def title(v): return "Love in Lagos (Full Movie)"
+    monkeypatch.setattr(ag, "_yt_title", title)
+    snap = type("S", (), {"title": "Premium Times - Nigeria leading newspaper"})()
+    out, _, _ = await a._download({"url": "https://www.youtube.com/watch?v=asgB8Y1Na9s"}, snap, play=True)
+    assert "PLAYING NOW" in out and "Love in Lagos" in out and "Premium Times" not in out
+    out2, _, _ = await a._download({"url": "https://www.youtube.com/watch?v=asgB8Y1Na9s"}, snap, play=True)
+    assert out2.startswith("already playing")
+    assert len([s for s in sent if s[0] == "media"]) == 1

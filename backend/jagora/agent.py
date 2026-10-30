@@ -274,6 +274,17 @@ def _said_again(a: str, b: str) -> bool:
     return bool(wa and wb) and len(wa & wb) / min(len(wa), len(wb)) >= 0.6
 
 
+async def _yt_title(vid: str) -> str:
+    """The video's own title from YouTube's public oEmbed (no key), so the player is not named after another tab."""
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=4) as c:
+            r = await c.get("https://www.youtube.com/oembed", params={"url": f"https://www.youtube.com/watch?v={vid}", "format": "json"})
+            return str(r.json().get("title") or "")[:90] if r.status_code == 200 else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def yt_embed(video_id: str) -> str:
     """YouTube's privacy-enhanced player, controllable from her app (pause while she talks, next, previous)."""
     return f"https://www.youtube-nocookie.com/embed/{video_id}?autoplay=1&rel=0&modestbranding=1&enablejsapi=1&playsinline=1"
@@ -2347,7 +2358,7 @@ class Agent:
         await self.io.event("media" if play else "file", {"name": name, "url": f"/files/{token}/{name}", "size": len(data), "type": ctype, "source": source})
         return f"/files/{token}/{name}"
 
-    async def _download(self, a, snap: Snapshot | None, play: bool = False):
+    async def _download(self, a, snap: Snapshot | None, play: bool = False):  # noqa: C901
         b = await self._ensure_browser()
         url = str(a.get("url") or "")
         button = None
@@ -2378,9 +2389,16 @@ class Agent:
         yt = re.search(r"(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/|live/)|youtu\.be/)([\w-]{11})", url)
         if play and yt:
             # played in their app from YouTube's privacy-enhanced player, without YouTube's tracking cookies
-            title = str(a.get("name") or (snap.title if snap else "") or "Video").replace(" - YouTube", "")[:90]
+            same = self._already_playing("play", [{"url": yt_embed(yt.group(1))}])
+            if same:
+                return same, False, None
+            # the open tab is often another site (a news page): its title is not the video's name
+            page_is_video = bool(snap and yt.group(1) in (getattr(b, "page", None) and b.page.url or ""))
+            title = str(a.get("name") or (snap.title if page_is_video else "") or await _yt_title(yt.group(1)) or "Video").replace(" - YouTube", "")[:90]
             await self.io.event("media", {"name": title, "url": yt_embed(yt.group(1)), "type": "youtube", "size": 0, "source": url})
-            return f'playing "{title}" for them in the app', False, None
+            return (f'PLAYING NOW on her screen: "{title}". It is playing; do not call play_media again (that restarts it). '
+                    "Finish now with ONE short line, in her language. If she later says it does not play, pick another "
+                    "video from the list instead of this one."), False, None
         if INSTALLER.search(url):
             return "refused: app installers are never downloaded", False, None
         if b.pdf and b.pdf.url == url:
