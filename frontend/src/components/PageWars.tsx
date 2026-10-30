@@ -131,6 +131,15 @@ export function PageWars() {
     });
     const wave = (n: number) => {
       const w = world.current!;
+      // a new round brings the partner back: the dead one is removed after its fall, so one is dropped in again
+      if (n > 1 && !w.men.some((m) => m.team === "blue" && !m.me && !m.dead)) {
+        w.men = w.men.filter((m) => !(m.team === "blue" && !m.me));
+        const me = w.men.find((m) => m.me);
+        w.men.push(spawn("blue", Math.max(40, Math.min(vw() - 40, (me ? me.x : vw() * 0.15) + 90)), false, "Partner"));
+      }
+      // and a little health back for you between rounds
+      const me = w.men.find((m) => m.me && !m.dead);
+      if (n > 1 && me) me.hp = Math.min(100, me.hp + 25);
       const count = Math.min(3 + n, 8);
       for (let i = 0; i < count; i++) w.men.push(spawn("red", vw() * (0.55 + Math.random() * 0.4), false, NAMES[(i + n) % NAMES.length]));
     };
