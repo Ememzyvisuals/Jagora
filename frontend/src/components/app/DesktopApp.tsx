@@ -36,6 +36,7 @@ import { setAutoFullscreen, toggleFullscreen, useAutoFullscreen } from "../Pwa";
 import { Starters, openSite, useTopSites } from "./NewTabBits";
 import { TranslateButton } from "../PageView";
 import { startPageWars } from "../PageWars";
+import { startScamSmash } from "../ScamSmash";
 import { aminaHidden, setAminaHidden } from "../mascot/Amina";
 import { reportScreen } from "@/lib/appctl";
 import { deleteChats } from "@/lib/sync";
@@ -438,6 +439,9 @@ function DeskProfile({ lang, setLang, langOpen, setLangOpen, theme, initial }: {
             </button>
             <button onClick={() => (startPageWars(), setOpen(false))} className={item}>
               <GameController size={18} /> Play Page Wars
+            </button>
+            <button onClick={() => (startScamSmash(), setOpen(false))} className={item}>
+              <ChatCircleText size={18} /> Play Scam Smash
             </button>
             <button onClick={() => (void downloadSessionLog(), setOpen(false))} className={item}>
               <DownloadSimple size={18} /> Download session log

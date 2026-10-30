@@ -32,6 +32,7 @@ import {
 import { fly } from "../Effects";
 import { Starters, openSite, useTopSites } from "./NewTabBits";
 import { startPageWars } from "../PageWars";
+import { startScamSmash } from "../ScamSmash";
 import { AnimatePresence, motion } from "motion/react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
@@ -563,6 +564,9 @@ function ProfileMenu({ canFull }: { canFull: boolean }) {
               )}
               <button onClick={() => (startPageWars(), setOpen(false))} className={item}>
                 <GameController size={19} /> Play Page Wars
+              </button>
+              <button onClick={() => (startScamSmash(), setOpen(false))} className={item}>
+                <ChatCircleText size={19} /> Play Scam Smash
               </button>
               <button onClick={() => (void downloadSessionLog(), setOpen(false))} className={item}>
               <DownloadSimple size={19} /> Download session log

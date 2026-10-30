@@ -10,6 +10,7 @@ import { BUILDER, PLOTWEAVER, REPO } from "@/lib/credits";
 import { GlassWordmark } from "./glass/GlassWordmark";
 import { Glass } from "./glass/Glass";
 import { startPageWars } from "./PageWars";
+import { startScamSmash } from "./ScamSmash";
 import { Amina, aminaHidden, setAminaHidden } from "./mascot/Amina";
 
 const COLUMNS: { title: string; links: { label: string; href: string; ext?: boolean }[] }[] = [
@@ -263,6 +264,9 @@ export function SiteFooter() {
               </button>
               <button onClick={startPageWars} className="shrink-0 whitespace-nowrap rounded-full bg-black/5 px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10" title="Shift + G">
                 Bored? Play
+              </button>
+              <button onClick={startScamSmash} className="shrink-0 whitespace-nowrap rounded-full bg-black/5 px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10">
+                Scam Smash
               </button>
             </p>
           </div>
