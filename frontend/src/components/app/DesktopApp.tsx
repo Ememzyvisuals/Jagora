@@ -565,7 +565,7 @@ function StartPage({ onAsk }: { onAsk: () => void }) {
               </button>
             )}
           </div>
-          <div data-amina-work className="mt-5 grid grid-cols-3 gap-6">
+          <div className="mt-5 grid grid-cols-3 gap-6">
             {news.length === 0
               ? [0, 1, 2].map((i) => <div key={i} className="aspect-[4/3] animate-pulse rounded-[22px] bg-white/60 dark:bg-white/5" />)
               : news.slice(0, all ? 12 : 6).map((n) => (

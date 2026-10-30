@@ -14,7 +14,6 @@ import { useEffect, useRef, useState } from "react";
 import { siMeta } from "simple-icons";
 import type { AminaStage, Gesture } from "./engine";
 import { useApp } from "@/lib/store";
-import { AminaCrew } from "./Crew";
 
 const API = process.env.NEXT_PUBLIC_BACKEND_HTTP || "";
 const LANGS = ["yo", "ha", "ig", "pcm", "en"];
@@ -59,12 +58,7 @@ export function Amina({ app = false }: { app?: boolean }) {
     window.addEventListener("amina:toggle", sync);
     return () => window.removeEventListener("amina:toggle", sync);
   }, []);
-  return on ? (
-    <>
-      <Stage app={app} />
-      <AminaCrew />
-    </>
-  ) : null;
+  return on ? <Stage app={app} /> : null;
 }
 
 function Stage({ app }: { app: boolean }) {
@@ -106,9 +100,6 @@ function Stage({ app }: { app: boolean }) {
     let pos = { x: -999, y: -999 }; // container top-left, viewport px
     let drag: { on: boolean; sx: number; sy: number; px: number; py: number; moved: boolean } | null = null;
     let walkBack = 0;
-    // desktop: a tap makes her run and jump aside; a tap while she is running catches her
-    const playful = matchMedia("(pointer: fine)").matches && innerWidth >= 1024;
-    let dodge: { t0: number; dir: number } | null = null;
     let taps: number[] = [];
     let lastLine: Element | null = null;
     let scale = 1;
@@ -428,19 +419,6 @@ function Stage({ app }: { app: boolean }) {
           stage.yaw = dx > 0 ? 1.2 : -1.2;
         }
       } else pos = { x: tx - head.x, y: ty - head.y };
-      if (dodge) {
-        const p = (performance.now() - dodge.t0) / 1100;
-        if (p >= 1) {
-          dodge = null;
-          stage.base = "stand";
-        } else {
-          // out and back in one arc, with a jump on the way out
-          const out = Math.sin(Math.PI * p);
-          pos = { x: pos.x + dodge.dir * 150 * out, y: pos.y - 55 * Math.max(0, Math.sin(Math.PI * Math.min(1, p * 2))) };
-          stage.yaw = p < 0.5 ? dodge.dir * 1.2 : -dodge.dir * 1.2;
-          clip = "none";
-        }
-      }
       el.style.clipPath = clip;
     };
 
@@ -577,19 +555,6 @@ function Stage({ app }: { app: boolean }) {
         taps = [];
         react("dizzy", 2200, "fun");
         speak("Whoa, I'm dizzy!", 2000);
-      } else if (playful && dodge && spot?.kind !== "seat") {
-        // caught while running
-        dodge = null;
-        stage!.base = "stand";
-        react("hop", 900, "fun");
-        setTimeout(() => !dead && react("wave", 1500, "fun"), 900);
-        speak(["You caught me!", "O ti mú mi!", "Ka kama ni!", "Ị jidere m!", "You don catch me!"][Math.floor(Math.random() * 5)], 2200);
-      } else if (playful && spot && spot.kind !== "seat" && spot.kind !== "over") {
-        // a touch: she runs and jumps out of the way (on the side away from the screen edge), then comes back
-        dodge = { t0: performance.now(), dir: spot.kind === "edgeR" ? -1 : 1 };
-        stage!.base = "walk";
-        react("hop", 1100, "fun");
-        holdUntil = Math.max(holdUntil, performance.now() + 4000);
       } else if (quick >= 2) react("hop", 1600, "fun");
       else {
         react(spot?.kind === "seat" ? "hello" : "wave", 1800, "happy");
