@@ -12,7 +12,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export const startPageWars = () => dispatchEvent(new Event("jagora:game"));
 
 type V = { x: number; y: number };
-type Block = { el: HTMLElement; x: number; y: number; w: number; h: number; color: string; hp: number };
+/* a piece of the page that can be shot off: one letter, or one tile of a picture or a button's background */
+type Piece = { x: number; y: number; w: number; h: number; alive: boolean; ch?: string; font?: string; color: string; base?: number; img?: CanvasImageSource; sx?: number; sy?: number; sw?: number; sh?: number };
+type Block = {
+  el: HTMLElement; x: number; y: number; w: number; h: number; color: string; hp: number;
+  /* once hit, the element is hidden (visibility only, so the layout never moves) and drawn piece by piece on the
+     debris canvas in exactly the same place; every hit then blows the pieces near it off */
+  live?: boolean; pieces?: Piece[]; left?: number; dirty?: boolean; rad?: number;
+};
 type Man = {
   team: "blue" | "red";
   me?: boolean;
@@ -33,7 +40,8 @@ type Man = {
   name: string;
 };
 type Shot = { x: number; y: number; vx: number; vy: number; team: Man["team"]; life: number };
-type Bit = { x: number; y: number; vx: number; vy: number; s: number; c: string; life: number; rot: number; vr: number };
+type Bit = { x: number; y: number; vx: number; vy: number; s: number; c: string; life: number; rot: number; vr: number; p?: Piece; oy?: number };
+type Flash = { x: number; y: number; t: number; big: boolean };
 
 const G = 1500; // gravity px/s²
 const H = 58; // stickman height
@@ -72,6 +80,127 @@ function collectBlocks(): Block[] {
   return out;
 }
 
+const clear = (c: string) => !c || c === "transparent" || /rgba?\([^)]*,\s*0(\.0+)?\)$/.test(c);
+const metrics = new Map<string, { asc: number; desc: number }>();
+/** where the text baseline sits inside a glyph's box, for this font */
+function fontMetrics(ctx: CanvasRenderingContext2D, font: string) {
+  let m = metrics.get(font);
+  if (!m) {
+    ctx.font = font;
+    const t = ctx.measureText("Hg");
+    const size = parseFloat(font.match(/(\d+(\.\d+)?)px/)?.[1] ?? "16");
+    m = { asc: t.fontBoundingBoxAscent ?? size * 0.8, desc: t.fontBoundingBoxDescent ?? size * 0.2 };
+    metrics.set(font, m);
+  }
+  return m;
+}
+/** cut an element into pieces: its letters (each where the browser drew it), or tiles for a picture, and tiles of its
+    background when it has one (buttons, chips) */
+function cut(b: Block, ctx: CanvasRenderingContext2D): Piece[] {
+  const out: Piece[] = [];
+  const el = b.el, st = getComputedStyle(el);
+  const tiles = (color: string, img?: CanvasImageSource, iw = 0, ih = 0, radius = 0) => {
+    const cols = Math.max(2, Math.min(10, Math.round(b.w / 30))), rows = Math.max(2, Math.min(8, Math.round(b.h / 30)));
+    const tw = b.w / cols, th = b.h / rows;
+    b.rad = Math.max(b.rad ?? 0, radius);
+    // a picture with object-fit: cover is cropped round its middle
+    let sc = 1, ox = 0, oy = 0;
+    if (img && iw && ih) {
+      const fit = st.objectFit;
+      sc = fit === "contain" ? Math.min(b.w / iw, b.h / ih) : fit === "fill" ? 0 : Math.max(b.w / iw, b.h / ih);
+      if (sc) {
+        ox = (iw * sc - b.w) / 2;
+        oy = (ih * sc - b.h) / 2;
+      }
+    }
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++) {
+        const p: Piece = { x: b.x + c * tw, y: b.y + r * th, w: tw, h: th, alive: true, color };
+        if (img && iw && ih) {
+          if (sc) Object.assign(p, { img, sx: (c * tw + ox) / sc, sy: (r * th + oy) / sc, sw: tw / sc, sh: th / sc });
+          else Object.assign(p, { img, sx: (c * tw * iw) / b.w, sy: (r * th * ih) / b.h, sw: (tw * iw) / b.w, sh: (th * ih) / b.h });
+        }
+        out.push(p);
+      }
+  };
+  const tag = el.tagName;
+  if (tag === "IMG") {
+    const im = el as HTMLImageElement;
+    tiles("#7aa7e8", im.complete && im.naturalWidth ? im : undefined, im.naturalWidth, im.naturalHeight, parseFloat(st.borderTopLeftRadius) || 0);
+    return out;
+  }
+  if (tag === "svg") {
+    // a copy of the drawing as a picture, so its tiles show the real icon or illustration once it has loaded
+    const copy = el.cloneNode(true) as SVGSVGElement;
+    copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    copy.setAttribute("width", String(b.w));
+    copy.setAttribute("height", String(b.h));
+    copy.style.color = st.color;
+    const src = new XMLSerializer().serializeToString(copy).replace(/currentColor/g, st.color);
+    const im = new Image();
+    im.onload = () => (b.dirty = true);
+    im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(src);
+    tiles(clear(st.color) ? "#7aa7e8" : st.color, im, b.w, b.h);
+    return out;
+  }
+  if (tag === "CANVAS" || tag === "INPUT") {
+    // a 3D canvas cannot be copied reliably, so it breaks into tiles of its colour
+    const bg = st.backgroundColor;
+    tiles(clear(bg) ? "rgba(122,167,232,.85)" : bg);
+    if (tag !== "INPUT") return out;
+  }
+  if (!clear(st.backgroundColor)) tiles(st.backgroundColor, undefined, 0, 0, Math.min(parseFloat(st.borderTopLeftRadius) || 0, b.h / 2));
+  // the letters
+  const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  let n: Node | null, count = 0;
+  while ((n = walk.nextNode()) && count < 900) {
+    const text = n.textContent ?? "";
+    if (!text.trim()) continue;
+    const ps = getComputedStyle(n.parentElement!);
+    if (ps.visibility === "hidden" || ps.display === "none") continue;
+    const font = `${ps.fontStyle} ${ps.fontWeight} ${ps.fontSize} ${ps.fontFamily}`;
+    const fill = ps.getPropertyValue("-webkit-text-fill-color");
+    const color = clear(ps.color) || (fill && clear(fill)) ? "#1d63ed" : ps.color; // gradient text: our blue
+    const up = ps.textTransform === "uppercase", low = ps.textTransform === "lowercase";
+    const m = fontMetrics(ctx, font);
+    for (let i = 0; i < text.length && count < 900; i++) {
+      const ch = text[i];
+      if (/\s/.test(ch)) continue;
+      // a surrogate pair (rare letters, symbols) stays in one piece
+      const len = ch.charCodeAt(0) >= 0xd800 && ch.charCodeAt(0) < 0xdc00 ? 2 : 1;
+      range.setStart(n, i);
+      range.setEnd(n, i + len);
+      const r = [...range.getClientRects()].find((x) => x.width > 0);
+      i += len - 1;
+      if (!r) continue;
+      const c = text.slice(i - len + 1, i + 1);
+      out.push({ x: r.left, y: r.top, w: r.width, h: r.height, alive: true, ch: up ? c.toUpperCase() : low ? c.toLowerCase() : c, font, color, base: r.top + (r.height - (m.asc + m.desc)) / 2 + m.asc });
+      count++;
+    }
+  }
+  return out;
+}
+/** draw one piece where it sits (or, for a flying piece, centred on 0,0) */
+function drawPiece(ctx: CanvasRenderingContext2D, p: Piece, cx = 0, cy = 0, flying = false) {
+  const x = flying ? -p.w / 2 : p.x - cx, y = flying ? -p.h / 2 : p.y - cy;
+  if (p.ch) {
+    ctx.font = p.font!;
+    ctx.fillStyle = p.color;
+    ctx.fillText(p.ch, x, flying ? -p.h / 2 + (p.base! - p.y) : p.base! - cy);
+  } else if (p.img && (!(p.img instanceof HTMLImageElement) || p.img.complete)) {
+    try {
+      ctx.drawImage(p.img, p.sx!, p.sy!, p.sw!, p.sh!, x, y, p.w + (flying ? 0 : 0.6), p.h + (flying ? 0 : 0.6));
+    } catch {
+      ctx.fillStyle = p.color;
+      ctx.fillRect(x, y, p.w, p.h);
+    }
+  } else {
+    ctx.fillStyle = p.color;
+    ctx.fillRect(x, y, p.w + (flying ? 0 : 0.6), p.h + (flying ? 0 : 0.6));
+  }
+}
+
 function hitRect(p: V, b: { x: number; y: number; w: number; h: number }) {
   return p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
 }
@@ -81,6 +210,7 @@ export function PageWars() {
   const [phase, setPhase] = useState<"intro" | "play" | "over">("intro");
   const [hud, setHud] = useState({ score: 0, wave: 1, hp: 100, ally: true, left: 0 });
   const cv = useRef<HTMLCanvasElement>(null);
+  const dv = useRef<HTMLCanvasElement>(null); // the debris layer: the shot-at parts of the page, drawn where they were
   const hidden = useRef<{ el: HTMLElement; vis: string }[]>([]);
   const world = useRef<{ blocks: Block[]; men: Man[]; shots: Shot[]; bits: Bit[]; score: number; wave: number; t: number } | null>(null);
   const input = useRef({ left: false, right: false, jump: false, fire: false, aim: { x: 0, y: 0 }, stick: null as null | { id: number; x0: number; y0: number; dx: number; dy: number }, fireId: -1 });
@@ -88,6 +218,8 @@ export function PageWars() {
   const restore = useCallback(() => {
     for (const h of hidden.current) h.el.style.visibility = h.vis;
     hidden.current = [];
+    const d = dv.current;
+    d?.getContext("2d")?.clearRect(0, 0, d.width, d.height);
   }, []);
   const exit = useCallback(() => {
     restore();
@@ -118,9 +250,13 @@ export function PageWars() {
     const c = cv.current!;
     const ctx = c.getContext("2d")!;
     const dpr = Math.min(devicePixelRatio || 1, 2);
+    const d = dv.current!;
+    const dctx = d.getContext("2d")!;
     const fit = () => {
-      c.width = innerWidth * dpr;
-      c.height = innerHeight * dpr;
+      c.width = d.width = innerWidth * dpr;
+      c.height = d.height = innerHeight * dpr;
+      dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      for (const b of world.current?.blocks ?? []) if (b.live) b.dirty = true;
     };
     fit();
     const vw = () => innerWidth, vh = () => innerHeight;
@@ -143,26 +279,70 @@ export function PageWars() {
       const count = Math.min(3 + n, 8);
       for (let i = 0; i < count; i++) w.men.push(spawn("red", vw() * (0.55 + Math.random() * 0.4), false, NAMES[(i + n) % NAMES.length]));
     };
+    const flashes: Flash[] = [];
+    const dirtyGone: Block[] = [];
     world.current = { blocks: collectBlocks(), men: [spawn("blue", vw() * 0.15, true, "You"), spawn("blue", vw() * 0.28, false, "Partner")], shots: [], bits: [], score: 0, wave: 1, t: 0 };
     wave(1);
     input.current.aim = { x: vw() * 0.7, y: vh() * 0.5 };
 
-    const blow = (b: Block, at: V) => {
-      const w = world.current!;
+    /** the first hit on an element: hide it (layout untouched) and draw its pieces on the debris layer instead */
+    const wake = (b: Block) => {
+      if (b.live) return;
+      b.live = true;
+      b.pieces = cut(b, dctx);
+      b.left = b.pieces.length;
+      b.dirty = true;
       hidden.current.push({ el: b.el, vis: b.el.style.visibility });
       b.el.style.visibility = "hidden";
-      w.blocks = w.blocks.filter((x) => x !== b);
-      const n = Math.min(70, 14 + Math.round((b.w * b.h) / 400));
-      for (let i = 0; i < n; i++) {
-        const px = b.x + Math.random() * b.w, py = b.y + Math.random() * b.h;
-        const a = Math.atan2(py - at.y, px - at.x) + (Math.random() - 0.5) * 1.2;
-        const sp = 120 + Math.random() * 420;
-        w.bits.push({ x: px, y: py, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 220, s: 2 + Math.random() * 5, c: Math.random() < 0.25 ? "#ffb02e" : b.color, life: 1.2 + Math.random() * 0.8, rot: 0, vr: (Math.random() - 0.5) * 12 });
+    };
+    /** a hit on the page: a small burst, and the letters or tiles near it fly off. Returns false when the shot went
+        through a gap that has already been blown clear. */
+    const smash = (b: Block, at: V, vx: number, vy: number) => {
+      const w = world.current!;
+      wake(b);
+      const ps = b.pieces!;
+      let near: Piece | null = null, nd = 1e9;
+      for (const p of ps) {
+        if (!p.alive) continue;
+        const d = Math.hypot(p.x + p.w / 2 - at.x, p.y + p.h / 2 - at.y);
+        if (d < nd) (nd = d), (near = p);
       }
-      w.score += 5;
+      if (!near) return false;
+      const reach = Math.max(24, near.h * 0.95);
+      if (nd > reach * 1.5) return false;
+      const sp0 = Math.hypot(vx, vy) || 1;
+      let n = 0;
+      for (const p of ps) {
+        if (!p.alive) continue;
+        const cx = p.x + p.w / 2, cy = p.y + p.h / 2;
+        const d = Math.hypot(cx - at.x, cy - at.y);
+        if (p !== near && d > reach) continue;
+        p.alive = false;
+        n++;
+        // away from the blast, a little along the bullet, and up; heavier pieces fly less
+        const a = Math.atan2(cy - at.y, cx - at.x) + (Math.random() - 0.5) * 0.9;
+        const push = (260 + Math.random() * 380) * (1 - Math.min(0.6, d / (reach * 2.2))) * (p.ch ? 1 : 0.8);
+        w.bits.push({
+          x: cx, y: cy, vx: Math.cos(a) * push + (vx / sp0) * 120, vy: Math.sin(a) * push - 260 - Math.random() * 160,
+          s: 0, c: p.color, life: 1.5 + Math.random() * 0.9, rot: 0, vr: (Math.random() - 0.5) * 16, p,
+        });
+      }
+      b.left = (b.left ?? 0) - n;
+      b.dirty = true;
+      if (!b.left) {
+        w.blocks = w.blocks.filter((x) => x !== b); // nothing left to stand on
+        dirtyGone.push(b);
+      }
+      flashes.push({ x: at.x, y: at.y, t: 0, big: n > 6 });
+      for (let i = 0; i < 10; i++) {
+        const a = Math.random() * Math.PI * 2, sp = 140 + Math.random() * 320;
+        w.bits.push({ x: at.x, y: at.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 120, s: 2 + Math.random() * 2.5, c: Math.random() < 0.5 ? "#ffd166" : "#ff9f1c", life: 0.35 + Math.random() * 0.3, rot: 0, vr: 0 });
+      }
+      w.score += n;
       try {
-        navigator.vibrate?.(10);
+        navigator.vibrate?.(8);
       } catch {}
+      return true;
     };
     const splat = (m: Man, color: string) => {
       const w = world.current!;
@@ -307,13 +487,8 @@ export function PageWars() {
           // the page
           if (s.life > 0)
             for (const b of w.blocks)
-              if (hitRect(s, b)) {
+              if (hitRect(s, b) && smash(b, s, s.vx, s.vy)) {
                 s.life = 0;
-                b.hp -= 1;
-                if (b.hp <= 0) blow(b, s);
-                else
-                  for (let i = 0; i < 6; i++)
-                    w.bits.push({ x: s.x, y: s.y, vx: (Math.random() - 0.5) * 260, vy: -Math.random() * 260, s: 2, c: b.color, life: 0.5, rot: 0, vr: 0 });
                 break;
               }
         }
@@ -328,14 +503,36 @@ export function PageWars() {
         b.x += b.vx * dt;
         b.y += b.vy * dt;
         b.rot += b.vr * dt;
-        if (b.y > vh() - 2) {
-          b.y = vh() - 2;
-          b.vy *= -0.3;
+        const floor = vh() - 2 - (b.p ? b.p.h / 2 : 0);
+        if (b.y > floor) {
+          b.y = floor;
+          b.vy *= -0.35;
           b.vx *= 0.7;
+          b.vr *= 0.6;
         }
         b.life -= dt;
       }
-      w.bits = w.bits.filter((b) => b.life > 0).slice(-900);
+      w.bits = w.bits.filter((b) => b.life > 0);
+      if (w.bits.length > 1100) w.bits = w.bits.slice(-1100);
+      for (const f of flashes) f.t += dt;
+      while (flashes.length && flashes[0].t > 0.3) flashes.shift();
+
+      // ---- the debris layer: redraw only the elements that changed
+      for (const b of w.blocks.concat(dirtyGone)) {
+        if (!b.dirty) continue;
+        b.dirty = false;
+        dctx.clearRect(b.x - 3, b.y - 3, b.w + 6, b.h + 6);
+        dctx.save();
+        dctx.beginPath();
+        if (b.rad && dctx.roundRect) dctx.roundRect(b.x, b.y, b.w, b.h, Math.min(b.rad, b.w / 2, b.h / 2));
+        else dctx.rect(b.x - 3, b.y - 3, b.w + 6, b.h + 6);
+        dctx.clip();
+        dctx.textBaseline = "alphabetic";
+        for (const p of b.pieces ?? []) if (p.alive && !p.ch) drawPiece(dctx, p);
+        dctx.restore();
+        for (const p of b.pieces ?? []) if (p.alive && p.ch) drawPiece(dctx, p);
+      }
+      dirtyGone.length = 0;
 
       // ---- waves, end
       w.men = w.men.filter((m) => !m.dead || m.dead < 2.5);
@@ -355,15 +552,33 @@ export function PageWars() {
       // ---- draw
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, vw(), vh());
+      ctx.textBaseline = "alphabetic";
       for (const b of w.bits) {
-        ctx.save();
-        ctx.globalAlpha = Math.min(1, b.life * 1.5);
-        ctx.translate(b.x, b.y);
-        ctx.rotate(b.rot);
-        ctx.fillStyle = b.c;
-        ctx.fillRect(-b.s / 2, -b.s / 2, b.s, b.s);
-        ctx.restore();
+        ctx.globalAlpha = Math.min(1, b.life * 1.4);
+        const cs = Math.cos(b.rot), sn = Math.sin(b.rot);
+        ctx.setTransform(dpr * cs, dpr * sn, -dpr * sn, dpr * cs, dpr * b.x, dpr * b.y);
+        if (b.p) drawPiece(ctx, b.p, 0, 0, true);
+        else {
+          ctx.fillStyle = b.c;
+          ctx.fillRect(-b.s / 2, -b.s / 2, b.s, b.s);
+        }
       }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // the bursts: a quick bright ring where a shot lands
+      for (const f of flashes) {
+        const k = f.t / 0.3;
+        ctx.globalAlpha = 1 - k;
+        ctx.fillStyle = "#fff6d6";
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, (f.big ? 16 : 10) * (1 - k * 0.6), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#ffb02e";
+        ctx.lineWidth = 3 * (1 - k) + 0.5;
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, (f.big ? 46 : 30) * Math.sqrt(k) + 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
       for (const s of w.shots) {
         const len = 16;
         const n = Math.hypot(s.vx, s.vy);
@@ -481,6 +696,7 @@ export function PageWars() {
   const final = world.current;
   return (
     <div id="page-wars" className="fixed inset-0 z-[400] select-none" style={{ touchAction: "none" }}>
+      <canvas ref={dv} aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full" />
       <canvas ref={cv} className="absolute inset-0 h-full w-full" style={{ cursor: phase === "play" ? "none" : "default" }} />
 
       {/* HUD */}
