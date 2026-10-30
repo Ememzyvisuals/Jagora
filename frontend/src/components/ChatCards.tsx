@@ -586,7 +586,7 @@ export function RecordCard({ m }: { m: Extract<Msg, { kind: "record" }> }) {
 
 /* ---- her payment record: what to pay, to whom, and where it stands. Saved on the server the moment it appears, so
    she can leave for her bank app and come back (even on another device) and still see exactly what she paid. ---- */
-const PAY: Record<"title" | "amount" | "to" | "account" | "bank" | "ref" | "copy" | "copied" | "paid" | "check" | "kept", Record<Lang, string>> = {
+const PAY: Record<"title" | "amount" | "to" | "account" | "bank" | "ref" | "copy" | "copied" | "paid" | "check" | "kept" | "payNow", Record<Lang, string>> = {
   title: { en: "Payment record", pcm: "Payment record", yo: "Àkọsílẹ̀ ìsanwó", ha: "Rikodin biya", ig: "Ndekọ ịkwụ ụgwọ" },
   amount: { en: "Amount", pcm: "Amount", yo: "Iye owó", ha: "Adadi", ig: "Ego ole" },
   to: { en: "Pay to", pcm: "Pay to", yo: "Sanwó fún", ha: "Biya zuwa", ig: "Kwụọ" },
@@ -597,6 +597,7 @@ const PAY: Record<"title" | "amount" | "to" | "account" | "bank" | "ref" | "copy
   copied: { en: "Copied", pcm: "Don copy", yo: "Ó ti dà á", ha: "An kwafa", ig: "Edetuola" },
   paid: { en: "I have paid", pcm: "I don pay", yo: "Mo ti sanwó", ha: "Na biya", ig: "Akwụọla m" },
   check: { en: "Check this payment", pcm: "Check this payment", yo: "Ṣàyẹ̀wò ìsanwó yìí", ha: "Duba wannan biyan", ig: "Lelee ịkwụ ụgwọ a" },
+  payNow: { en: "Pay", pcm: "Pay", yo: "San", ha: "Biya", ig: "Kwụọ" },
   kept: {
     en: "Kept safe in this chat. You can go to your bank app and come back; Jagora keeps the page open for you.",
     pcm: "E dey safe for this chat. You fit go your bank app come back; Jagora go keep the page open for you.",
@@ -668,8 +669,14 @@ export function PaymentCard({ m, task }: { m: Extract<Msg, { kind: "payment" }>;
       {open && <p className="mt-2 text-[13px] leading-snug text-ink-2">{PAY.kept[lang]}</p>}
       {open && (
         <div className="mt-3 flex flex-wrap gap-2">
+          {m.status === "waiting" && m.pay_url?.startsWith("https://") && (
+            // the checkout opens in her own browser, where the site's human check passes
+            <a href={m.pay_url} target="_blank" rel="noopener noreferrer" className="btn btn-ink h-12 w-full text-[15.5px] font-bold">
+              {PAY.payNow[lang]}{m.amount ? ` ${m.amount}` : ""}
+            </a>
+          )}
           {m.status === "waiting" && (
-            <button onClick={() => void say(PAY.paid[lang])} className="btn btn-ink h-11 flex-1 text-[15px] font-semibold">
+            <button onClick={() => void say(PAY.paid[lang])} className={`btn ${m.pay_url ? "btn-glass" : "btn-ink"} h-11 flex-1 text-[15px] font-semibold`}>
               {PAY.paid[lang]}
             </button>
           )}

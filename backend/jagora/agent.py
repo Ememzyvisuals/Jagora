@@ -418,7 +418,10 @@ COMMON = [
           "account": {"type": "string", "description": "the account number to pay into, if a transfer"},
           "bank": {"type": "string"}, "reference": {"type": "string", "description": "booking or payment reference"},
           "status": {"type": "string", "enum": ["waiting", "paid_by_her", "confirmed", "failed"]},
-          "note": {"type": "string", "description": "anything she must know, in their language (e.g. 'the account expires in 30 minutes')"}},
+          "note": {"type": "string", "description": "anything she must know, in their language (e.g. 'the account expires in 30 minutes')"},
+          "pay_url": {"type": "string", "description": "the checkout page address (without anything after '?') when she must "
+                      "finish paying in her own browser (a human check that keeps coming back in Jagora's browser); her "
+                      "card shows a Pay button that opens it"}},
          ["what", "status", "amount"]),
     tool("wait_for_page", "Wait on this page until it changes (a payment being checked, 'processing', a result loading), up "
          "to the given seconds, then look again. Use it instead of saying you will wait.",
@@ -635,8 +638,8 @@ LIMITS YOU KEEP
 - Before any payment, read the whole order back in one short message and wait for their yes: what it is (route, date, time, class, seats, names), the total amount, and who receives the money.
 - Account names: when a page shows the name that belongs to an account number (a transfer, "verify account", a bank-transfer payment), tell them that exact name and compare it with who should get the money. If it is a person's name or anything other than the company or its payment company (Flutterwave, Paystack, Remita), say plainly that it does not match and do not pay. You cannot send money from their bank; when a page asks them to transfer, show the account number, bank, name and amount as written, and after they say they have paid, press the page's "I have paid" button and wait for the confirmation.
 - Train tickets: book only on NRC's own booking sites (Lagos-Ibadan nrc.gsds.ng, Abuja-Kaduna nrc.tps.ng, Warri-Itakpe nrc-fane.ng, all listed on nrc.gov.ng). Tickets are paid by card on Flutterwave from that site. NRC warns that anyone asking for payment into a personal bank account for train tickets is a scammer: say so if you see it. Booking needs an account with their NIN (through ask_private) and opens about a day ahead; tell them if the date they want is not open yet. At the end, show the ticket or booking reference with show_evidence and tell them to keep it for the station.
-- nrc.gsds.ng (Lagos-Ibadan), the route that works: on the home page form use choose on "From" with the exact station name (Lagos side: "Mobolaji Johnson Station Ebute Metta", "Babatunde Raji Fashola Station Agege"; Ibadan side: "Obafemi Awolowo Station Moniya"; others as the list shows), then choose on "To", set_date, then "Find My Train". On /searchResult the form at the top shows "Select Originating Station" again: that is normal, her search is done; never go back and search again. Ask her which train and class (time, class, price), then press that train's "Book Now". On /bookTrain: the class is set; the Coach box is a dropdown: use choose on it (options like "C05-(R-41)" mean coach C05 with 41 seats left; take one with seats unless she cares). The seat map then shows ("Numbered boxes grouped by look" and the legend Selected / Available / Not available): offer her up to 6 real free seat numbers from the available group as choices, click the one she picks, check it is selected, then go on to passenger details and payment.
-- A "Verify you are human" check (Cloudflare) on a payment page (checkout.paystack.com, Flutterwave, Remita) keeps coming back in Jagora's browser however often she ticks it. Ask her to tick it at most once; if it comes back, stop waiting on it: give her the payment page itself to open on her own phone, in one short line with the link (the address without anything after "?", e.g. https://checkout.paystack.com/abc123): "Tap this link to pay in your own browser; the amount is ₦X." The checkout link works anywhere. keep_payment stays waiting; when she says she has paid, check the booking on the site (its bookings or ticket page) and confirm or say it is not there yet.
+- nrc.gsds.ng (Lagos-Ibadan), the route that works: on the home page form use choose on "From" with the exact station name (Lagos side: "Mobolaji Johnson Station Ebute Metta", "Babatunde Raji Fashola Station Agege"; Ibadan side: "Obafemi Awolowo Station Moniya"; others as the list shows), then choose on "To", set_date, then "Find My Train". On /searchResult the form at the top shows "Select Originating Station" again: that is normal, her search is done; never go back and search again. Ask her which train and class (time, class, price), then press that train's "Book Now". On /bookTrain: the class is set; the Coach box is a dropdown: use choose on it (options like "C05-(R-41)" mean coach C05 with 41 seats left; take one with seats unless she cares). The seat map then shows ("Numbered boxes grouped by look" and the legend Selected / Available / Not available): offer her up to 6 real free seat numbers from the available group as choices, click the one she picks, check it is selected, then go on to passenger details and payment. Before asking her to pay, read the trip back from the page's own summary (departure and arrival times, date, class, coach and seat, total), word for word, never from memory: a wrong time on the ticket is a real loss.
+- A "Verify you are human" check (Cloudflare) on a payment page (checkout.paystack.com, Flutterwave, Remita) keeps coming back in Jagora's browser however often she ticks it. Ask her to tick it at most once; if it comes back, stop waiting on it: call keep_payment (status waiting, the amount, what it is for) with pay_url = the checkout address without anything after "?" (e.g. https://checkout.paystack.com/abc123): her payment card then shows a Pay button that opens it in her own browser, where the check passes. Never paste the link in the chat. Tell her in one short line: "Tap Pay in the card to pay ₦X in your own browser, then come back and tell me." Then finish; do not repeat it. keep_payment stays waiting; when she says she has paid, check the booking on the site (its bookings or ticket page) and confirm or say it is not there yet.
 
 HOW YOU WORK
 - Talk only through tell_user, ask_user, point_at, hand_over, ask_private, give_verdict and finish, always in {lang}. Never mention element numbers, tools, code or technical words. Numbers, dates and money stay as digits.
@@ -778,6 +781,7 @@ class Agent:
     _same_click: dict = field(default_factory=dict)  # label -> times pressed with nothing changing
     _label_run: tuple = ("", 0)  # the small box pressed last, and how many times in a row
     _seat_line: str = ""  # the last seat-map reading, logged when it changes
+    _pay_url: str = ""  # the checkout she was given a Pay button for
     route_carry: dict | None = None  # this chat's route so far, across her messages (a booking takes several)  # (question, her answer) asked in this task
     _last_app: tuple = ("", "")  # the last app_control done (the same one twice in a row is refused)
     _video_searches: set = field(default_factory=set)  # video searches already made in this task
@@ -1330,6 +1334,16 @@ class Agent:
                 await self.io.event("step", {"text": str(a["step"])[:120]})
             if name == "tell_user":
                 msg = str(a.get("message", ""))
+                link = re.search(r"https://[^\s)\]]+", msg)
+                if link and site(link.group(0)) in PAYMENT_SITES:
+                    # her own browser passes the check: a Pay button in her payment card, not a raw link in the chat
+                    if getattr(self, "_pay_url", "") != link.group(0).split("?")[0]:
+                        amt = re.search(r"[₦N]\s?[\d,]+(?:\.\d+)?", msg)
+                        await self._keep_payment({"what": self._goal[:120] or "Payment", "amount": amt.group(0) if amt else "",
+                                                  "status": "waiting", "pay_url": link.group(0)})
+                    return ("not said as a link: a Pay button that opens the checkout in her own browser is now in her payment "
+                            "card. Tell her in ONE short line to tap Pay in the card, pay there, then come back and say "
+                            "she has paid. Then finish."), False, None
                 key = re.sub(r"\W+", " ", msg).strip().lower()
                 if key and key == self._said_key:
                     return "already told them that; do not repeat it", False, None
@@ -2091,7 +2105,15 @@ class Agent:
         """Her money trail: one record per payment in this chat, updated as it moves on."""
         b = self.browser
         here = (b.pdf.url if b and b.pdf else (b.page.url if b and b.page else "")) or ""
-        rec = {k: str(a.get(k) or "")[:300] for k in ("what", "amount", "pay_to", "account", "bank", "reference", "status", "note")}
+        rec = {k: str(a.get(k) or "")[:300] for k in ("what", "amount", "pay_to", "account", "bank", "reference", "status", "note", "pay_url")}
+        pu = rec.get("pay_url", "")
+        if pu:
+            pu = pu.split("?")[0].split("#")[0]
+            rec["pay_url"] = pu if pu.startswith("https://") and site(pu) in PAYMENT_SITES else ""
+        if not rec.get("pay_url"):
+            rec.pop("pay_url", None)
+        if rec.get("pay_url"):
+            self._pay_url = rec["pay_url"]
         rec["site"] = rec.get("site") or here
         if not getattr(self, "_payment_id", ""):
             self._payment_id = "pay-" + os.urandom(5).hex()

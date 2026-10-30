@@ -76,3 +76,20 @@ async def test_the_same_video_is_not_played_again_and_is_named_right(monkeypatch
     out2, _, _ = await a._download({"url": "https://www.youtube.com/watch?v=asgB8Y1Na9s"}, snap, play=True)
     assert out2.startswith("already playing")
     assert len([s for s in sent if s[0] == "media"]) == 1
+
+
+async def test_a_pasted_checkout_link_becomes_the_pay_button():
+    from jagora import agent as ag
+    sent = []
+
+    class IOm:
+        async def event(self, k, d): sent.append((k, d))
+        async def say(self, t): sent.append(("say", t))
+
+    a = ag.Agent(None, None, IOm())
+    a._goal = "Train ticket Agege to Moniya"
+    out, _, _ = await a._act("tell_user", {"message": "Tap dis link pay, amount na ₦3887: [Pay now](https://checkout.paystack.com/91t5igr1dirojs4?x=1)"}, None)
+    assert out.startswith("not said as a link")
+    pay = [d for k, d in sent if k == "payment"]
+    assert pay and pay[0]["pay_url"] == "https://checkout.paystack.com/91t5igr1dirojs4" and pay[0]["amount"] == "₦3887"
+    assert not [x for x in sent if x[0] == "say"]

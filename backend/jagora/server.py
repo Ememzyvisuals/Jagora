@@ -1001,7 +1001,7 @@ class Session:
                       (rec["id"], self.user_id, task, rec["since"], now, status, json.dumps(rec, ensure_ascii=False)))
         trace.write(self.user_id, "payment", task=task, status=status, what=rec.get("what", ""), amount=rec.get("amount", ""))
         card = {"kind": "payment", **{k: rec.get(k, "") for k in ("what", "amount", "pay_to", "account", "bank", "reference",
-                                                                   "status", "note", "site")}, "since": rec["since"], "updated": now}
+                                                                   "status", "note", "site", "pay_url")}, "since": rec["since"], "updated": now}
         if new:
             await self.send({"type": "msg", "task": task, "msg": {"id": rec["id"], **card}})
         else:
