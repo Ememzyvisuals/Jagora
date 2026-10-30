@@ -1,6 +1,7 @@
 /* The 3D devices behind Devices3D.tsx. Plain three.js, loaded only when a device section is near the screen.
-   Units are roughly decimetres: the laptop is a 13 inch midnight notebook (30.4 x 21.5 cm) and the phone a
-   6.1 inch phone (7.2 x 15.6 cm), so the two keep their real sizes next to each other.
+   Units are roughly decimetres: the laptop is a 13 inch aluminium notebook (30.4 x 21.5 cm) and the phone a
+   6.1 inch phone (7.2 x 15.6 cm), so the two keep their real sizes next to each other. Both are generic, brandless
+   devices: no logos, a plain camera dot in the laptop bezel and a punch-hole camera on the phones.
 
    She can play with them:
      drag (mouse or finger)  turns the device in her hand; let go and it comes back to face her
@@ -76,14 +77,14 @@ function face(w: number, h: number, r: number, seg = 16) {
 /* ---------- screens: the real screenshots, with a status bar on top like a real device ---------- */
 
 type Shot = { tex: THREE.Texture; aspect: number };
-type Kind = "phone" | "android" | "laptop";
+type Kind = "phone" | "android" | "laptop"; // both phone kinds draw the same generic status bar
 
 async function loadShot(name: string, kind: Kind, hd: boolean, aniso: number): Promise<Shot> {
   const src = `/shots/${hd ? "hd/" : ""}${name}.webp`;
   // decoded off the main thread, so scrolling stays smooth while the big images arrive
   const blob = await (await fetch(src)).blob();
   const im = await createImageBitmap(blob);
-  const strip = Math.round(im.width * (kind === "phone" ? 0.137 : kind === "android" ? 0.1 : 0.0267));
+  const strip = Math.round(im.width * (kind === "laptop" ? 0.0267 : 0.1));
   const c = document.createElement("canvas");
   c.width = im.width;
   c.height = im.height + strip;
@@ -106,14 +107,14 @@ async function loadShot(name: string, kind: Kind, hd: boolean, aniso: number): P
   const ink = (0.299 * R + 0.587 * G + 0.114 * B) / 255 > 0.6 ? "#111318" : "#ffffff";
   g.fillStyle = ink;
   g.strokeStyle = ink;
-  const sans = `-apple-system, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif`;
+  const sans = `"Jagora Text", system-ui, sans-serif`;
   if (kind !== "laptop") {
-    const droid = kind === "android";
+    const droid = true;
     const mid = strip * (droid ? 0.56 : 0.6);
-    g.font = `${droid ? 500 : 600} ${strip * (droid ? 0.4 : 0.34)}px ${droid ? `Roboto, "Google Sans", ${sans}` : sans}`;
+    g.font = `600 ${strip * 0.38}px ${sans}`;
     g.textBaseline = "middle";
     g.textAlign = droid ? "left" : "center";
-    g.fillText("9:41", c.width * (droid ? 0.075 : 0.19), mid);
+    g.fillText("12:30", c.width * (droid ? 0.075 : 0.19), mid);
     const u = strip * (droid ? 0.07 : 0.06);
     let x = c.width * (droid ? 0.71 : 0.69);
     for (let i = 0; i < 4; i++) {
@@ -148,10 +149,7 @@ async function loadShot(name: string, kind: Kind, hd: boolean, aniso: number): P
     g.roundRect(x + u * 0.65, mid - u * 1.25, u * 5.4, u * 2.5, u * 0.6);
     g.fill();
   } else {
-    g.font = `600 ${strip * 0.5}px ${sans}`;
-    g.textBaseline = "middle";
-    g.textAlign = "right";
-    g.fillText("Tue 27 Oct  9:41", c.width - strip * 0.9, strip * 0.52);
+    // a plain strip, no desktop menu bar of any particular system
   }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -201,6 +199,24 @@ class Screen {
 
 /* ---------- materials (standard PBR: one specular layer, cheaper than clearcoat, same look) ---------- */
 
+/** A soft diagonal light band, the glare on a real screen's glass. */
+function glareTex() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const g = c.getContext("2d")!;
+  const gr = g.createLinearGradient(0, 0, 256, 256);
+  gr.addColorStop(0, "rgba(255,255,255,0.10)");
+  gr.addColorStop(0.32, "rgba(255,255,255,0.03)");
+  gr.addColorStop(0.42, "rgba(255,255,255,0.13)");
+  gr.addColorStop(0.5, "rgba(255,255,255,0.02)");
+  gr.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 function materials() {
   return {
     metal: new THREE.MeshStandardMaterial({ color: 0x1f2a3d, metalness: 0.86, roughness: 0.3 }),
@@ -211,8 +227,14 @@ function materials() {
     back: new THREE.MeshStandardMaterial({ color: 0x27324a, metalness: 0.3, roughness: 0.48 }),
     lens: new THREE.MeshStandardMaterial({ color: 0x06080b, metalness: 0.3, roughness: 0.04 }),
     flash: new THREE.MeshStandardMaterial({ color: 0xf3ead2, metalness: 0, roughness: 0.3, emissive: 0x3a3426 }),
-    silver: new THREE.MeshStandardMaterial({ color: 0xb9c4d2, metalness: 0.9, roughness: 0.24 }),
-    alu: new THREE.MeshStandardMaterial({ color: 0xcfd4dc, metalness: 0.88, roughness: 0.34 }),
+    silver: new THREE.MeshPhysicalMaterial({ color: 0xd3d9e1, metalness: 0.95, roughness: 0.2, clearcoat: 0.6, clearcoatRoughness: 0.15, envMapIntensity: 1.4 }),
+    alu: new THREE.MeshPhysicalMaterial({ color: 0xcfd4dc, metalness: 0.92, roughness: 0.32, clearcoat: 0.25, clearcoatRoughness: 0.4, envMapIntensity: 1.25 }),
+    edge: new THREE.MeshStandardMaterial({ color: 0xf2f5f9, metalness: 1, roughness: 0.12, envMapIntensity: 1.6 }),
+    hingeM: new THREE.MeshStandardMaterial({ color: 0x8d939d, metalness: 0.9, roughness: 0.38 }),
+    camRing: new THREE.MeshStandardMaterial({ color: 0x1a1d22, metalness: 0.4, roughness: 0.3 }),
+    graphite: new THREE.MeshPhysicalMaterial({ color: 0x3b3f47, metalness: 0.95, roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.15, envMapIntensity: 1.4 }),
+    graphiteBack: new THREE.MeshPhysicalMaterial({ color: 0x23262c, metalness: 0.2, roughness: 0.35, clearcoat: 0.8, clearcoatRoughness: 0.25 }),
+    glare: new THREE.MeshBasicMaterial({ map: glareTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, opacity: 0.55 }),
     aluPad: new THREE.MeshStandardMaterial({ color: 0xc3c9d2, metalness: 0.7, roughness: 0.2 }),
     silverBack: new THREE.MeshStandardMaterial({ color: 0xcdd7e3, metalness: 0.25, roughness: 0.32 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x000000, metalness: 0, roughness: 0.06, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, envMapIntensity: 1.3 }),
@@ -287,12 +309,23 @@ function buildLaptop(m: Mats, shots: Shot[]) {
   const holder = new THREE.Group();
   holder.position.set(0, sy, 0);
   const screen = new Screen(face(SW, SH, 0.03), shots, 0.001, holder);
-  const notch = new THREE.Mesh(face(0.2, 0.07, 0.022), m.black);
-  notch.position.set(0, SH / 2 - 0.025, 0.0016);
-  holder.add(notch);
+  // a small camera dot in the top bezel (no notch)
+  const camDot = new THREE.Mesh(new THREE.CircleGeometry(0.011, 24), m.lens);
+  camDot.position.set(0, LH - 0.045, 0.0012);
+  const camRing = new THREE.Mesh(new THREE.RingGeometry(0.011, 0.016, 24), m.camRing);
+  camRing.position.set(0, LH - 0.045, 0.0011);
+  hinge.add(camDot, camRing);
   const glass = new THREE.Mesh(face(W - 0.04, LH - 0.04, R - 0.02), m.glass);
   glass.position.set(0, LH / 2, 0.0022);
-  hinge.add(lid, bezel, holder, glass);
+  const glare = new THREE.Mesh(face(W - 0.04, LH - 0.04, R - 0.02), m.glare);
+  glare.position.set(0, LH / 2, 0.0026);
+  // the chamfered lid edge catches the light: a thin bright rim just inside the outline of the lid's back
+  const rim = new THREE.Mesh(slab(W + 0.006, LH + 0.006, 0.006, R + 0.003, 0.003, 20).translate(0, LH / 2, -LT - 0.001), m.edge);
+  hinge.add(lid, rim, bezel, holder, glass, glare);
+  // the hinge barrel between lid and base
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, W * 0.86, 24).rotateZ(PI / 2), m.hingeM);
+  barrel.position.set(0, top + 0.012, -D / 2 + 0.03);
+  body.add(barrel);
 
   return { body, hinge, screen, keyboard: { mesh: keys, rest, byKey, pressed: new Map<number, number>() } };
 }
@@ -300,16 +333,16 @@ type Keyboard = ReturnType<typeof buildLaptop>["keyboard"];
 
 /* ---------- the phone ---------- */
 
-/* Two kinds, so the two phones on the page are clearly different:
-     iphone   midnight, rounded, Dynamic Island, two lenses on a square camera plateau
-     android  silver blue, flatter and squarer, a punch-hole camera, three lenses in a column */
-function buildPhone(m: Mats, shots: Shot[], style: "iphone" | "android" = "iphone") {
-  const droid = style === "android";
-  const W = droid ? 0.71 : 0.716, bz = droid ? 0.026 : 0.034;
-  const SW = W - 2 * bz, SH = SW / shots[0].aspect, H = SH + 2 * bz, T = droid ? 0.076 : 0.082, R = droid ? 0.075 : 0.118;
-  const frameM = droid ? m.silver : m.metal, backM = droid ? m.silverBack : m.back;
+/* Two finishes, so the two phones on the page are clearly different; both are generic, brandless phones:
+     graphite  dark metal rails, a punch-hole camera, two lenses in a rounded module
+     silver    light metal rails, the same plain layout */
+function buildPhone(m: Mats, shots: Shot[], style: "graphite" | "silver" = "graphite") {
+  const droid = style === "silver";
+  const W = 0.716, bz = 0.026;
+  const SW = W - 2 * bz, SH = SW / shots[0].aspect, H = SH + 2 * bz, T = 0.078, R = 0.1;
+  const frameM = droid ? m.silver : m.graphite, backM = droid ? m.silverBack : m.graphiteBack;
   const body = new THREE.Group();
-  body.add(new THREE.Mesh(slab(W, H, T, R, droid ? 0.012 : 0.027, 20), frameM));
+  body.add(new THREE.Mesh(slab(W, H, T, R, 0.02, 20), frameM));
 
   const back = new THREE.Mesh(face(W - 0.03, H - 0.03, R - 0.015), backM);
   back.rotation.y = PI;
@@ -322,38 +355,30 @@ function buildPhone(m: Mats, shots: Shot[], style: "iphone" | "android" = "iphon
   const holder = new THREE.Group();
   holder.position.z = T / 2;
   body.add(holder);
-  const screen = new Screen(face(SW, SH, droid ? 0.06 : 0.096), shots, 0.001, holder);
-  if (droid) {
-    const hole = new THREE.Mesh(new THREE.CircleGeometry(0.019, 32), m.black);
-    hole.position.set(0, SH / 2 - 0.036, 0.0018);
-    holder.add(hole);
-  } else {
-    const island = new THREE.Mesh(face(0.172, 0.05, 0.025), m.black);
-    island.position.set(0, SH / 2 - 0.047, 0.0018);
-    holder.add(island);
-  }
+  const screen = new Screen(face(SW, SH, 0.078), shots, 0.001, holder);
+  // a small punch-hole camera, centred
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(0.017, 32), m.black);
+  hole.position.set(0, SH / 2 - 0.034, 0.0018);
+  const holeLens = new THREE.Mesh(new THREE.CircleGeometry(0.007, 24), m.lens);
+  holeLens.position.set(0.002, SH / 2 - 0.032, 0.0019);
+  holder.add(hole, holeLens);
   const glass = new THREE.Mesh(face(W - 0.01, H - 0.01, R - 0.005), m.glass);
   glass.position.z = 0.0024;
-  holder.add(glass);
+  const glare = new THREE.Mesh(face(W - 0.01, H - 0.01, R - 0.005), m.glare);
+  glare.position.z = 0.0028;
+  holder.add(glass, glare);
 
   const btn = (x: number, y: number, len: number) => {
-    const b = new THREE.Mesh(new RoundedBoxGeometry(0.014, len, droid ? 0.024 : 0.03, 2, 0.006), frameM);
+    const b = new THREE.Mesh(new RoundedBoxGeometry(0.014, len, 0.026, 2, 0.006), frameM);
     b.position.set(x, y, 0);
     body.add(b);
   };
-  if (droid) {
-    btn(W / 2 + 0.002, H / 2 - 0.42, 0.2);
-    btn(W / 2 + 0.002, H / 2 - 0.62, 0.1);
-  } else {
-    btn(-W / 2 - 0.002, H / 2 - 0.36, 0.06);
-    btn(-W / 2 - 0.002, H / 2 - 0.5, 0.12);
-    btn(-W / 2 - 0.002, H / 2 - 0.66, 0.12);
-    btn(W / 2 + 0.002, H / 2 - 0.55, 0.18);
-  }
+  btn(W / 2 + 0.002, H / 2 - 0.4, 0.2); // volume
+  btn(W / 2 + 0.002, H / 2 - 0.62, 0.1); // power
 
   // cameras on the back, seen when it turns over
-  const lensGeo = new THREE.CircleGeometry(droid ? 0.036 : 0.04, 32);
-  const ringGeo = new THREE.CylinderGeometry(droid ? 0.05 : 0.056, droid ? 0.05 : 0.056, 0.022, 32).rotateX(PI / 2);
+  const lensGeo = new THREE.CircleGeometry(0.038, 32);
+  const ringGeo = new THREE.CylinderGeometry(0.052, 0.052, 0.022, 32).rotateX(PI / 2);
   const lensAt = (x: number, y: number, z: number) => {
     const ring = new THREE.Mesh(ringGeo, frameM);
     ring.position.set(x, y, z);
@@ -362,22 +387,16 @@ function buildPhone(m: Mats, shots: Shot[], style: "iphone" | "android" = "iphon
     lens.position.set(x, y, z - 0.0115);
     body.add(ring, lens);
   };
-  if (droid) {
-    for (let i = 0; i < 3; i++) lensAt(-W / 2 + 0.13, H / 2 - 0.14 - i * 0.125, -T / 2 - 0.01);
-    const flash = new THREE.Mesh(new THREE.CircleGeometry(0.014, 20), m.flash);
-    flash.rotation.y = PI;
-    flash.position.set(-W / 2 + 0.24, H / 2 - 0.14, -T / 2 - 0.0012);
-    body.add(flash);
-  } else {
-    const cam = new THREE.Mesh(slab(0.3, 0.3, 0.014, 0.075, 0.005, 12), backM);
-    cam.position.set(-W / 2 + 0.2, H / 2 - 0.2, -T / 2 - 0.006);
-    body.add(cam);
-    for (const [dx, dy] of [[-0.066, 0.066], [0.066, -0.066]]) lensAt(cam.position.x + dx, cam.position.y + dy, -T / 2 - 0.016);
-    const flash = new THREE.Mesh(new THREE.CircleGeometry(0.016, 20), m.flash);
-    flash.rotation.y = PI;
-    flash.position.set(cam.position.x + 0.07, cam.position.y + 0.07, -T / 2 - 0.0135);
-    body.add(flash);
-  }
+  // a plain rounded camera module with two lenses one above the other, and a small flash beside them
+  const mod = new THREE.Mesh(slab(0.17, 0.32, 0.012, 0.075, 0.005, 12), backM);
+  mod.position.set(-W / 2 + 0.16, H / 2 - 0.24, -T / 2 - 0.005);
+  body.add(mod);
+  lensAt(mod.position.x, mod.position.y + 0.075, -T / 2 - 0.016);
+  lensAt(mod.position.x, mod.position.y - 0.075, -T / 2 - 0.016);
+  const flash = new THREE.Mesh(new THREE.CircleGeometry(0.015, 20), m.flash);
+  flash.rotation.y = PI;
+  flash.position.set(mod.position.x + 0.13, mod.position.y + 0.075, -T / 2 - 0.0012);
+  body.add(flash);
   return { body, screen };
 }
 
@@ -455,7 +474,10 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
   pmrem.dispose();
   const key = new THREE.DirectionalLight(0xffffff, 1.3);
   key.position.set(3, 6, 5);
-  three.add(key, new THREE.HemisphereLight(0xe4eeff, 0x18202e, 0.45));
+  // a cool rim light from behind, so metal edges and the lid's chamfer catch a bright line like a studio shot
+  const rimL = new THREE.DirectionalLight(0xdfe9ff, 1.1);
+  rimL.position.set(-4, 3, -5);
+  three.add(key, rimL, new THREE.HemisphereLight(0xe4eeff, 0x18202e, 0.45));
 
   const camera = new THREE.PerspectiveCamera(26, 1, 0.1, 100);
   const world = new THREE.Group();
@@ -495,7 +517,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
     };
   };
 
-  const phonePart = (shots: Shot[], at: [number, number, number], rest: [number, number, number], scale: number, floor: number, delay: number, spin = 0.9, style: "iphone" | "android" = "iphone"): Part => {
+  const phonePart = (shots: Shot[], at: [number, number, number], rest: [number, number, number], scale: number, floor: number, delay: number, spin = 0.9, style: "graphite" | "silver" = "graphite"): Part => {
     const ph = buildPhone(m, shots, style);
     const rig = new THREE.Group();
     rig.position.set(...at);
@@ -534,7 +556,7 @@ export function mount(el: HTMLElement, scene: Scene, onReady: () => void, onFail
       const [a, b] = await Promise.all([first(want.a, "phone"), first(want.b, "android")]);
       if (!alive) return;
       const A = phonePart(a, [-0.46, 0.06, 0.1], [0.06, 0.4, 0.16], 1, -1.0, 0, 1.1);
-      const B = phonePart(b, [0.5, 0.3, -0.25], [0.02, -0.42, -0.14], 1, -1.24, 0.25, -1.1, "android");
+      const B = phonePart(b, [0.5, 0.3, -0.25], [0.02, -0.42, -0.14], 1, -1.24, 0.25, -1.1, "silver");
       parts.push(A, B);
       later.push({ screen: A.screen, names: want.a, kind: "phone" });
       frame = { w: 2.25, h: 2.35 };

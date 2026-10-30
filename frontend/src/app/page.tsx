@@ -22,7 +22,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Backdrop } from "@/components/glass/Backdrop";
 import { CloudWordmark } from "@/components/glass/CloudWordmark";
-import { Devices3D } from "@/components/Devices3D";
+import { DeviceRender } from "@/components/landing/DeviceRender";
 import { CardStack } from "@/components/CardStack";
 import { Orb } from "@/components/Orb";
 import { PeopleGlobe } from "@/components/landing/PeopleGlobe";
@@ -161,10 +161,12 @@ export default function Landing() {
         </div>
 
         <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1.1, delay: 0.3 }} className="wrap relative pb-20">
-          <Devices3D
-            scene="hero"
-            className="aspect-[5/4] w-full sm:aspect-[16/9]"
-            fallback={<Shot src="/shots/desktop-register.webp" alt="Jagora filling a registration form on the live page, with the conversation on the left" wide />}
+          <DeviceRender
+            name="hero"
+            w={1740}
+            h={1020}
+            className="mx-auto max-w-[1300px]"
+            alt="A laptop and a phone with Jagora open: Jagora filling a registration form on the live page, with the conversation beside it"
           />
         </motion.div>
       </section>
@@ -220,15 +222,12 @@ export default function Landing() {
               </ul>
             </motion.div>
             <motion.div {...rise} data-amina="phones">
-              <Devices3D
-                scene="phones"
-                className="aspect-[1/1] w-full"
-                fallback={
-                  <div className="flex items-end justify-center gap-4">
-                    <PhoneShot src="/shots/phone-register.webp" alt="Jagora filling a form on a phone" />
-                    <PhoneShot src="/shots/phone-doc.webp" alt="A research document Jagora wrote, ready as PDF, Word or Markdown" className="hidden translate-y-10 sm:block" />
-                  </div>
-                }
+              <DeviceRender
+                name="phones"
+                w={910}
+                h={960}
+                className="mx-auto max-w-[560px]"
+                alt="Two phones with Jagora: one filling a form, one showing a research document ready as PDF, Word or Markdown"
               />
             </motion.div>
           </div>
@@ -265,23 +264,5 @@ function Li({ icon, children }: { icon: ReactNode; children: ReactNode }) {
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border border-ink/15">{icon}</span>
       {children}
     </li>
-  );
-}
-
-function Shot({ src, alt, wide = false }: { src: string; alt: string; wide?: boolean }) {
-  return (
-    <div className={`liquid-glass overflow-hidden p-2 sm:p-3 ${wide ? "rounded-[30px] sm:rounded-[38px]" : "rounded-[26px]"}`}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={alt} loading="lazy" className={`block w-full ${wide ? "rounded-[22px] sm:rounded-[28px]" : "rounded-[18px]"}`} />
-    </div>
-  );
-}
-
-function PhoneShot({ src, alt, className = "" }: { src: string; alt: string; className?: string }) {
-  return (
-    <div className={`w-[46%] max-w-[260px] rounded-[38px] bg-ink p-2 shadow-[0_40px_80px_-40px_rgba(10,30,70,.6)] ${className}`}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={alt} loading="lazy" className="block w-full rounded-[31px]" />
-    </div>
   );
 }

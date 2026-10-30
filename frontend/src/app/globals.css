@@ -702,3 +702,8 @@ section[id] {
     animation: none;
   }
 }
+
+/* the rendered devices on the landing page float gently, like a product shot on a turntable */
+.device-float { animation: device-float 7s ease-in-out infinite alternate; will-change: transform; }
+@keyframes device-float { from { transform: translateY(0); } to { transform: translateY(-12px); } }
+@media (prefers-reduced-motion: reduce) { .device-float { animation: none; } }
