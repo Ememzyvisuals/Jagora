@@ -134,17 +134,17 @@ def lin(h):  # sRGB hex to linear
     c = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
     return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)
 
-ALU = mat("alu", lin("c9ced6"), metal=1.0, rough=0.28, aniso=0.35)
-ALU_DARK = mat("alu_dark", lin("9aa1ab"), metal=1.0, rough=0.42)
-KEY = mat("key", lin("16181c"), metal=0.0, rough=0.55, spec=0.3)
-WELL = mat("well", lin("6f757e"), metal=1.0, rough=0.5)
+ALU = mat("alu", lin("17181b"), metal=0.55, rough=0.36, coat=0.25, coat_rough=0.3)  # deep satin black body
+ALU_DARK = mat("alu_dark", lin("0d0e10"), metal=0.3, rough=0.08, coat=1.0, coat_rough=0.05)  # black glass trackpad, hinge
+KEY = mat("key", lin("0b0c0e"), metal=0.0, rough=0.5, spec=0.35)
+WELL = mat("well", lin("08090a"), metal=0.2, rough=0.6)
 BEZEL = mat("bezel", lin("050506"), metal=0.0, rough=0.08, coat=1.0, coat_rough=0.02)
 LENS = mat("lens", lin("0b0d12"), metal=0.3, rough=0.05, coat=1.0)
 LENS_RING = mat("lens_ring", lin("2a2d33"), metal=1.0, rough=0.25)
-GRAPHITE = mat("graphite", lin("4a4e57"), metal=1.0, rough=0.18)
+GRAPHITE = mat("graphite", lin("1c1d21"), metal=0.85, rough=0.22)  # black rails
 GRAPHITE_BACK = mat("graphite_back", lin("2a2d33"), metal=0.0, rough=0.32, coat=0.8, coat_rough=0.2)
-SILVER = mat("silver", lin("d5dbe3"), metal=1.0, rough=0.16)
-SILVER_BACK = mat("silver_back", lin("e3e7ed"), metal=0.0, rough=0.3, coat=0.8, coat_rough=0.2)
+SILVER = mat("silver", lin("1c1d21"), metal=0.85, rough=0.22)  # black too, to match the laptop
+SILVER_BACK = mat("silver_back", lin("15161a"), metal=0.0, rough=0.3, coat=0.8, coat_rough=0.2)
 FLASH = mat("flash", lin("f3ead2"), rough=0.3)
 
 # ---------- the laptop ----------
@@ -301,7 +301,7 @@ def studio():
         return L
     area("key", (-40, -45, 60), 45, 42000)
     area("fill", (55, -30, 25), 40, 12000, (0.9, 0.95, 1.0))
-    area("rim", (10, 60, 35), 30, 36000, (0.92, 0.96, 1.0))
+    area("rim", (10, 60, 35), 30, 52000, (0.92, 0.96, 1.0))
     area("top", (0, 0, 80), 60, 9000)
     # the table: catches shadows only
     bpy.ops.mesh.primitive_plane_add(size=600, location=(0, 0, 0))
@@ -324,20 +324,20 @@ if SCENE == "hero":
     L.location = (-4, 0, 0)
     P = phone("phone-register", "graphite")
     # the phone stands on its bottom edge, leaning back a little, to the right and in front of the laptop
-    P.rotation_euler = (math.radians(78), 0, math.radians(-26))
+    P.rotation_euler = (math.radians(80), 0, math.radians(-12))
     P.location = (17.5, -9.5, 7.75 * math.sin(math.radians(78)) * 0 + 0.0)
     # lift so its bottom edge touches the table: the body is centred on its origin in Y, so move up by half its height
-    P.location.z = 15.5 / 2 * math.sin(math.radians(78)) + 0.05
+    P.location.z = 15.5 / 2 * math.sin(math.radians(80)) + 0.05
     sc.render.resolution_x = WIDTH
     sc.render.resolution_y = int(WIDTH * 0.6)
     camera((4, -84, 40), (4, 0, 9), lens=55)
 elif SCENE == "phones":
     A = phone("phone-register", "graphite")
-    A.rotation_euler = (math.radians(80), 0, math.radians(14))
-    A.location = (-4.6, 0, 15.5 / 2 * math.sin(math.radians(80)) + 0.05)
+    A.rotation_euler = (math.radians(82), 0, math.radians(8))
+    A.location = (-4.6, 0, 15.5 / 2 * math.sin(math.radians(82)) + 0.05)
     B = phone("phone-doc", "silver")
-    B.rotation_euler = (math.radians(80), 0, math.radians(-16))
-    B.location = (4.8, 4.5, 15.5 / 2 * math.sin(math.radians(80)) + 0.05)
+    B.rotation_euler = (math.radians(82), 0, math.radians(-8))
+    B.location = (4.8, 4.5, 15.5 / 2 * math.sin(math.radians(82)) + 0.05)
     sc.render.resolution_x = WIDTH
     sc.render.resolution_y = WIDTH
     camera((0, -40, 13), (0, 2.5, 8.2), lens=55)
