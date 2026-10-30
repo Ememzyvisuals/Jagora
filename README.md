@@ -34,8 +34,15 @@
   <img src="docs/media/devices.png" alt="Jagora registering for an event on a laptop and a phone" width="88%">
 </p>
 
+## Watch the 3 minute demo
+
+https://github.com/user-attachments/assets/553284b2-60f7-405c-99b6-39b48e1e6bac
+
+[Download the demo video](docs/demos/jagora-demo.mp4)
+
 ## Contents
 
+1. [Watch the 3 minute demo](#watch-the-3-minute-demo)
 1. [Demos](#demos)
 1. [Why Jagora](#why-jagora)
 2. [From demo to browser](#from-demo-to-browser)
@@ -55,14 +62,35 @@
 ## Demos
 
 Full recordings of four real tasks on live websites. Speech plays at real speed; only the waits while Jagora works
-are sped up (4x, marked on screen). Nothing is cut. Click a title to watch.
+are sped up (4x, marked on screen). Nothing is cut.
 
-| Demo | Language | What happens |
-|---|---|---|
-| [UNILAG exam requirements, with proof](docs/demos/jagora-yoruba-unilag.mp4) | Yorùbá | The user asks for the UTME subjects for Computer Science at UNILAG. Jagora finds the official page, reads the answer, and draws a picture guide. |
-| [A train ticket on the real NRC site](docs/demos/jagora-pidgin-train-booking.mp4) | Pidgin | Jagora books Agege to Moniya, asks which train and which seat, and stops at payment for the user's yes. |
-| [Is this SMS a scam?](docs/demos/jagora-pidgin-scam-sms.mp4) | Pidgin | The user sends a screenshot of an SMS. Jagora reads it with Muse Wonder, checks it against the official NIMC site, and says what to do. |
-| [Learn Python by voice](docs/demos/jagora-english-python-course.mp4) | English | A beginner asks for one good Python course, skips through it by voice, and saves it to continue later. |
+### UNILAG exam requirements, with proof (Yorùbá)
+
+The user asks for the UTME subjects for Computer Science at UNILAG. Jagora finds the official page, reads the answer,
+and draws a picture guide.
+
+https://github.com/user-attachments/assets/8a068473-6def-4ea6-8ce9-524c3cedce93
+
+### A train ticket on the real NRC site (Pidgin)
+
+Jagora books Agege to Moniya, asks which train and which seat, and stops at payment for the user's yes.
+
+https://github.com/user-attachments/assets/89f0b179-9ebc-4c5e-8224-3a08fd9bf30b
+
+### Is this SMS a scam? (Pidgin)
+
+The user sends a screenshot of an SMS. Jagora reads it with Muse Wonder, checks it against the official NIMC site, and
+says what to do.
+
+https://github.com/user-attachments/assets/a6b8d8f7-1d0e-45ca-96c5-76ff5d4149f2
+
+### Learn Python by voice (English)
+
+A beginner asks for one good Python course, skips through it by voice, and saves it to continue later.
+
+https://github.com/user-attachments/assets/c5a9a1a5-5a97-4cd4-9e1a-9c11125f7dd4
+
+The same videos are in [docs/demos](docs/demos) to download.
 
 ---
 
