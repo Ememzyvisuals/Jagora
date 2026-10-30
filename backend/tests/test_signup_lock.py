@@ -3,12 +3,11 @@ import asyncio
 import pytest
 
 from jagora import auth
-from jagora.config import settings
 
 
 def _set(monkeypatch, name, value):
-    old = getattr(settings, name)
-    object.__setattr__(settings, name, value)
+    old = getattr(auth.settings, name)
+    object.__setattr__(auth.settings, name, value)
     monkeypatch.undo  # noqa: B018
     return old
 
@@ -27,7 +26,7 @@ def test_closed_signup_needs_a_code(monkeypatch):
         with pytest.raises(auth.AuthError) as e:
             asyncio.run(auth.signup(FakeDB(), "new@example.com", "longpassword"))
     finally:
-        object.__setattr__(settings, "signups_open", old)
+        object.__setattr__(auth.settings, "signups_open", old)
     assert "paused" in str(e.value.args) or "paused" in getattr(e.value, "message", "")
 
 
@@ -36,6 +35,6 @@ def test_closed_signup_with_code_works(monkeypatch):
     try:
         out = asyncio.run(auth.signup(FakeDB(), "judge@example.com", "longpassword", "jagora-abc123"))
     finally:
-        object.__setattr__(settings, "signups_open", a)
-        object.__setattr__(settings, "access_codes", b)
+        object.__setattr__(auth.settings, "signups_open", a)
+        object.__setattr__(auth.settings, "access_codes", b)
     assert out["user"]["plan"] == "code"
