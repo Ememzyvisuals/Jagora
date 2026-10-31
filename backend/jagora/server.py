@@ -937,7 +937,7 @@ class Session:
                 self._page_ready.set()
             except Exception as e:  # noqa: BLE001
                 trace.write(self.user_id, "stream_line_dead", error=f"{type(e).__name__}: {str(e)[:200]}")
-                self._dead_ws = ws
+                self._line_gone(ws)
 
     async def send(self, msg: dict) -> None:
         """One message to her app. A phone connection can die without saying so (lift, weak signal, screen off): then
@@ -957,10 +957,25 @@ class Session:
                         k = msg.get("type")
                         self.sent[k if k in ("frame", "pcm") else "other"] += len(text)
                         return
-                    except Exception:  # noqa: BLE001
-                        self._dead_ws = ws
+                    except Exception as e:  # noqa: BLE001
+                        trace.write(self.user_id, "app_line_dead", error=f"{type(e).__name__}: {str(e)[:200]}", what=msg.get("type"))
+                        self._line_gone(ws)
         if msg.get("type") in KEEP_FOR_LATER and len(self._missed) < 300:
             self._missed.append(msg)
+
+    def _line_gone(self, ws: WebSocket) -> None:
+        """Her connection stopped taking messages (weak signal, a phone that slept). It is closed too: an app still
+        holding a half-dead line would otherwise sit there with no picture and no chat, never knowing. Closed, her
+        app reconnects by itself and gets what she missed (attach)."""
+        self._dead_ws = ws
+
+        async def close() -> None:
+            try:
+                await ws.close(code=4000)
+            except Exception:  # noqa: BLE001
+                pass
+
+        asyncio.create_task(close())
 
     async def attach(self, ws: WebSocket) -> None:
         """Her app came back (new connection, same person): the same session carries on, with its tasks, browser
@@ -2593,6 +2608,16 @@ async def admin_chat(user_id: str, chat_id: str, request: Request):
 
 # ---- the WebSocket ---------------------------------------------------------------------------------------------------
 
+def _in_use(ev: dict) -> bool:
+    """Does this message mean she is using the device it came from (not a background tab or a sleeping phone)?"""
+    t = ev.get("type")
+    if t in ("net", "ping", "clientlog"):
+        return False
+    if t in ("view", "video"):
+        return bool(ev.get("on"))
+    return True
+
+
 @app.websocket("/ws")
 async def ws_route(ws: WebSocket):
     origin = ws.headers.get("origin", "")
@@ -2654,6 +2679,12 @@ async def ws_route(ws: WebSocket):
                 ev = json.loads(raw)
             except ValueError:
                 continue
+            if s.ws is not ws and _in_use(ev):
+                # Jagora open on two devices (her phone and her computer): the one she is using now gets the chat,
+                # the voice text and the live picture. Before, the newest connection kept them, so a phone that
+                # reconnected in a pocket took the picture away from the computer she was looking at.
+                trace.write(uid, "app_device_switched", by=ev.get("type"))
+                await s.attach(ws)
             asyncio.create_task(s.handle(ev))
     except WebSocketDisconnect:
         pass
