@@ -73,7 +73,10 @@ https://github.com/user-attachments/assets/8a068473-6def-4ea6-8ce9-524c3cedce93
 
 ### A train ticket on the real NRC site (Pidgin)
 
-Jagora books Agege to Moniya, asks which train and which seat, and stops at payment for the user's yes.
+Jagora books Agege to Moniya. Tomorrow evening is full, so she offers the next day, asks which seat, reads back the
+total and asks before pressing Make Payment. Then she hands the checkout to the user: the Pay button opens it in the
+user's own browser. (Paystack's human check blocks browsers that run on a server, which is where Jagora runs for this
+demo. In the Jagora desktop browser she runs on the user's own device, so the check passes normally.)
 
 https://github.com/user-attachments/assets/89f0b179-9ebc-4c5e-8224-3a08fd9bf30b
 
