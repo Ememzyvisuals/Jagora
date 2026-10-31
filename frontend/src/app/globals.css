@@ -96,6 +96,10 @@ body {
   background: var(--color-white);
   color: var(--color-ink);
 }
+/* no double-tap zoom: a quick second tap (Amina, the games, the 3D devices) never zooms the page */
+html {
+  touch-action: manipulation;
+}
 
 /* ---- soft dark: dims everything, keeps the sky and the glass, never pitch black ---------------------------- */
 [data-theme="dark"] {

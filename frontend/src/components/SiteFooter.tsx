@@ -257,18 +257,21 @@ export function SiteFooter() {
           {/* bottom */}
           <div className="flex flex-col items-center justify-between gap-3 border-t border-ink/10 pt-6 sm:flex-row">
             <p className="text-[13px] text-ink-3">© {year} Jagora. Built for the Meta Global AI Developer Hackathon 2026.</p>
-            <p className="flex items-center gap-3 text-[13px] text-ink-3">
-              Designed and built by {BUILDER.name}
-              <button onClick={() => setAminaHidden(!aminaOff)} className="shrink-0 whitespace-nowrap rounded-full bg-black/5 px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10">
-                {aminaOff ? "Show Amina" : "Hide Amina"}
-              </button>
+            <div className="flex flex-col items-center gap-3 text-[13px] text-ink-3 sm:flex-row">
+              <span>Designed and built by {BUILDER.name}</span>
+              {/* the games and Amina's switch sit apart, so a tap meant for a game never hides her */}
+              <span className="flex flex-wrap items-center justify-center gap-2">
               <button onClick={startPageWars} className="shrink-0 whitespace-nowrap rounded-full bg-black/5 px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10" title="Shift + G">
                 Bored? Play
               </button>
               <button onClick={startScamSmash} className="shrink-0 whitespace-nowrap rounded-full bg-black/5 px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10">
                 Scam Smash
               </button>
-            </p>
+              </span>
+              <button onClick={() => setAminaHidden(!aminaOff)} className="shrink-0 whitespace-nowrap rounded-full border border-ink/10 bg-transparent px-3 py-1 font-semibold text-ink-2 transition hover:bg-black/10 dark:bg-white/10">
+                {aminaOff ? "Show Amina" : "Hide Amina"}
+              </button>
+            </div>
           </div>
         </div>
       </Glass>

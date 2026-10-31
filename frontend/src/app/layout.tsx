@@ -18,6 +18,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // the page does not zoom while she scrolls or taps (games, Amina, the 3D devices all take quick taps)
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
   themeColor: "#0e0f12",
 };

@@ -35,16 +35,19 @@ const VISIT_LINES = ["Hi, I'm Amina!", "Ẹ n lẹ́!", "Sannu!", "Ndeewo!", "Ho
 const VISIT_GESTURES: Gesture[] = ["wave", "hello", "none"];
 const sm = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
+/* "Hide Amina" lasts for this visit only: she is back the next time the site is opened, so a stray tap never
+   removes her for good (an older version kept it forever; that setting is cleared) */
 export function aminaHidden() {
   try {
-    return localStorage.getItem(HIDE_KEY) === "off";
+    localStorage.removeItem(HIDE_KEY);
+    return sessionStorage.getItem(HIDE_KEY) === "off";
   } catch {
     return false;
   }
 }
 export function setAminaHidden(off: boolean) {
   try {
-    localStorage.setItem(HIDE_KEY, off ? "off" : "on");
+    sessionStorage.setItem(HIDE_KEY, off ? "off" : "on");
   } catch {}
   window.dispatchEvent(new Event("amina:toggle"));
 }
