@@ -221,6 +221,41 @@ async def draw_art_picture(subject: str, images: "Images") -> bytes:
     return await images.generate(f"{ART_STYLE} Subject: {subject.strip()[:300]}")
 
 
+PAINT_STYLE = ("A rich, painterly reference for a hand-painted portrait. One single subject, centred, head and shoulders or a "
+               "seated figure, with warm directional light, clear light and shadow shapes, bold saturated colour and a "
+               "simple soft background (a sunset sky, a warm wall, a plain studio colour) that sets the subject off. "
+               "An ordinary, fictional person, never a real or famous person. Draw the culture faithfully and with "
+               "respect: the exact traditional attire, fabrics, beads, caps and hairstyles named, as Nigerians really wear "
+               "them. No text, no letters, no logos, no watermark, no frame.")
+
+
+async def draw_paint_picture(subject: str, images: "Images") -> bytes:
+    """Muse Image: the reference the painting mode paints from (painterly light and colour for the strokes to follow)."""
+    return await images.generate(f"{PAINT_STYLE} Subject: {subject.strip()[:300]}")
+
+
+TITLE_PROMPT = ("You title artworks. This picture has just been turned into art. Give it a short, warm title of 2 to 5 "
+                "words in {lang}, naming who or what it shows the way a gallery label would (e.g. in Yoruba 'Ìyá ní "
+                "gèlè'). Never a real person's name. Reply with the title only, no quotes.")
+
+
+async def art_title(jpeg: bytes, lang: str, wonder) -> str:
+    """Muse Wonder looks at the picture and titles the artwork in her language. Empty when it cannot."""
+    if wonder is None or not jpeg:
+        return ""
+    from jagora.llm import image_part
+
+    msg = [{"role": "user", "content": [{"type": "text", "text": TITLE_PROMPT.format(lang=LANGS.get(lang, "English"))},
+                                        image_part(base64.b64encode(jpeg).decode())]}]
+    try:
+        r = await wonder.chat(msg, None, effort="low", max_tokens=60, kind="art_title")
+        t = re.sub(r"[\"“”*_#]", "", (r.text or "").strip().splitlines()[0] if (r.text or "").strip() else "").strip(" .")
+        return t[:48]
+    except Exception as e:  # noqa: BLE001
+        log.info("no title for the art: %s", e)
+        return ""
+
+
 # ---- open weights -----------------------------------------------------------------------------------------------------
 
 def open_model():

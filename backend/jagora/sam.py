@@ -278,3 +278,27 @@ async def look(sam: Sam, jpeg: bytes) -> dict[str, list[Found]]:
 
     got = await asyncio.gather(*(one(k, c) for k, c in SIGNS.items()))
     return {k: v for k, v in got if v is not None}
+
+
+async def cutout(sam: "Sam", jpeg: bytes, w: int, h: int) -> bytes | None:
+    """The person on a photo as a soft mask (a grey PNG the size of the photo, white on the person), for the painting
+    mode: the face is painted carefully and the background loosely. None when SAM finds no one."""
+    import io as _io
+
+    from PIL import Image, ImageChops, ImageFilter
+
+    found = await sam.find("person", jpeg, min_conf=0.35)
+    if not found:
+        return None
+    m = Image.new("L", (w, h), 0)
+    for f in found[:4]:
+        layer = _mask_layer(f, (w, h))
+        if layer is None:
+            layer = Image.new("L", (w, h), 0)
+            l, t, r, b = f.box
+            layer.paste(255, (l, t, r, b))
+        m = ImageChops.lighter(m, layer)
+    m = m.filter(ImageFilter.GaussianBlur(max(2, w // 200)))
+    out = _io.BytesIO()
+    m.save(out, "PNG")
+    return out.getvalue()

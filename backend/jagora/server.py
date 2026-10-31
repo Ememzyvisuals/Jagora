@@ -476,6 +476,48 @@ async def files(token: str, name: str):
     return FileResponse(f, filename=name)
 
 
+@app.post("/art/cutout")
+async def art_cutout(request: Request):
+    """Type Art's painting mode, only after she has said the photo is her or she has their permission: SAM 3.1 cuts
+    the person out (so the face is painted carefully and the background loosely) and Muse Wonder titles the artwork in
+    her language. The photo is held in memory for this one request and never written anywhere."""
+    uid = _user_from(request)
+    if not uid:
+        raise HTTPException(401)
+    if not settings.meta_key:
+        raise HTTPException(503)
+    body = await request.json()
+    data_url = str(body.get("image") or "")
+    if len(data_url) > 12_000_000:
+        raise HTTPException(413)
+    lang = str(body.get("lang") or "en")[:4]
+    from jagora import muse
+    from jagora import sam as sam_mod
+    from jagora.llm import MuseSpark
+
+    photo = await asyncio.to_thread(sam_mod.photo_for_sam, data_url)
+    del data_url, body
+    if not photo:
+        raise HTTPException(400)
+    jpeg, w, h = photo
+    try:
+        wonder = MuseSpark(settings.wonder_model)
+    except Exception:  # noqa: BLE001
+        wonder = None
+
+    async def cut():
+        try:
+            return await sam_mod.cutout(sam_mod.Sam(), jpeg, w, h)
+        except Exception as e:  # noqa: BLE001
+            log.info("art cutout failed: %s", e)
+            return None
+
+    mask, title = await asyncio.gather(cut(), muse.art_title(jpeg, lang, wonder))
+    del jpeg, photo
+    trace.write(uid, "type_art_cutout", found=bool(mask), titled=bool(title))  # no picture is kept
+    return {"mask": ("data:image/png;base64," + base64.b64encode(mask).decode()) if mask else "", "title": title, "w": w, "h": h}
+
+
 @app.get("/trace")
 async def trace_download(request: Request, token: str = "", minutes: float = 0):
     """Her session log as one text file (Profile > Download session log). Signed in only, her own log only."""

@@ -440,15 +440,7 @@ export const SIZES: { id: SaveSize; label: string; note: string }[] = [
 
 /** the page for a size: its pixels, where the art sits on it and how much it is scaled */
 export function pageFor(a: Art, size: SaveSize) {
-  const aw = a.cols * a.cw, ah = (a.rows + 2) * a.lh;
-  if (size === "a4" || size === "a3") {
-    const [W, H] = size === "a4" ? [2480, 3508] : [3508, 4961];
-    const m = Math.round(Math.min(W, H) * 0.08); // a white (or dark) margin all round, for the frame
-    const s = Math.min((W - 2 * m) / aw, (H - 2 * m) / ah);
-    return { W, H, s, ox: (W - aw * s) / 2, oy: (H - ah * s) / 2, dpi: 300 };
-  }
-  const s = size === "screen" ? 1080 / aw : size === "hd" ? 2048 / aw : 3840 / Math.max(aw, ah);
-  return { W: Math.round(aw * s), H: Math.round(ah * s), s, ox: 0, oy: 0, dpi: 0 };
+  return pageForSize(a.cols * a.cw, (a.rows + 2) * a.lh, size);
 }
 
 /** draw the letters (and the signature) of the part of the page between rows y0 and y1, typed again at full size */
@@ -505,43 +497,45 @@ function chunk(type: string, data: Uint8Array): Uint8Array<ArrayBuffer> {
   return out;
 }
 
-/** The art as a PNG at the chosen size. The page is typed and compressed a strip at a time, so even A3 at 300 dpi
-    (17 million pixels) never needs one huge canvas, which phones cannot make. Print sizes carry 300 dpi in the file. */
-export async function exportPNG(a: Art, sig: string, size: SaveSize, onProgress?: (f: number) => void): Promise<Blob> {
-  const p = pageFor(a, size);
-  try {
-    await document.fonts?.load(`800 40px "Jagora Mono"`);
-  } catch {}
+/** A PNG of W x H pixels drawn a strip at a time by drawStrip(g, y0, y1) (g is translated so y0 is its top row), so
+    even A3 at 300 dpi (17 million pixels) never needs one huge canvas, which phones cannot make. Print sizes carry
+    their dpi in the file. Browsers without CompressionStream get one canvas, made smaller if it would be too big. */
+export async function encodePNG(W: number, H: number, dpi: number, drawStrip: (g: CanvasRenderingContext2D, y0: number, y1: number, k: number) => void, onProgress?: (f: number) => void): Promise<Blob> {
   const CS = (globalThis as { CompressionStream?: new (f: string) => TransformStream<Uint8Array, Uint8Array> }).CompressionStream;
   if (!CS) {
-    // an older browser: one canvas, made smaller if it would be too big for the browser
-    const k = Math.min(1, Math.sqrt(16_000_000 / (p.W * p.H)));
-    const q = { ...p, W: Math.round(p.W * k), H: Math.round(p.H * k), s: p.s * k, ox: p.ox * k, oy: p.oy * k };
+    const k = Math.min(1, Math.sqrt(16_000_000 / (W * H)));
     const c = document.createElement("canvas");
-    c.width = q.W;
-    c.height = q.H;
-    drawPart(c.getContext("2d")!, a, sig, q, 0, q.H);
+    c.width = Math.round(W * k);
+    c.height = Math.round(H * k);
+    const g = c.getContext("2d")!;
+    g.scale(k, k);
+    drawStrip(g, 0, H, k);
     return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("no picture"))), "image/png"));
   }
   const STRIP = 256;
   const c = document.createElement("canvas");
-  c.width = p.W;
+  c.width = W;
   c.height = STRIP;
   const g = c.getContext("2d", { willReadFrequently: true })!;
   const cs = new CS("deflate"); // zlib, as PNG wants it
   const writer = cs.writable.getWriter();
   const collected = new Response(cs.readable).arrayBuffer();
-  const row = 1 + p.W * 3;
-  for (let y0 = 0; y0 < p.H; y0 += STRIP) {
-    const h = Math.min(STRIP, p.H - y0);
-    drawPart(g, a, sig, p, y0, y0 + h);
-    const px = g.getImageData(0, 0, p.W, h).data;
+  const row = 1 + W * 3;
+  for (let y0 = 0; y0 < H; y0 += STRIP) {
+    const h = Math.min(STRIP, H - y0);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, W, STRIP);
+    g.save();
+    g.translate(0, -y0);
+    drawStrip(g, y0, y0 + h, 1);
+    g.restore();
+    const px = g.getImageData(0, 0, W, h).data;
     const raw = new Uint8Array(h * row);
     for (let y = 0; y < h; y++) {
       const o = y * row;
       raw[o] = 1; // the Sub filter: each byte minus the one to its left, which packs flat areas well
-      for (let x = 0; x < p.W; x++) {
-        const i = (y * p.W + x) * 4, j = o + 1 + x * 3;
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4, j = o + 1 + x * 3;
         if (x === 0) {
           raw[j] = px[i];
           raw[j + 1] = px[i + 1];
@@ -554,21 +548,21 @@ export async function exportPNG(a: Art, sig: string, size: SaveSize, onProgress?
       }
     }
     await writer.write(raw);
-    onProgress?.(Math.min(1, (y0 + h) / p.H));
+    onProgress?.(Math.min(1, (y0 + h) / H));
     await new Promise((r) => setTimeout(r));
   }
   await writer.close();
   const idat = new Uint8Array(await collected);
   const ihdr = new Uint8Array(13);
   const hv = new DataView(ihdr.buffer);
-  hv.setUint32(0, p.W);
-  hv.setUint32(4, p.H);
+  hv.setUint32(0, W);
+  hv.setUint32(4, H);
   ihdr.set([8, 2, 0, 0, 0], 8); // 8-bit RGB
   const parts: BlobPart[] = [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr)];
-  if (p.dpi) {
+  if (dpi) {
     const ph = new Uint8Array(9);
     const pv = new DataView(ph.buffer);
-    const ppm = Math.round(p.dpi / 0.0254);
+    const ppm = Math.round(dpi / 0.0254);
     pv.setUint32(0, ppm);
     pv.setUint32(4, ppm);
     ph[8] = 1;
@@ -576,6 +570,32 @@ export async function exportPNG(a: Art, sig: string, size: SaveSize, onProgress?
   }
   parts.push(chunk("IDAT", idat), chunk("IEND", new Uint8Array(0)));
   return new Blob(parts, { type: "image/png" });
+}
+
+/** the page for any art W x H wide (letters or paint): its pixels, where the art sits and how much it is scaled */
+export function pageForSize(aw: number, ah: number, size: SaveSize) {
+  if (size === "a4" || size === "a3") {
+    const [W, H] = size === "a4" ? [2480, 3508] : [3508, 4961];
+    const m = Math.round(Math.min(W, H) * 0.08); // a margin all round, for the frame
+    const s = Math.min((W - 2 * m) / aw, (H - 2 * m) / ah);
+    return { W, H, s, ox: (W - aw * s) / 2, oy: (H - ah * s) / 2, dpi: 300 };
+  }
+  const s = size === "screen" ? 1080 / aw : size === "hd" ? 2048 / aw : 3840 / Math.max(aw, ah);
+  return { W: Math.round(aw * s), H: Math.round(ah * s), s, ox: 0, oy: 0, dpi: 0 };
+}
+
+/** The typed art as a PNG at the chosen size, every letter typed again at that size. */
+export async function exportPNG(a: Art, sig: string, size: SaveSize, onProgress?: (f: number) => void): Promise<Blob> {
+  const p = pageFor(a, size);
+  try {
+    await document.fonts?.load(`800 40px "Jagora Mono"`);
+  } catch {}
+  return encodePNG(p.W, p.H, p.dpi, (g, y0, y1) => {
+    g.save();
+    g.translate(0, y0); // drawPart works in strip coordinates
+    drawPart(g, a, sig, p, y0, y1);
+    g.restore();
+  }, onProgress);
 }
 
 // for checks in development builds only

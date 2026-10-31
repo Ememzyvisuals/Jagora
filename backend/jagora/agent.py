@@ -348,12 +348,14 @@ COMMON = [
          "for someone who finds reading hard. Use after a result with steps the user must take (pay, go somewhere, bring documents), "
          "or when the user asks for pictures. Give the steps in plain words.",
          {"text": {"type": "string", "description": "the steps or result to draw"}, "count": {"type": "integer"}}, ["text"]),
-    tool("draw_art", "Type Art: draw a picture on her full-screen artboard, typed out live in letters, like typed portraits "
-         "people share online. Use when she asks you to draw someone or something ('draw a Nigerian woman in a gele', "
-         "'draw a boy sitting on a bench'), to turn her photo into type art (use_photo), or to change the art already on "
-         "her artboard ('make am blue', 'use words', 'draw am bigger': restyle, no subject). Never draw a real or famous "
-         "person by name: say you draw people in general and offer an ordinary person like them (e.g. 'a Nigerian "
-         "musician in sunglasses'). Her own photo is fine.",
+    tool("draw_art", "Her art board: Type Art (a picture typed out live in letters, like typed portraits people share "
+         "online) or Paint (a picture painted live with brush strokes, coarse to fine, like a painter). Use when she asks "
+         "you to draw or paint someone or something ('draw a Nigerian woman in a gele', 'paint a Fulani woman at "
+         "sunset', 'paint me a portrait'), to turn her photo into art (use_photo), or to change the art already on her "
+         "board ('make am blue', 'use words', 'paint am like oil', 'draw am bigger': restyle, no subject). mode is paint "
+         "when she says paint, painting or portrait painting; otherwise type. Never draw or paint a real or famous "
+         "person by name: say kindly that you make art of people in general, and offer an ordinary person like them "
+         "(e.g. 'a Nigerian musician in sunglasses') or that she can upload her own photo.",
          {"subject": {"type": "string", "description": "what to draw, written in ENGLISH whatever language she asked in (she may "
                       "ask in Yoruba, Hausa, Igbo or Pidgin: translate it), one subject (a person, a face, a figure), keeping "
                       "every cultural detail she gave or that fits: the people (Yoruba, Hausa, Igbo, Fulani, Ijaw...), the "
@@ -365,7 +367,9 @@ COMMON = [
           "letters": {"type": "string", "enum": ["symbols", "numbers", "words"], "description": "words = words in her language"},
           "colour": {"type": "string", "enum": ["full", "one", "bw"], "description": "full colour, one colour (blue on paper), black and white"},
           "detail": {"type": "string", "enum": ["coarse", "medium", "fine"], "description": "'bigger letters' is coarse, 'more detail' is fine"},
-          "board": {"type": "string", "enum": ["dark", "paper"], "description": "the dark (black) board or light paper"}},
+          "board": {"type": "string", "enum": ["dark", "paper"], "description": "the dark (black) board or light paper"},
+          "mode": {"type": "string", "enum": ["type", "paint"], "description": "type art (letters) or a painting"},
+          "style": {"type": "string", "enum": ["bold", "oil", "water"], "description": "painting style: bold colour, oil, watercolour"}},
          []),
     tool("check_link", "Check a link before anyone opens it (one the user pasted, got by SMS or WhatsApp, or found on a page): where it "
          "really goes after redirects and shorteners, whether it is an IP logger that records who opens it, tracking codes, "
@@ -2838,14 +2842,15 @@ class Agent:
 
     async def _draw_art(self, a: dict) -> tuple[str, bool, None]:
         """Type Art: Muse Image draws the reference (or her own photo is used), and her artboard types it out live."""
-        opts = {k: str(a[k]) for k in ("letters", "colour", "detail", "board") if a.get(k) in {
+        opts = {k: str(a[k]) for k in ("letters", "colour", "detail", "board", "mode", "style") if a.get(k) in {
             "letters": ("symbols", "numbers", "words"), "colour": ("full", "one", "bw"), "detail": ("coarse", "medium", "fine"),
-            "board": ("dark", "paper")}[k]}
+            "board": ("dark", "paper"), "mode": ("type", "paint"), "style": ("bold", "oil", "water")}[k]}
+        paint = opts.get("mode") == "paint"
         subject = str(a.get("subject") or "").strip()
         if subject and FAMOUS.search(subject):
-            return ("not drawn: that names a real, famous person. Tell her in one short line that you draw people in general, "
-                    "not real stars, and offer an ordinary person like them (e.g. 'a Nigerian musician in sunglasses'). "
-                    "Her own photo of anyone is fine."), False, None
+            return ("not drawn: that names a real, famous person. Tell her kindly in one short line that you make art of "
+                    "people in general, not real stars, and offer an ordinary person like them (e.g. 'a Nigerian musician "
+                    "in sunglasses'), or that she can upload her own photo."), False, None
         if a.get("use_photo"):
             pics = [(n, p) for n, p in (self.files or {}).items() if re.search(r"\.(jpe?g|png|webp|heic|gif)$", n, re.I)]
             if not pics:
@@ -2862,20 +2867,38 @@ class Agent:
             return "the art on her artboard is being typed again with the new settings. Finish with one short line.", False, None
         if not self.images:
             return "drawing pictures is not available here right now; say so in one short line", False, None
-        await self.io.say({"en": "I'm drawing it for you now, watch the artboard.", "pcm": "I dey draw am for you now, watch the artboard.",
-                           "yo": "Mo ń yà á fún yín báyìí, ẹ wo pátákó àwòrán.", "ha": "Ina zana shi maka yanzu, ka kalli allon zane.",
-                           "ig": "Ana m ese ya maka gị ugbu a, lee bọọdụ nka."}.get(self.lang, "I'm drawing it for you now, watch the artboard."))
+        said = ({"en": "I'm painting it for you now, watch the board.", "pcm": "I dey paint am for you now, watch the board.",
+                 "yo": "Mo ń kun ún fún yín báyìí, ẹ wo pátákó.", "ha": "Ina zana shi da fenti yanzu, ka kalli allon.",
+                 "ig": "Ana m ese ya na agba ugbu a, lee bọọdụ."} if paint else
+                {"en": "I'm drawing it for you now, watch the artboard.", "pcm": "I dey draw am for you now, watch the artboard.",
+                 "yo": "Mo ń yà á fún yín báyìí, ẹ wo pátákó àwòrán.", "ha": "Ina zana shi maka yanzu, ka kalli allon zane.",
+                 "ig": "Ana m ese ya maka gị ugbu a, lee bọọdụ nka."})
+        await self.io.say(said.get(self.lang, said["en"]))
         try:
-            img = await muse.draw_art_picture(subject, self.images)
+            img = await (muse.draw_paint_picture if paint else muse.draw_art_picture)(subject, self.images)
         except Exception as e:  # noqa: BLE001
-            log.warning("type art picture failed: %s", e)
+            log.warning("art picture failed: %s", e)
             return "the picture could not be drawn right now (Muse Image refused or failed); say so in one short line", False, None
+        small = _phone_picture(img)
         token = secrets.token_urlsafe(12)
         folder = FILES_DIR / token
         folder.mkdir(parents=True, exist_ok=True)
-        (folder / "art.webp").write_bytes(_phone_picture(img))
-        await self.io.event("typeart", {"url": f"/files/{token}/art.webp", "subject": subject[:160], "drawn_by": "Muse Image", **opts})
-        self._record("type_art", {"subject": subject[:120], **opts})
+        (folder / "art.webp").write_bytes(small)
+        title = ""
+        if paint:  # Muse Wonder titles the painting in her language
+            try:
+                import io as _io
+
+                from PIL import Image
+
+                b = _io.BytesIO()
+                Image.open(_io.BytesIO(small)).convert("RGB").save(b, "JPEG", quality=85)
+                title = await muse.art_title(b.getvalue(), self.lang, self.wonder)
+            except Exception:  # noqa: BLE001
+                title = ""
+        await self.io.event("typeart", {"url": f"/files/{token}/art.webp", "subject": subject[:160], "drawn_by": "Muse Image",
+                                        **({"title": title} if title else {}), **opts})
+        self._record("type_art", {"subject": subject[:120], "title": title, **opts})
         return ("her artboard is typing it out now (drawn by Muse Image). Do not say it again: finish with one short line "
                 "(e.g. that she can change the letters or colour, or save it)."), False, None
 

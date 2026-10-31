@@ -539,6 +539,7 @@ function Stage({ app }: { app: boolean }) {
         never the part of the page she is hidden behind and never off the screen */
     const onHer = (x: number, y: number, touch = false) => {
       if (!stage || !spot || phase < 0.6) return false;
+      if (document.documentElement.dataset.typeart) return false; // the art board covers her: taps there are for the board
       if (y >= clipLine || x < 0 || y < 0 || x > innerWidth || y > innerHeight) return false;
       const p = local(x, y);
       if (p.x >= 0 && p.y >= 0 && p.x <= W && p.y <= H && stage.hit(p.x, p.y)) return true;

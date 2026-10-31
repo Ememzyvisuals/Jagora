@@ -90,3 +90,36 @@ def test_the_tool_asks_for_an_english_prompt_that_keeps_the_culture():
     desc = t["function"]["parameters"]["properties"]["subject"]["description"]
     assert "ENGLISH" in desc and "Yoruba" in desc and "babban riga" in desc and "isiagu" in desc
     assert "traditional attire" in muse.ART_STYLE
+
+
+async def test_paint_mode_uses_the_painterly_reference_and_a_wonder_title(tmp_path, monkeypatch):
+    monkeypatch.setattr(ag, "FILES_DIR", tmp_path)
+
+    class Wonder:
+        async def chat(self, msg, tools, **k):
+            class R:
+                text = "Ìyá ní gèlè"
+            return R()
+
+    io_, imgs = IOm(), FakeImages()
+    a = ag.Agent(None, None, io_, lang="yo")
+    a.images, a.wonder = imgs, Wonder()
+    await a._act("draw_art", {"subject": "a Fulani woman with facial beads at sunset", "mode": "paint", "style": "oil"}, None)
+    assert "painterly" in imgs.prompts[0] and "sunset" in imgs.prompts[0]
+    ev = [d for k, d in io_.sent if k == "typeart"][0]
+    assert ev["mode"] == "paint" and ev["style"] == "oil" and ev["title"] == "Ìyá ní gèlè"
+    assert any("kun" in t for k, t in io_.sent if k == "say")
+
+
+async def test_famous_people_get_the_upload_offer():
+    a = ag.Agent(None, None, IOm())
+    a.images = FakeImages()
+    out, _, _ = await a._act("draw_art", {"subject": "paint Davido", "mode": "paint"}, None)
+    assert out.startswith("not drawn") and "upload her own photo" in out
+
+
+async def test_the_cutout_endpoint_needs_her_sign_in():
+    from fastapi.testclient import TestClient
+    from jagora.server import app
+    r = TestClient(app).post("/art/cutout", json={"image": "data:image/jpeg;base64,AAAA"})
+    assert r.status_code == 401
