@@ -21,7 +21,7 @@ import { useApp } from "@/lib/store";
 import type { Lang } from "@/lib/i18n";
 import type { Art, ArtOpts, Board, Colour, Detail, Letters, SaveSize } from "@/lib/typeart";
 
-export type TypeArtEvent = { more?: boolean; url?: string; subject?: string; letters?: Letters; colour?: Colour; detail?: Detail; board?: Board; mode?: "type" | "paint"; style?: Style; title?: string; restyle?: boolean; open?: boolean; own?: boolean; drawn_by?: string };
+export type TypeArtEvent = { more?: boolean; url?: string; subject?: string; letters?: Letters; colour?: Colour; detail?: Detail; board?: Board; mode?: "type" | "paint"; style?: Style; title?: string; restyle?: boolean; open?: boolean; own?: boolean; drawn_by?: string; preparing?: boolean };
 export const openTypeArt = (d: TypeArtEvent = {}) => dispatchEvent(new CustomEvent("jagora:typeart", { detail: { open: true, ...d } }));
 export const closeTypeArt = () => dispatchEvent(new CustomEvent("jagora:typeart", { detail: { open: false } }));
 
@@ -72,6 +72,8 @@ const T: Record<string, Record<Lang, string>> = {
   bold: { en: "Bold colour", pcm: "Bold colour", yo: "Àwọ̀ tó ń tàn", ha: "Launi haske", ig: "Agba siri ike" },
   oil: { en: "Oil", pcm: "Oil", yo: "Òróró", ha: "Mai", ig: "Mmanụ" },
   water: { en: "Watercolour", pcm: "Watercolour", yo: "Àwọ̀ omi", ha: "Launin ruwa", ig: "Agba mmiri" },
+  prepPaint: { en: "Jagora is preparing the canvas", pcm: "Jagora dey prepare the canvas", yo: "Jagora ń ṣètò pátákó àwòrán", ha: "Jagora na shirya allon zane", ig: "Jagora na-akwado bọọdụ nka" },
+  prepType: { en: "Jagora is getting the board ready", pcm: "Jagora dey ready the board", yo: "Jagora ń ṣètò pátákó", ha: "Jagora na shirya allo", ig: "Jagora na-akwado bọọdụ" },
   painting: { en: "Jagora is painting...", pcm: "Jagora dey paint...", yo: "Jagora ń kun ún...", ha: "Jagora na zana da fenti...", ig: "Jagora na-ese agba..." },
   consentQ: { en: "Is this you, or do you have their permission?", pcm: "Na you be this, or the person don give you permission?", yo: "Ṣé ẹ̀yin ni, tàbí ẹ ní àṣẹ ẹni náà?", ha: "Kai ne wannan, ko ka sami izinin mutumin?", ig: "Ọ bụ gị, ka ị nwetara ikike onye ahụ?" },
   consentLine: { en: "This photo is used only to make this art. It isn't stored or used for anything else.", pcm: "We use this photo only to make this art. We no dey keep am or use am for any other thing.", yo: "Fọ́tò yìí wà fún ṣíṣe iṣẹ́ ọnà yìí nìkan. A kò ní tọ́jú rẹ̀ tàbí lò ó fún nǹkan mìíràn.", ha: "Ana amfani da wannan hoto ne kawai don yin wannan zanen. Ba a ajiye shi ko amfani da shi don wani abu ba.", ig: "Ejiri foto a naanị mee nka a. A naghị echekwa ya ma ọ bụ jiri ya mee ihe ọzọ." },
@@ -146,6 +148,23 @@ function save(blob: Blob, name: string) {
 /** a title as a file name: letters and numbers kept (with their tone marks), spaces as dashes */
 const slug = (t: string) => t.normalize("NFC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").slice(0, 48);
 
+/** her photo as a JPEG data URL for the cut-out, at most 1280 px (encoded by the browser off the main thread) */
+async function photoData(bmp: ImageBitmap): Promise<string> {
+  const c = document.createElement("canvas");
+  const k = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+  c.width = Math.round(bmp.width * k);
+  c.height = Math.round(bmp.height * k);
+  c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
+  const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", 0.88));
+  if (!blob) return "";
+  return new Promise((res) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result || ""));
+    r.onerror = () => res("");
+    r.readAsDataURL(blob);
+  });
+}
+
 /** SAM 3.1 cuts the person out of her photo and Muse Wonder titles it; the server keeps nothing */
 async function cutOut(dataUrl: string, lang: string): Promise<{ mask: string; title: string } | null> {
   try {
@@ -219,9 +238,10 @@ export function TypeArt() {
   const [style, setStyle] = useState<Style>("bold");
   const [title, setTitle] = useState("");
   const [ask, setAsk] = useState<File | null>(null); // a photo waiting for her yes
-  const own = useRef<{ dataUrl: string; cut?: Promise<{ mask: string; title: string } | null> } | null>(null);
+  const own = useRef<{ bmp: ImageBitmap; cut?: Promise<{ mask: string; title: string } | null> } | null>(null);
   const paintPlan = useRef<Painting | null>(null);
-  const [planning, setPlanning] = useState(false);
+  const [prep, setPrep] = useState<{ subject: string } | null>(null); // Muse Image is drawing it: the board gets ready
+  const prepTimer = useRef(0);
   const [cat, setCat] = useState<"letters" | "colour" | "board" | "detail" | "style" | "more">("letters");
   const [extra, setExtra] = useState(0); // Keep detailing in type mode: each one types it again with smaller letters
   const [finest, setFinest] = useState(false);
@@ -252,6 +272,15 @@ export function TypeArt() {
       const d = ((e as CustomEvent).detail || {}) as TypeArtEvent;
       if (d.open === false) return setOn(false);
       setOn(true);
+      if (d.preparing) {
+        // Muse Image is drawing it: the board gets the canvas ready meanwhile (never an empty board)
+        setPic(null);
+        setTitle("");
+        setPrep({ subject: d.subject || "" });
+        clearTimeout(prepTimer.current);
+        prepTimer.current = window.setTimeout(() => setPrep(null), 120_000);
+      } else if (d.preparing === false) setPrep(null);
+      if (d.title && !d.url) setTitle(d.title); // the title comes after the picture, and fades in
       const next: Partial<Omit<ArtOpts, "lang">> = {};
       if (d.letters) next.letters = d.letters;
       if (d.colour) next.colour = d.colour;
@@ -263,11 +292,14 @@ export function TypeArt() {
       if (d.more) dispatchEvent(new CustomEvent("jagora:typeart-cmd", { detail: { action: "art_more" } }));
       if (d.detail || d.letters || d.colour || d.board || d.mode || d.style || d.url) setExtra(0);
       if (d.url) {
+        performance.mark("art:url");
         setWaiting(true);
         try {
           const bmp = await loadPicture(d.url);
+          performance.mark("art:pic");
           own.current = null;
           setTitle(d.title || "");
+          setPrep(null);
           setPic({ bmp, subject: d.subject || "" });
         } catch {
           setPic(null);
@@ -284,10 +316,10 @@ export function TypeArt() {
     reportScreen(
       "typeart",
       on
-        ? `open${pic ? (mode === "paint" ? `, painting "${pic.subject || "her photo"}" in ${style} style, ${opts.detail} detail` : `, typing "${pic.subject || "her photo"}" in ${opts.letters}, ${opts.colour} colour, ${opts.board} board, ${opts.detail} detail`) + (extra ? `, detailed ${extra} more times` : "") + (zoomed ? ", zoomed in" : "") + (phase === "done" ? ", finished" : ", drawing now") : ", empty"}`
+        ? `open${prep && !pic ? `, getting the canvas ready while Muse Image draws "${prep.subject}"` : pic ? (mode === "paint" ? `, painting "${pic.subject || "her photo"}" in ${style} style, ${opts.detail} detail` : `, typing "${pic.subject || "her photo"}" in ${opts.letters}, ${opts.colour} colour, ${opts.board} board, ${opts.detail} detail`) + (extra ? `, detailed ${extra} more times` : "") + (zoomed ? ", zoomed in" : "") + (phase === "done" ? ", finished" : ", drawing now") : ", empty"}`
         : "",
     );
-  }, [on, pic, opts, mode, style, extra, zoomed, phase]);
+  }, [on, pic, prep, opts, mode, style, extra, zoomed, phase]);
 
   /* build the cells and type them out */
   const draw = useCallback(
@@ -297,6 +329,7 @@ export function TypeArt() {
       if (mode === "paint") return paintRun(record);
       const my = ++run.current;
       setPhase("typing");
+      if (paintPlan.current) void import("@/lib/paint").then((P) => paintPlan.current && P.stopPlanning(paintPlan.current));
       const { buildArt, FONT } = await import("@/lib/typeart");
       const bw = box.clientWidth - 24, bh = box.clientHeight - 24;
       const a = await buildArt(pic.bmp, bw, bh, { ...opts, lang, extra });
@@ -429,30 +462,24 @@ export function TypeArt() {
     [pic, opts, lang, sign, mode, style, extra],
   );
 
-  /* paint mode: plan every stroke, then paint them with a real brush that travels along each one */
+  /* paint mode: the first, biggest brush is planned in a moment and the brush starts on it; the finer layers are planned
+     while it paints. Her photo's cut-out (SAM) and the title (Muse Wonder) are never waited for: the painting starts
+     with an estimate of where she is, follows SAM's cut-out from the next layer on when it comes, and the title fades
+     in when it is ready. */
   const paintRun = async (record: boolean) => {
     const box = board.current, canvas = cv.current;
     if (!pic || !box || !canvas) return;
     const my = ++run.current;
+    performance.mark("art:paint");
     setPhase("typing");
-    setPlanning(true);
     setFinest(false);
     resetView(canvas);
     const P = await import("@/lib/paint");
-    // her own photo: the person cut out by SAM 3.1 (only with her yes, when Jagora is connected), else an estimate
-    let mask: Float32Array | null = null;
-    const long = opts.detail === "realistic" ? 1024 : P.paintSize(), kk = long / Math.max(pic.bmp.width, pic.bmp.height);
-    const pw = Math.round(pic.bmp.width * kk), ph = Math.round(pic.bmp.height * kk);
-    if (own.current) {
-      if (!own.current.cut && API && getToken()) own.current.cut = cutOut(own.current.dataUrl, lang);
-      const got = own.current.cut ? await Promise.race([own.current.cut, new Promise<null>((r) => setTimeout(() => r(null), 20000))]) : null;
-      if (got?.mask) mask = await P.maskFromImage(got.mask, pw, ph);
-      if (got?.title) setTitle(got.title);
-    }
-    if (my !== run.current) return;
-    const plan = await P.planPainting(pic.bmp, style, opts.detail, mask, pw, ph, 7);
-    if (my === run.current) setPlanning(false);
-    if (my !== run.current) return;
+    if (paintPlan.current) P.stopPlanning(paintPlan.current);
+    performance.mark("art:plan");
+    const plan = await P.startPainting(pic.bmp, style, opts.detail, 7);
+    performance.mark("art:planned");
+    if (my !== run.current) return P.stopPlanning(plan);
     paintPlan.current = plan;
     const sigRoom = plan.H * 0.06;
     const k = Math.min((box.clientWidth - 24) / plan.W, (box.clientHeight - 24) / (plan.H + sigRoom));
@@ -470,8 +497,25 @@ export function TypeArt() {
     lg.fillRect(0, 0, layer.width, layer.height);
     painted.current = { plan, k, dpr, W, H, layer, sigRoom, sig: sign.trim().slice(0, 24), ink: style === "water" ? "#0e0f12" : "#eceef2" };
     typed.current = null;
+    // the finer layers, planned a slice at a time while the brush works
+    void (async () => {
+      let n = 1;
+      while (my === run.current && (await P.nextLayer(plan))) performance.mark(`art:layer${n++}`);
+    })();
     // the first brushes get the most time, so every big stroke is painted where she can see it
     animatePaint(my, 0, record, (li) => (li === 0 ? 10000 : li === 1 ? 6000 : 3000));
+    // the brush is on; now her photo's cut-out is asked for (SAM 3.1, only with her yes, when Jagora is connected),
+    // and followed from the next layer on if it comes
+    await new Promise((r) => requestAnimationFrame(r));
+    const mine = own.current;
+    const cut = mine && API && getToken() ? (mine.cut ??= photoData(mine.bmp).then((d) => (d ? cutOut(d, lang) : null))) : null;
+    void cut?.then(async (got) => {
+      if (my !== run.current || !got) return;
+      performance.mark("art:cut");
+      if (got.title) setTitle(got.title);
+      const m = got.mask ? await P.maskFromImage(got.mask, plan.W, plan.H) : null;
+      if (m && my === run.current) P.setMask(plan, m);
+    });
   };
 
   /** paint strokes [from..] of the painting with the brush (also used by Keep detailing, on top of what is there) */
@@ -483,17 +527,31 @@ export function TypeArt() {
     const lg = layer.getContext("2d")!;
     const g = canvas.getContext("2d")!;
     const { steps, total } = P.schedule(plan.strokes, from, (li) => budget(li));
+    let covered = plan.strokes.length; // strokes scheduled so far (finer layers are added while it paints)
+    if (from === 0 && steps.length) steps[0].hop = Math.min(steps[0].hop, 160); // straight onto the canvas
+    let waited = 0, waitFrom = 0;
     const rec = record ? startRecorder(canvas, setRec) : null;
-    const t0 = performance.now();
-    let j = 0, batched = -1, lastClick = 0, finishedAt = 0;
+    let j = 0, lastClick = 0, finishedAt = 0;
     let prev: [number, number] | null = null; // where the brush lifted
-    const commit = (a: number, b: number) => {
+    let marked = false;
+    /* The brush keeps its own clock (vt). Strokes go onto the canvas a few milliseconds' worth per frame; when a frame
+       comes late or the canvas is behind, the clock waits instead of jumping ahead, so no frame ever has to paint
+       thousands of strokes at once. When the next layer is still being planned, the brush slows down near the end of
+       the planned strokes, and only if it is still not ready does it rest above the canvas. */
+    let vt = 0, last = -1, done = from;
+    const commitTo = (target: number, ms: number) => {
+      if (done >= target) return true;
+      const until = performance.now() + ms;
       lg.save();
       lg.beginPath();
       lg.rect(0, 0, plan.W * k * dpr, plan.H * k * dpr);
       lg.clip();
-      for (let i = a; i < b; i++) P.drawStroke(lg, plan.strokes[i], plan.style, k * dpr);
+      while (done < target) {
+        P.drawStroke(lg, plan.strokes[done++], plan.style, k * dpr);
+        if ((done & 7) === 0 && performance.now() > until) break;
+      }
       lg.restore();
+      return done >= target;
     };
     const art = () => {
       g.setTransform(1, 0, 0, 1, 0, 0);
@@ -518,23 +576,45 @@ export function TypeArt() {
     };
     const frame = (now: number) => {
       if (my !== run.current) return;
-      const t = now - t0;
-      // strokes whose time has passed go onto the canvas for good
-      while (j < steps.length && t >= steps[j].start + steps[j].hop + steps[j].dur) {
-        const sp = steps[j];
-        commit(batched === j ? sp.i : sp.from, sp.to);
-        const p = plan.strokes[sp.i].pts;
+      if (!marked) {
+        marked = true;
+        performance.mark("art:frame");
+      }
+      const dt = last < 0 ? 0 : Math.min(50, now - last);
+      last = now;
+      if (j >= steps.length && plan.strokes.length > covered) {
+        // the next layer is planned: a new brush, and on
+        const more = P.schedule(plan.strokes, covered, (li) => budget(li)).steps;
+        for (const sp of more) steps.push({ ...sp, start: sp.start + vt });
+        covered = plan.strokes.length;
+        if (waitFrom) {
+          waited += now - waitFrom;
+          waitFrom = 0;
+        }
+      }
+      // the steps whose time has passed
+      while (j < steps.length && vt >= steps[j].start + steps[j].hop + steps[j].dur) {
+        const p = plan.strokes[steps[j].i].pts;
         prev = [p[p.length - 2], p[p.length - 1]];
         j++;
       }
+      // what should be on the canvas by now: the finished steps, and the small strokes of the current group (they
+      // appear while the brush lifts); the stroke under the brush is drawn growing, on top
+      const target = j < steps.length ? (vt >= steps[j].start ? steps[j].i : steps[j].from) : covered;
+      const caught = commitTo(target, 9);
+      const ending = j < steps.length && !P.planned(plan) && steps.length - j < Math.max(4, steps.length * 0.08) && covered === plan.strokes.length;
+      if (caught) vt += ending ? dt * 0.45 : dt;
+      const t = vt;
       art();
-      if (j < steps.length) {
+      if (j >= steps.length && !P.planned(plan)) {
+        // the next layer is not planned yet: the brush rests just above the canvas, as a painter looks before going on
+        if (!waitFrom) waitFrom = now;
+        const s = plan.strokes[plan.strokes.length - 1];
+        const at = prev ?? [plan.W / 2, plan.H / 2];
+        g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        P.drawBrush(g, at[0] * k, at[1] * k, -0.6 + Math.sin(now / 700) * 0.06, Math.max(15, Math.min(42, s.r * k * 3.2)), s.c, s.layer === 0, 0.55 + Math.sin(now / 420) * 0.12, 1);
+      } else if (j < steps.length) {
         const sp = steps[j], s = plan.strokes[sp.i];
-        if (t >= sp.start && batched !== j) {
-          commit(sp.from, sp.i); // the small strokes of this group appear while the brush lifts
-          batched = j;
-          art();
-        }
         const flat = s.layer === 0;
         const size = flat ? Math.max(18, Math.min(70, s.r * k * 2.6)) : Math.max(15, Math.min(42, s.r * k * 3.2));
         const wob = Math.sin(t / 95) * 0.07; // the hand is never perfectly still
@@ -567,8 +647,11 @@ export function TypeArt() {
             click();
           }
         }
+      } else if (!caught) {
+        // the last strokes are still going onto the canvas
       } else if (!finishedAt) {
         finishedAt = now;
+        performance.mark("art:done", { detail: { waited: Math.round(waited) } });
         finish();
         const rest = document.createElement("canvas");
         rest.width = canvas.width;
@@ -583,11 +666,143 @@ export function TypeArt() {
       }
       if (!finishedAt || rec) requestAnimationFrame(frame);
     };
-    if (!total) {
+    if (!total && P.planned(plan)) {
       setFinest(true);
       setPhase("done");
       return;
     }
+    requestAnimationFrame(frame);
+  };
+
+  /* While Muse Image draws the picture the board is never empty. Paint: the brush tones the bare canvas with thin
+     umber washes, then a pencil marks light guide lines and hatches a little while it waits. Type: the cursor lays out
+     the letter grid in faint dots. The picture replaces it the moment it comes. */
+  const prepRun = async () => {
+    const box = board.current, canvas = cv.current;
+    if (!box || !canvas) return;
+    const my = ++run.current;
+    setPhase("idle");
+    resetView(canvas);
+    typed.current = null;
+    painted.current = null;
+    const P = await import("@/lib/paint"); // (the painter is loaded before the picture comes)
+    if (paintPlan.current) P.stopPlanning(paintPlan.current); // the painting it replaces stops planning its layers
+    if (my !== run.current) return;
+    const paint = mode === "paint";
+    const bw = box.clientWidth - 24, bh = box.clientHeight - 24 - 26; // room below for the line that says what is happening
+    const W = Math.max(120, Math.floor(Math.min(bw, bh * 0.75))), H = Math.floor(W / 0.75);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    canvas.style.width = `${W}px`;
+    canvas.style.height = `${H}px`;
+    const ground = paint ? (style === "water" ? "#ffffff" : "#0e0f12") : opts.board === "dark" ? "#0e0f12" : "#ffffff";
+    const onDark = ground === "#0e0f12";
+    const layer = document.createElement("canvas");
+    layer.width = canvas.width;
+    layer.height = canvas.height;
+    const lg = layer.getContext("2d")!;
+    lg.scale(dpr, dpr);
+    lg.fillStyle = ground;
+    lg.fillRect(0, 0, W, H);
+    const g = canvas.getContext("2d")!;
+    const t0 = performance.now();
+    if (!paint) {
+      // the letter grid, laid out in faint dots by the cursor
+      const cw = Math.max(7, W / 44), lh = cw * 1.55;
+      const cols = Math.floor(W / cw), rows = Math.floor(H / lh), n = cols * rows;
+      let done = 0;
+      const frame = (now: number) => {
+        if (my !== run.current) return;
+        const want = Math.min(n, Math.floor(((now - t0) / 9000) * n));
+        lg.fillStyle = onDark ? "rgba(236,238,242,0.2)" : "rgba(14,15,18,0.18)";
+        for (; done < want; done++) lg.fillRect((done % cols) * cw + cw / 2 - 0.75, Math.floor(done / cols) * lh + lh / 2 - 0.75, 1.5, 1.5);
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        g.drawImage(layer, 0, 0);
+        g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const at = Math.min(done, n - 1);
+        if (done < n || Math.floor(now / 530) % 2 === 0) {
+          g.fillStyle = onDark ? "rgba(236,238,242,0.92)" : "rgba(14,15,18,0.85)";
+          g.fillRect((at % cols) * cw, Math.floor(at / cols) * lh, cw * 0.62, lh);
+        }
+        requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+      return;
+    }
+    type Mk = { pts: number[]; w: number; c: string; dur: number; tool: "brush" | "pencil" };
+    const marks: Mk[] = [];
+    if (style !== "water") {
+      // toning: broad, thin washes of warm umber across the bare canvas, back and forth
+      const rows = 6;
+      for (let r = 0; r < rows; r++) {
+        const y = ((r + 0.5) * H) / rows, ltr = r % 2 === 0, pts: number[] = [];
+        for (let q = 0; q <= 12; q++) pts.push(ltr ? -8 + (q * (W + 16)) / 12 : W + 8 - (q * (W + 16)) / 12, y + Math.sin(q * 0.9 + r) * H * 0.012);
+        marks.push({ pts, w: (H / rows) * 1.7, c: "rgba(122,86,52,0.11)", dur: 560, tool: "brush" });
+      }
+    }
+    // the pencil: the thirds, a margin, then light hatching while it waits
+    const pc = onDark ? "rgba(236,238,242,0.32)" : "rgba(14,15,18,0.3)", hc = onDark ? "rgba(236,238,242,0.16)" : "rgba(14,15,18,0.14)";
+    for (const f of [1 / 3, 2 / 3]) marks.push({ pts: [W * f, H * 0.06, W * f, H * 0.94], w: 1.1, c: pc, dur: 700, tool: "pencil" });
+    for (const f of [1 / 3, 2 / 3]) marks.push({ pts: [W * 0.06, H * f, W * 0.94, H * f], w: 1.1, c: pc, dur: 650, tool: "pencil" });
+    const m = W * 0.05;
+    marks.push({ pts: [m, m, W - m, m, W - m, H - m, m, H - m, m, m], w: 1, c: pc, dur: 1600, tool: "pencil" });
+    let seed = 11;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    for (let h = 0; h < 14; h++) {
+      const cx = W * (h % 2 ? 2 / 3 : 1 / 3) + (rnd() - 0.5) * W * 0.4, cy = H * ((h >> 1) % 2 ? 2 / 3 : 1 / 3) + (rnd() - 0.5) * H * 0.4;
+      const s2 = W * 0.035, pts: number[] = [];
+      for (let q = 0; q < 6; q++) pts.push(cx + (q - 3) * s2 * 0.5 - s2, cy + s2, cx + (q - 3) * s2 * 0.5 + s2, cy - s2);
+      marks.push({ pts, w: 0.9, c: hc, dur: 760, tool: "pencil" });
+    }
+    const hopMs = (k: number) => (marks[k].tool === "brush" ? 200 : k && marks[k - 1].tool === "brush" ? 420 : 300);
+    const start: number[] = [];
+    let acc = 0;
+    marks.forEach((mk, k) => (start.push(acc), (acc += hopMs(k) + mk.dur + (k > 10 ? 500 : 0))));
+    const line = (c: CanvasRenderingContext2D, mk: Mk, pts: number[]) => {
+      c.strokeStyle = mk.c;
+      c.lineWidth = mk.w;
+      c.lineCap = "round";
+      c.lineJoin = "round";
+      c.beginPath();
+      c.moveTo(pts[0], pts[1]);
+      for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]);
+      c.stroke();
+    };
+    const pencil = Math.min(120, W * 0.32), umber: [number, number, number] = [122, 86, 52];
+    const tool = (mk: Mk, x: number, y: number, ang: number, lift: number) =>
+      mk.tool === "brush" ? P.drawBrush(g, x, y, ang, 34, umber, true, lift, 1) : P.drawPencil(g, x, y, -0.95 + Math.sin(performance.now() / 380) * 0.04, pencil, lift);
+    let j = 0, lastDraw = -1;
+    let prev: [number, number] = [W * 0.85, H * 0.95];
+    const frame = (now: number) => {
+      if (my !== run.current) return;
+      if (now - lastDraw < 30) return void requestAnimationFrame(frame);
+      lastDraw = now;
+      const t = now - t0;
+      while (j < marks.length && t >= start[j] + hopMs(j) + marks[j].dur) {
+        line(lg, marks[j], marks[j].pts);
+        const p = marks[j].pts;
+        prev = [p[p.length - 2], p[p.length - 1]];
+        j++;
+      }
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.drawImage(layer, 0, 0);
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (j < marks.length) {
+        const mk = marks[j], u = t - start[j], hp = hopMs(j);
+        if (u < hp) {
+          const e = Math.max(0, u / hp), s3 = e * e * (3 - 2 * e);
+          const x = prev[0] + (mk.pts[0] - prev[0]) * s3, y = prev[1] + (mk.pts[1] - prev[1]) * s3;
+          tool(mk, x, y, Math.atan2(mk.pts[1] - prev[1], mk.pts[0] - prev[0]), Math.sin(e * Math.PI));
+        } else {
+          const part = P.partOf({ pts: mk.pts, r: 1, c: umber, a: 1, layer: 0, box: [0, 0, 0, 0] }, Math.min(1, (u - hp) / mk.dur)).pts;
+          line(g, mk, part);
+          const n = part.length;
+          tool(mk, part[n - 2], part[n - 1], n >= 4 ? Math.atan2(part[n - 1] - part[n - 3], part[n - 2] - part[n - 4]) : 0, 0);
+        }
+      } else tool(marks[marks.length - 1], prev[0], prev[1], 0, 0.45 + Math.sin(t / 520) * 0.15); // resting, it waits
+      requestAnimationFrame(frame);
+    };
     requestAnimationFrame(frame);
   };
 
@@ -750,6 +965,15 @@ export function TypeArt() {
     return () => removeEventListener("jagora:typeart-cmd", onCmd);
   });
 
+  // Muse Image is drawing it: get the board ready (and load the painter meanwhile)
+  useEffect(() => {
+    if (on && prep && !pic) void prepRun();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on, prep, pic, mode, style, opts.board]);
+  useEffect(() => {
+    if (on && mode === "paint") void import("@/lib/paint");
+  }, [on, mode]);
+
   // a new picture or new settings: type it again
   useEffect(() => {
     if (on && pic) void draw();
@@ -768,6 +992,7 @@ export function TypeArt() {
   useEffect(() => {
     if (!on) {
       run.current++;
+      if (paintPlan.current) void import("@/lib/paint").then((P) => paintPlan.current && P.stopPlanning(paintPlan.current));
       setPhase("idle");
       setSaveOpen(false);
     }
@@ -805,23 +1030,20 @@ export function TypeArt() {
   const takePhoto = async (f: File) => {
     setAsk(null);
     try {
-      const bmp = await createImageBitmap(f); // stays on her phone
-      const dataUrl = await new Promise<string>((res) => {
-        const c = document.createElement("canvas");
-        const k = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
-        c.width = Math.round(bmp.width * k);
-        c.height = Math.round(bmp.height * k);
-        c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
-        res(c.toDataURL("image/jpeg", 0.88));
-      });
-      own.current = { dataUrl }; // sent to the server only for the painting's cut-out, and only when she paints it
+      // stays on her phone. Decoded off the main thread and used as it is: the painter first reads only a small copy
+      performance.mark("art:yes");
+      const bmp = await createImageBitmap(f);
+      performance.mark("art:decoded");
+      own.current = { bmp }; // sent to the server only for the painting's cut-out, and only when she paints it
       setTitle("");
+      setPrep(null);
       setPic({ bmp, subject: f.name });
     } catch {}
   };
   const sample = async (url: string, name: string) => {
     try {
       own.current = null;
+      setPrep(null);
       setTitle("");
       setPic({ bmp: await loadPicture(url), subject: name });
     } catch {}
@@ -830,8 +1052,12 @@ export function TypeArt() {
     what = what.trim();
     if (!what) return;
     setPrompt("");
-    setWaiting(true);
-    setTimeout(() => setWaiting(false), 60_000);
+    // the board gets the canvas ready while Jagora asks Muse Image for the picture
+    setPic(null);
+    setTitle("");
+    setPrep({ subject: what });
+    clearTimeout(prepTimer.current);
+    prepTimer.current = window.setTimeout(() => setPrep(null), 120_000);
     (await import("@/lib/engine")).ask(mode === "paint" ? `Paint a picture (${style} style): ${what}` : `Draw type art: ${what}`);
   };
 
@@ -910,9 +1136,9 @@ export function TypeArt() {
       {/* the board: the art is the hero */}
       <div ref={board} className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-3">
         <div
-          className={`relative flex max-h-full max-w-full items-center justify-center overflow-hidden rounded-[22px] p-3 shadow-[0_30px_70px_-30px_rgba(10,25,60,.65)] ring-1 ${dark ? "bg-[#0e0f12] ring-[#fff]/25" : "bg-[#fff] ring-[#0e0f12]/10"} ${pic ? "" : "h-full w-full max-w-[680px]"}`}
+          className={`relative flex max-h-full max-w-full items-center justify-center overflow-hidden rounded-[22px] p-3 shadow-[0_30px_70px_-30px_rgba(10,25,60,.65)] ring-1 ${dark ? "bg-[#0e0f12] ring-[#fff]/25" : "bg-[#fff] ring-[#0e0f12]/10"} ${pic ? "" : prep ? "pb-9" : "h-full w-full max-w-[680px]"}`}
         >
-          {pic ? (
+          {pic || prep ? (
             <canvas
               ref={cv}
               className="block max-h-full max-w-full"
@@ -952,9 +1178,6 @@ export function TypeArt() {
               )}
             </div>
           )}
-          {pic && planning && mode === "paint" && !waiting && (
-            <div className="absolute inset-x-0 top-1/2 mx-auto w-fit -translate-y-1/2 rounded-full bg-[#fff]/90 px-4 py-2 text-[13.5px] font-bold text-[#0e0f12]">{L("painting")}</div>
-          )}
           {pic && waiting && <div className="absolute inset-x-0 top-3 mx-auto w-fit rounded-full bg-[#fff]/90 px-4 py-2 text-[13.5px] font-bold text-[#0e0f12]">{L("getting")}</div>}
           {pic && phase === "done" && (
             <div className="absolute right-3 top-3 flex gap-2">
@@ -971,8 +1194,16 @@ export function TypeArt() {
               </button>
             </div>
           )}
+          {prep && !pic && (
+            <p className={`pointer-events-none absolute inset-x-4 bottom-2.5 animate-pulse truncate text-center text-[13px] font-bold ${dark ? "text-[#eceef2]/80" : "text-[#0e0f12]/75"}`}>
+              {L(mode === "paint" ? "prepPaint" : "prepType")}
+            </p>
+          )}
           {pic && title && (
-            <p className={`pointer-events-none absolute bottom-2 left-4 max-w-[60%] truncate text-[12.5px] font-bold ${dark ? "text-[#eceef2]/80" : "text-[#0e0f12]/75"}`}>
+            <p
+              key={title}
+              ref={(el) => void el?.animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 900, easing: "ease-out" })}
+              className={`pointer-events-none absolute bottom-2 left-4 max-w-[60%] truncate text-[12.5px] font-bold ${dark ? "text-[#eceef2]/80" : "text-[#0e0f12]/75"}`}>
               {title}, {new Date().getFullYear()}
             </p>
           )}

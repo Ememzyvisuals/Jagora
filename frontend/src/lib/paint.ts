@@ -25,6 +25,56 @@ export const paintSize = () => (typeof window !== "undefined" && Math.min(screen
 
 const clamp = (v: number, a = 0, b = 255) => (v < a ? a : v > b ? b : v);
 
+/* Planning never holds the page for long: work is done in slices of a few milliseconds, and between slices the page
+   draws its next frame (the brush keeps moving while the next layers are planned). */
+let slice = 0;
+const SLICE_MS = 8;
+const yieldNow = (): Promise<void> => {
+  const s = (globalThis as unknown as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+  if (s?.yield) return s.yield();
+  return new Promise((r) => {
+    const c = new MessageChannel();
+    c.port1.onmessage = () => r();
+    c.port2.postMessage(0);
+  });
+};
+/** give the page a turn if this slice has run long enough */
+async function breathe() {
+  if (performance.now() - slice > SLICE_MS) {
+    await yieldNow();
+    slice = performance.now();
+  }
+}
+
+/** a box blur (two passes, close to a gaussian), in slices */
+async function blurA(src: Float32Array, w: number, h: number, r: number): Promise<Float32Array> {
+  if (r < 1) return src.slice();
+  const tmp = new Float32Array(src.length), out = new Float32Array(src.length);
+  const n = 2 * r + 1;
+  for (let pass = 0; pass < 2; pass++) {
+    const a = pass === 0 ? src : out;
+    for (let y = 0; y < h; y++) {
+      if ((y & 15) === 0) await breathe();
+      let s = 0;
+      for (let x = -r; x <= r; x++) s += a[y * w + clampI(x, w)];
+      for (let x = 0; x < w; x++) {
+        tmp[y * w + x] = s / n;
+        s += a[y * w + clampI(x + r + 1, w)] - a[y * w + clampI(x - r, w)];
+      }
+    }
+    for (let x = 0; x < w; x++) {
+      if ((x & 15) === 0) await breathe();
+      let s = 0;
+      for (let y = -r; y <= r; y++) s += tmp[clampI(y, h) * w + x];
+      for (let y = 0; y < h; y++) {
+        out[y * w + x] = s / n;
+        s += tmp[clampI(y + r + 1, h) * w + x] - tmp[clampI(y - r, h) * w + x];
+      }
+    }
+  }
+  return out;
+}
+
 function blurChannel(src: Float32Array, w: number, h: number, r: number): Float32Array {
   if (r < 1) return src.slice();
   const tmp = new Float32Array(src.length), out = new Float32Array(src.length);
@@ -59,7 +109,7 @@ function rng(seed: number) {
 }
 
 /** the subject, estimated on her phone: grown in from the edges through the background colour, with a soft oval */
-export function estimateMask(d: Uint8ClampedArray, w: number, h: number): Float32Array {
+export async function estimateMask(d: Uint8ClampedArray, w: number, h: number): Promise<Float32Array> {
   const border: number[][] = [];
   for (let x = 0; x < w; x += 2) border.push([d[x * 4], d[x * 4 + 1], d[x * 4 + 2]]);
   for (let y = 0; y < h * 0.8; y += 2) border.push([d[y * w * 4], d[y * w * 4 + 1], d[y * w * 4 + 2]], [d[(y * w + w - 1) * 4], d[(y * w + w - 1) * 4 + 1], d[(y * w + w - 1) * 4 + 2]]);
@@ -82,7 +132,9 @@ export function estimateMask(d: Uint8ClampedArray, w: number, h: number): Float3
       seed(y * w);
       seed(y * w + w - 1);
     }
+    let k = 0;
     while (stack.length) {
+      if ((++k & 16383) === 0) await breathe();
       const i = stack.pop()!;
       const x = i % w, y = (i / w) | 0;
       if (x > 0) seed(i - 1);
@@ -92,12 +144,14 @@ export function estimateMask(d: Uint8ClampedArray, w: number, h: number): Float3
     }
     for (let i = 0; i < m.length; i++) m[i] = bg[i] ? 0 : 1;
   }
-  for (let y = 0; y < h; y++)
+  for (let y = 0; y < h; y++) {
+    if ((y & 31) === 0) await breathe();
     for (let x = 0; x < w; x++) {
       const dx = (x - w / 2) / (w * 0.5), dy = (y - h * 0.46) / (h * 0.56);
       m[y * w + x] *= clamp((1 - Math.sqrt(dx * dx + dy * dy)) / 0.25, 0, 1);
     }
-  return blurChannel(m, w, h, 3);
+  }
+  return blurA(m, w, h, 3);
 }
 
 /** a mask from SAM (a grey PNG, white on the person) at the painting's size */
@@ -125,12 +179,16 @@ const STYLE = {
   water: { T: 30, maxLen: 12, minLen: 2, fc: 0.5, fs: 1.0, alpha: 0.5, posterize: 0, sat: 1.1 },
 };
 
-/* What the planner keeps between passes, so Keep detailing can add a finer pass on top without starting again. */
+/* What the planner keeps between passes: the next layers are planned while the brush paints the first, and Keep
+   detailing adds a finer pass on top without starting again. */
 type Ctx = {
-  W: number; H: number; style: Style; R: Float32Array; G: Float32Array; B: Float32Array; M: Float32Array; skin: Float32Array;
-  cg: CanvasRenderingContext2D; rand: () => number; layer: number; r: number; T: number; real: boolean; floor: number;
+  W: number; H: number; style: Style; img: CanvasImageSource; real: boolean; radii: number[]; next: number;
+  R: Float32Array; G: Float32Array; B: Float32Array; M: Float32Array; skin0: Float32Array; skin: Float32Array;
+  cg: CanvasRenderingContext2D; rand: () => number; layer: number; r: number; T: number; floor: number;
+  ready: boolean; done: boolean; stop: boolean; newMask: Float32Array | null;
 };
 const CTX = new WeakMap<Painting, Ctx>();
+const NONE = new Float32Array(0);
 
 /** the radii of the brushes, from the big flat one to the finest, in pixels at a 640-wide picture */
 const RADII: Record<Detail, number[]> = {
@@ -140,23 +198,135 @@ const RADII: Record<Detail, number[]> = {
   realistic: [36, 18, 9, 5, 3, 2, 1.4],
 };
 
-/** plan every stroke of the painting (nothing is shown yet; the board then paints them with the brush) */
-export async function planPainting(img: CanvasImageSource & { width: number; height: number }, style: Style, detail: Detail, mask: Float32Array | null, maskW = 0, maskH = 0, seed = 7): Promise<Painting> {
+/** Start a painting: only the first, biggest brush is planned now, from a small copy of the picture (a big brush only
+    sees big colour shapes), so the brush is on the canvas within a moment. nextLayer() plans the finer layers after,
+    in slices, while the brush works. */
+export async function startPainting(img: CanvasImageSource & { width: number; height: number }, style: Style, detail: Detail, seed = 7): Promise<Painting> {
+  slice = performance.now();
   const real = detail === "realistic";
   const long = real ? 1024 : paintSize(); // realistic paints at a higher resolution, so the fine strokes stay sharp
   const k = long / Math.max(img.width, img.height);
   const W = Math.round(img.width * k), H = Math.round(img.height * k);
+  const st = STYLE[style];
+  const radii = RADII[detail].map((r) => Math.max(1.2, (r * W) / 640));
+  const r0 = radii[0];
+  // the small copy: 1/8 the size (smoothed while it shrinks), then blurred to the big brush
+  const f = 8, sw = Math.ceil(W / f), sh = Math.ceil(H / f);
+  const sc = document.createElement("canvas");
+  sc.width = sw;
+  sc.height = sh;
+  const sg = sc.getContext("2d", { willReadFrequently: true })!;
+  sg.imageSmoothingQuality = "high";
+  sg.drawImage(img, 0, 0, sw, sh);
+  const sd = sg.getImageData(0, 0, sw, sh).data;
+  let sR: Float32Array = new Float32Array(sw * sh), sG: Float32Array = new Float32Array(sw * sh), sB: Float32Array = new Float32Array(sw * sh);
+  for (let i = 0; i < sw * sh; i++) {
+    const r1 = sd[i * 4], g1 = sd[i * 4 + 1], b1 = sd[i * 4 + 2], avg = (r1 + g1 + b1) / 3;
+    sR[i] = clamp(avg + (r1 - avg) * st.sat);
+    sG[i] = clamp(avg + (g1 - avg) * st.sat);
+    sB[i] = clamp(avg + (b1 - avg) * st.sat);
+  }
+  const sbr = Math.max(1, Math.round((st.fs * r0) / f));
+  sR = blurChannel(sR, sw, sh, sbr);
+  sG = blurChannel(sG, sw, sh, sbr);
+  sB = blurChannel(sB, sw, sh, sbr);
+  if (st.posterize) {
+    const q = 255 / (st.posterize - 1);
+    for (let i = 0; i < sR.length; i++) {
+      sR[i] = Math.round(sR[i] / q) * q;
+      sG[i] = Math.round(sG[i] / q) * q;
+      sB[i] = Math.round(sB[i] / q) * q;
+    }
+  }
+  const sL = new Float32Array(sw * sh);
+  for (let i = 0; i < sL.length; i++) sL[i] = 0.3 * sR[i] + 0.59 * sG[i] + 0.11 * sB[i];
+  const at = (x: number, y: number) => clampI(Math.floor(y / f), sh) * sw + clampI(Math.floor(x / f), sw);
+
+  const rand = rng(seed);
+  const layer: Stroke[] = [];
+  const grid = Math.max(1, Math.round(r0));
+  const maxLen = Math.min(st.maxLen, Math.max(3, Math.round((110 * W) / 640 / r0)));
+  for (let gy = 0; gy < H; gy += grid)
+    for (let gx = 0; gx < W; gx += grid) {
+      // every cell gets a stroke on the bare canvas, from its corner, across the light-and-dark lines
+      const i0 = at(gx, gy);
+      const col: [number, number, number] = [sR[i0], sG[i0], sB[i0]];
+      const pts = [gx, gy];
+      let x = gx, y = gy, lx = 0, ly = 0;
+      for (let s2 = 1; s2 <= maxLen; s2++) {
+        const sx = clampI(Math.floor(x / f), sw), sy = clampI(Math.floor(y / f), sh);
+        const gx2 = (sL[sy * sw + clampI(sx + 1, sw)] - sL[sy * sw + clampI(sx - 1, sw)]) / f;
+        const gy2 = (sL[clampI(sy + 1, sh) * sw + sx] - sL[clampI(sy - 1, sh) * sw + sx]) / f;
+        if (Math.hypot(gx2, gy2) < 0.5) {
+          if (s2 === 1) {
+            const a = rand() * Math.PI * 2;
+            lx = Math.cos(a);
+            ly = Math.sin(a);
+          }
+        } else {
+          let dx = -gy2, dy = gx2;
+          if (lx * dx + ly * dy < 0) {
+            dx = -dx;
+            dy = -dy;
+          }
+          dx = st.fc * dx + (1 - st.fc) * lx;
+          dy = st.fc * dy + (1 - st.fc) * ly;
+          const len = Math.hypot(dx, dy) || 1;
+          lx = dx / len;
+          ly = dy / len;
+        }
+        x += r0 * lx;
+        y += r0 * ly;
+        if (x < 0 || y < 0 || x >= W || y >= H) break;
+        pts.push(x, y);
+      }
+      const j = style === "bold" ? 6 : 10;
+      const jc: [number, number, number] = [clamp(col[0] + (rand() - 0.5) * j), clamp(col[1] + (rand() - 0.5) * j), clamp(col[2] + (rand() - 0.5) * j)];
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (let p = 0; p < pts.length; p += 2) {
+        x0 = Math.min(x0, pts[p]);
+        x1 = Math.max(x1, pts[p]);
+        y0 = Math.min(y0, pts[p + 1]);
+        y1 = Math.max(y1, pts[p + 1]);
+      }
+      layer.push({ pts, r: r0, c: jc, a: st.alpha, layer: 0, box: [x0 - r0 * 1.5, y0 - r0 * 1.5, x1 + r0 * 1.5, y1 + r0 * 1.5] });
+    }
+  for (let i = layer.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [layer[i], layer[j]] = [layer[j], layer[i]];
+  }
+  // what is on the canvas so far (for "where is it still off?" in the next layers)
+  const cc = document.createElement("canvas");
+  cc.width = W;
+  cc.height = H;
+  const cg = cc.getContext("2d", { willReadFrequently: true })!;
+  cg.fillStyle = style === "water" ? "#ffffff" : "#808080";
+  cg.fillRect(0, 0, W, H);
+  for (const s2 of layer) drawStroke(cg, s2, style, 1, true);
+  const plan: Painting = { W, H, strokes: layer, style, ground: style === "water" ? "#ffffff" : "#0e0f12", seed };
+  CTX.set(plan, {
+    W, H, style, img, real, radii, next: 1, R: NONE, G: NONE, B: NONE, M: NONE, skin0: NONE, skin: NONE, cg, rand,
+    layer: 1, r: r0, T: st.T, floor: (1.2 * W) / 640, ready: false, done: radii.length < 2, stop: false, newMask: null,
+  });
+  return plan;
+}
+
+/** the full-size picture for the finer layers: its colours, the person (SAM's cut-out if it came, else an estimate) and
+    the skin, so the face gets the most passes. In slices. */
+async function prepare(ctx: Ctx) {
+  const { W, H, style } = ctx;
+  const st = STYLE[style];
   const c = document.createElement("canvas");
   c.width = W;
   c.height = H;
   const g = c.getContext("2d", { willReadFrequently: true })!;
-  g.drawImage(img, 0, 0, W, H);
+  g.drawImage(ctx.img, 0, 0, W, H);
+  await breathe();
   const d = g.getImageData(0, 0, W, H).data;
-  const st = STYLE[style];
-
-  // the colours to paint with: a little richer, and for Bold colour cut to a few flat steps
+  await breathe();
   const R = new Float32Array(W * H), G = new Float32Array(W * H), B = new Float32Array(W * H), sk = new Float32Array(W * H);
   for (let i = 0; i < W * H; i++) {
+    if ((i & 32767) === 0) await breathe();
     const r0 = d[i * 4], g0 = d[i * 4 + 1], b0 = d[i * 4 + 2];
     const avg = (r0 + g0 + b0) / 3;
     R[i] = clamp(avg + (r0 - avg) * st.sat);
@@ -165,28 +335,59 @@ export async function planPainting(img: CanvasImageSource & { width: number; hei
     // skin (warm, moderately saturated): the face gets the most passes
     sk[i] = r0 > g0 && g0 >= b0 * 0.92 && r0 - b0 > 14 && r0 - b0 < 150 && r0 > 38 ? 1 : 0;
   }
-  // the subject at this size: SAM's cut-out when there is one, else an estimate
-  const M = mask && maskW === W && maskH === H ? mask : estimateMask(d, W, H);
-  const skin = blurChannel(sk, W, H, Math.max(3, Math.round(W / 90)));
-  for (let i = 0; i < skin.length; i++) skin[i] *= M[i];
-  await new Promise((r) => setTimeout(r));
+  Object.assign(ctx, { R, G, B });
+  ctx.M = ctx.newMask ?? (await estimateMask(d, W, H));
+  ctx.newMask = null;
+  ctx.skin0 = await blurA(sk, W, H, Math.max(3, Math.round(W / 90)));
+  ctx.skin = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) ctx.skin[i] = ctx.skin0[i] * ctx.M[i];
+  ctx.ready = true;
+}
 
-  // what is on the canvas so far (for "where is it still off?")
-  const cc = document.createElement("canvas");
-  cc.width = W;
-  cc.height = H;
-  const cg = cc.getContext("2d", { willReadFrequently: true })!;
-  cg.fillStyle = style === "water" ? "#ffffff" : "#808080";
-  cg.fillRect(0, 0, W, H);
-  const plan: Painting = { W, H, strokes: [], style, ground: style === "water" ? "#ffffff" : "#0e0f12", seed };
-  const ctx: Ctx = { W, H, style, R, G, B, M, skin, cg, rand: rng(seed), layer: 0, r: 0, T: st.T, real, floor: (1.2 * W) / 640 };
-  CTX.set(plan, ctx);
-  const radii = RADII[detail].map((r) => Math.max(1.2, (r * W) / 640));
-  for (let li = 0; li < radii.length; li++) {
-    // each finer layer of a realistic painting is held to a closer match
-    const T = real ? st.T * Math.max(0.42, 1 - 0.11 * li) : st.T;
-    for (const st2 of await paintLayer(ctx, li, radii[li], T)) plan.strokes.push(st2); // (no spread: a layer can hold 100k strokes)
+/** plan the next, finer layer of the painting and add its strokes (false when every layer is planned) */
+export async function nextLayer(plan: Painting): Promise<boolean> {
+  const ctx = CTX.get(plan);
+  if (!ctx || ctx.stop) return false;
+  if (ctx.next >= ctx.radii.length) {
+    ctx.done = true;
+    return false;
   }
+  slice = performance.now();
+  if (!ctx.ready) await prepare(ctx);
+  if (ctx.newMask) {
+    // SAM's cut-out came while the brush was working: the finer layers follow it from here on
+    ctx.M = ctx.newMask;
+    ctx.newMask = null;
+    for (let i = 0; i < ctx.skin.length; i++) ctx.skin[i] = ctx.skin0[i] * ctx.M[i];
+  }
+  if (ctx.stop) return false;
+  const li = ctx.next++;
+  // each finer layer of a realistic painting is held to a closer match
+  const T = ctx.real ? STYLE[ctx.style].T * Math.max(0.42, 1 - 0.11 * li) : STYLE[ctx.style].T;
+  const add = await paintLayer(ctx, li, ctx.radii[li], T);
+  if (ctx.stop) return false;
+  for (const s2 of add) plan.strokes.push(s2); // (no spread: a layer can hold 100k strokes)
+  if (ctx.next >= ctx.radii.length) ctx.done = true;
+  return true;
+}
+/** every layer planned? */
+export const planned = (plan: Painting) => CTX.get(plan)?.done ?? true;
+/** stop planning (a new picture or Draw again) */
+export const stopPlanning = (plan: Painting) => {
+  const ctx = CTX.get(plan);
+  if (ctx) ctx.stop = true;
+};
+/** SAM's cut-out of the person, at the painting's size; used from the next layer on */
+export function setMask(plan: Painting, m: Float32Array) {
+  const ctx = CTX.get(plan);
+  if (ctx && m.length === plan.W * plan.H) ctx.newMask = m;
+}
+
+/** plan every stroke at once (the print copy and tests) */
+export async function planPainting(img: CanvasImageSource & { width: number; height: number }, style: Style, detail: Detail, mask: Float32Array | null = null, seed = 7): Promise<Painting> {
+  const plan = await startPainting(img, style, detail, seed);
+  if (mask) setMask(plan, mask);
+  while (await nextLayer(plan));
   return plan;
 }
 
@@ -195,6 +396,8 @@ export async function planPainting(img: CanvasImageSource & { width: number; hei
 export async function morePass(plan: Painting): Promise<Stroke[]> {
   const ctx = CTX.get(plan);
   if (!ctx) return [];
+  while (await nextLayer(plan));
+  slice = performance.now();
   const r = Math.max(ctx.floor, ctx.r * 0.75);
   const T = Math.max(STYLE[ctx.style].T * 0.32, ctx.T * 0.82);
   if (r <= ctx.floor && T <= STYLE[ctx.style].T * 0.33 && ctx.layer >= 9) return [];
@@ -210,27 +413,27 @@ async function paintLayer(ctx: Ctx, li: number, r: number, T: number): Promise<S
   ctx.r = r;
   ctx.T = T;
   const br = Math.max(1, Math.round(st.fs * r));
-  let rR = blurChannel(R, W, H, br), rG = blurChannel(G, W, H, br), rB = blurChannel(B, W, H, br);
-  if (st.posterize) {
-    const q = 255 / (st.posterize - 1);
-    rR = rR.map((v) => Math.round(v / q) * q);
-    rG = rG.map((v) => Math.round(v / q) * q);
-    rB = rB.map((v) => Math.round(v / q) * q);
-  }
-  // the brightness of the reference, for the stroke directions
+  const rR = await blurA(R, W, H, br), rG = await blurA(G, W, H, br), rB = await blurA(B, W, H, br);
+  // the brightness of the reference, for the stroke directions (and Bold colour cut to a few flat steps)
   const Lm = new Float32Array(W * H);
-  for (let i = 0; i < Lm.length; i++) Lm[i] = 0.3 * rR[i] + 0.59 * rG[i] + 0.11 * rB[i];
+  const q = st.posterize ? 255 / (st.posterize - 1) : 0;
+  for (let i = 0; i < Lm.length; i++) {
+    if ((i & 32767) === 0) await breathe();
+    if (q) {
+      rR[i] = Math.round(rR[i] / q) * q;
+      rG[i] = Math.round(rG[i] / q) * q;
+      rB[i] = Math.round(rB[i] / q) * q;
+    }
+    Lm[i] = 0.3 * rR[i] + 0.59 * rG[i] + 0.11 * rB[i];
+  }
   const cd = cg.getImageData(0, 0, W, H).data;
   const diff = (i: number) => Math.hypot(cd[i * 4] - rR[i], cd[i * 4 + 1] - rG[i], cd[i * 4 + 2] - rB[i]);
   const first = li === 0;
   const grid = Math.max(1, Math.round(r));
   const layer: Stroke[] = [];
-  let lastYield = performance.now();
   for (let gy = 0; gy < H; gy += grid) {
-    if (performance.now() - lastYield > 30) {
-      await new Promise((r2) => setTimeout(r2)); // let the page breathe while planning
-      lastYield = performance.now();
-    }
+    await breathe();
+    if (ctx.stop) return [];
     for (let gx = 0; gx < W; gx += grid) {
       let sum = 0, n = 0, best = -1, bx = gx, by = gy, inside = 0, face = 0;
       for (let y = gy; y < Math.min(H, gy + grid); y++)
@@ -312,8 +515,10 @@ async function paintLayer(ctx: Ctx, li: number, r: number, T: number): Promise<S
     const j = Math.floor(rand() * (i + 1));
     [layer[i], layer[j]] = [layer[j], layer[i]];
   }
-  for (const s of layer) drawStroke(cg, s, style, 1);
-  await new Promise((r2) => setTimeout(r2));
+  for (let i = 0; i < layer.length; i++) {
+    if ((i & 63) === 0) await breathe();
+    drawStroke(cg, layer[i], style, 1, true);
+  }
   return layer;
 }
 
@@ -339,8 +544,9 @@ export function partOf(s: Stroke, f: number): Stroke {
   return { ...s, pts: out };
 }
 
-/** one stroke, at a scale (1 = the planning size) */
-export function drawStroke(g: CanvasRenderingContext2D, s: Stroke, style: Style, k: number) {
+/** one stroke, at a scale (1 = the planning size). plain: only its colour (the planner's own copy of the canvas, where
+    the bristle lines would cost time and change nothing) */
+export function drawStroke(g: CanvasRenderingContext2D, s: Stroke, style: Style, k: number, plain = false) {
   const p = s.pts;
   const [r, gg, b] = s.c;
   const path = (dx: number, dy: number, from = 0, to = p.length) => {
@@ -370,7 +576,7 @@ export function drawStroke(g: CanvasRenderingContext2D, s: Stroke, style: Style,
   g.strokeStyle = `rgb(${r | 0},${gg | 0},${b | 0})`;
   g.lineWidth = 2 * s.r * k;
   const n = p.length / 2;
-  if (style !== "water" && n >= 5) {
+  if (style !== "water" && n >= 5 && !plain) {
     // dry brush: the paint thins out near the end of a long stroke
     const cut = Math.max(4, Math.round(n * 0.78) * 2);
     path(0, 0, 0, cut);
@@ -384,7 +590,7 @@ export function drawStroke(g: CanvasRenderingContext2D, s: Stroke, style: Style,
     path(0, 0);
     g.stroke();
   }
-  if (style !== "water" && s.r * k > 2.5) {
+  if (style !== "water" && s.r * k > 2.5 && !plain) {
     // bristle streaks: lighter and darker threads through the stroke, so the brush marks show
     const nb = style === "oil" ? (s.r > 6 ? 3 : 2) : 2;
     const len = Math.hypot(p[p.length - 2] - p[0], p[p.length - 1] - p[1]) || 1;
@@ -399,7 +605,7 @@ export function drawStroke(g: CanvasRenderingContext2D, s: Stroke, style: Style,
       g.stroke();
     }
   }
-  if (style === "water" && s.r * k > 2) {
+  if (style === "water" && s.r * k > 2 && !plain) {
     // a darker rim where the wash dries
     g.globalAlpha = 0.12;
     g.lineWidth = Math.max(0.8, s.r * 0.18 * k);
@@ -529,6 +735,61 @@ export function drawBrush(g: CanvasRenderingContext2D, x: number, y: number, ang
   g.restore();
 }
 
+/** A pencil at the point (x, y), leaning back at an angle: graphite point, sharpened wood, a blue lacquered body, a
+    metal band and an eraser. Used while Jagora prepares the canvas. */
+export function drawPencil(g: CanvasRenderingContext2D, x: number, y: number, angle: number, size: number, lift = 0) {
+  const s = size;
+  g.save();
+  g.save();
+  g.translate(x + s * (0.12 + lift * 0.5), y + s * (0.18 + lift * 0.6));
+  g.rotate(angle);
+  g.fillStyle = `rgba(0,0,0,${0.2 - lift * 0.08})`;
+  g.beginPath();
+  g.ellipse(s * 0.55, 0, s * 0.6, s * 0.05, 0, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
+  g.translate(x, y - lift * s * 0.25);
+  g.rotate(angle);
+  const w = s * 0.075;
+  // sharpened wood and the graphite point
+  g.fillStyle = "#e7c79a";
+  g.beginPath();
+  g.moveTo(0, 0);
+  g.lineTo(s * 0.17, -w);
+  g.lineTo(s * 0.17, w);
+  g.closePath();
+  g.fill();
+  g.fillStyle = "#2b2d31";
+  g.beginPath();
+  g.moveTo(0, 0);
+  g.lineTo(s * 0.055, -w * 0.33);
+  g.lineTo(s * 0.055, w * 0.33);
+  g.closePath();
+  g.fill();
+  // the body: three faces of a hexagon, lit from above
+  const faces = ["#4f86f7", "#1d63ed", "#154bb8"];
+  for (let f = 0; f < 3; f++) {
+    g.fillStyle = faces[f];
+    g.fillRect(s * 0.17, -w + (f * 2 * w) / 3, s * 0.68, (2 * w) / 3 + 0.5);
+  }
+  // metal band and eraser
+  const mg = g.createLinearGradient(0, -w, 0, w);
+  mg.addColorStop(0, "#9aa0a8");
+  mg.addColorStop(0.4, "#eef1f5");
+  mg.addColorStop(1, "#6b7179");
+  g.fillStyle = mg;
+  g.fillRect(s * 0.85, -w * 1.04, s * 0.07, w * 2.08);
+  g.fillStyle = "#d98b7a";
+  g.beginPath();
+  g.moveTo(s * 0.92, -w);
+  g.lineTo(s * 0.99, -w);
+  g.quadraticCurveTo(s * 1.01, 0, s * 0.99, w);
+  g.lineTo(s * 0.92, w);
+  g.closePath();
+  g.fill();
+  g.restore();
+}
+
 /** The part of the painting seen through a zoom, every stroke painted again at that size (the canvas is w x h CSS
     pixels at dpr; k is the board's scale of the painting). */
 export function drawPaintView(g: CanvasRenderingContext2D, p: Painting, k: number, sig: string, ink: string, w: number, h: number, dpr: number, z: number, ox: number, oy: number) {
@@ -581,6 +842,7 @@ export function grain(g: CanvasRenderingContext2D, w: number, h: number, style: 
 
 /** The painting as a PNG at the chosen size, every stroke painted again at that size, with her signature. */
 export async function exportPainting(p: Painting, sig: string, size: SaveSize, ink: string, onProgress?: (f: number) => void): Promise<Blob> {
+  while (await nextLayer(p)); // (saved before the last layers were planned: plan them first)
   const sigH = p.H * 0.06;
   const page = pageForSize(p.W, p.H + sigH, size);
   const ground = p.style === "water" ? "#ffffff" : p.ground;
@@ -612,4 +874,4 @@ export async function exportPainting(p: Painting, sig: string, size: SaveSize, i
 }
 
 // for checks in development builds only
-if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") (window as unknown as { __paint?: unknown }).__paint = { planPainting, morePass, drawStroke, grain, exportPainting, drawBrush, drawPaintView };
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") (window as unknown as { __paint?: unknown }).__paint = { planPainting, startPainting, nextLayer, morePass, drawStroke, grain, exportPainting, drawBrush, drawPaintView };

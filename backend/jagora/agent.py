@@ -2899,33 +2899,45 @@ class Agent:
                  "yo": "Mo ń yà á fún yín báyìí, ẹ wo pátákó àwòrán.", "ha": "Ina zana shi maka yanzu, ka kalli allon zane.",
                  "ig": "Ana m ese ya maka gị ugbu a, lee bọọdụ nka."})
         await self.io.say(said.get(self.lang, said["en"]))
+        # her board gets the canvas ready while Muse Image draws (never an empty board while she waits)
+        await self.io.event("typeart", {"preparing": True, "subject": subject[:160], **opts})
         try:
             img = await (muse.draw_paint_picture if paint else muse.draw_art_picture)(subject, self.images)
         except Exception as e:  # noqa: BLE001
             log.warning("art picture failed: %s", e)
+            await self.io.event("typeart", {"preparing": False})
             return "the picture could not be drawn right now (Muse Image refused or failed); say so in one short line", False, None
         small = _phone_picture(img)
         token = secrets.token_urlsafe(12)
         folder = FILES_DIR / token
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "art.webp").write_bytes(small)
-        title = ""
-        if paint:  # Muse Wonder titles the painting in her language
-            try:
-                import io as _io
-
-                from PIL import Image
-
-                b = _io.BytesIO()
-                Image.open(_io.BytesIO(small)).convert("RGB").save(b, "JPEG", quality=85)
-                title = await muse.art_title(b.getvalue(), self.lang, self.wonder)
-            except Exception:  # noqa: BLE001
-                title = ""
-        await self.io.event("typeart", {"url": f"/files/{token}/art.webp", "subject": subject[:160], "drawn_by": "Muse Image",
-                                        **({"title": title} if title else {}), **opts})
-        self._record("type_art", {"subject": subject[:120], "title": title, **opts})
+        # the picture goes to her board at once; Muse Wonder's title follows when it is ready (it fades in), so the
+        # brush never waits for it
+        await self.io.event("typeart", {"url": f"/files/{token}/art.webp", "subject": subject[:160], "drawn_by": "Muse Image", **opts})
+        if paint:
+            self._titling = asyncio.create_task(self._art_title(small, subject, opts))
+        else:
+            self._record("type_art", {"subject": subject[:120], "title": "", **opts})
         return ("her artboard is typing it out now (drawn by Muse Image). Do not say it again: finish with one short line "
                 "(e.g. that she can change the letters or colour, or save it)."), False, None
+
+    async def _art_title(self, small: bytes, subject: str, opts: dict) -> None:
+        """Muse Wonder titles a painting in her language; sent to her board on its own when it is ready."""
+        title = ""
+        try:
+            import io as _io
+
+            from PIL import Image
+
+            b = _io.BytesIO()
+            Image.open(_io.BytesIO(small)).convert("RGB").save(b, "JPEG", quality=85)
+            title = await muse.art_title(b.getvalue(), self.lang, self.wonder)
+        except Exception:  # noqa: BLE001
+            title = ""
+        if title:
+            await self.io.event("typeart", {"title": title})
+        self._record("type_art", {"subject": subject[:120], "title": title, **opts})
 
     async def _picture_guide(self, a: dict) -> tuple[str, bool, None]:
         """Muse Image: the result as 3 or 4 pictures with the same woman in the same style, captions in their language."""

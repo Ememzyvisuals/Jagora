@@ -41,8 +41,9 @@ async def test_draw_art_draws_with_muse_image_and_opens_the_artboard(tmp_path, m
     assert "artboard is typing" in out
     assert imgs.prompts and "black background" in imgs.prompts[0] and "gele" in imgs.prompts[0]
     ev = [d for k, d in io_.sent if k == "typeart"]
-    assert ev and ev[0]["url"].startswith("/files/") and ev[0]["letters"] == "words" and ev[0]["colour"] == "full"
-    assert (tmp_path / ev[0]["url"].split("/")[2] / "art.webp").exists()
+    assert ev[0]["preparing"] is True and ev[0]["letters"] == "words"  # the board gets ready while Muse Image draws
+    assert ev[1]["url"].startswith("/files/") and ev[1]["letters"] == "words" and ev[1]["colour"] == "full"
+    assert (tmp_path / ev[1]["url"].split("/")[2] / "art.webp").exists()
     assert [t for k, t in io_.sent if k == "say"]  # she hears one line while it draws
 
 
@@ -106,9 +107,28 @@ async def test_paint_mode_uses_the_painterly_reference_and_a_wonder_title(tmp_pa
     a.images, a.wonder = imgs, Wonder()
     await a._act("draw_art", {"subject": "a Fulani woman with facial beads at sunset", "mode": "paint", "style": "oil"}, None)
     assert "painterly" in imgs.prompts[0] and "sunset" in imgs.prompts[0]
-    ev = [d for k, d in io_.sent if k == "typeart"][0]
-    assert ev["mode"] == "paint" and ev["style"] == "oil" and ev["title"] == "Ìyá ní gèlè"
+    await a._titling
+    evs = [d for k, d in io_.sent if k == "typeart"]
+    # the board gets ready first, the picture goes the moment it is drawn, and the title follows on its own
+    assert evs[0]["preparing"] is True and "sunset" in evs[0]["subject"] and evs[0]["mode"] == "paint"
+    assert evs[1]["url"].endswith("art.webp") and evs[1]["mode"] == "paint" and evs[1]["style"] == "oil" and "title" not in evs[1]
+    assert evs[2] == {"title": "Ìyá ní gèlè"}
     assert any("kun" in t for k, t in io_.sent if k == "say")
+
+
+async def test_a_failed_picture_clears_the_preparing_board(tmp_path, monkeypatch):
+    monkeypatch.setattr(ag, "FILES_DIR", tmp_path)
+
+    class Broken:
+        async def generate(self, *a, **k):
+            raise RuntimeError("refused")
+
+    io_ = IOm()
+    a = ag.Agent(None, None, io_)
+    a.images = Broken()
+    out, _, _ = await a._act("draw_art", {"subject": "a weaver in Iseyin", "mode": "paint"}, None)
+    evs = [d for k, d in io_.sent if k == "typeart"]
+    assert evs[0]["preparing"] is True and evs[-1] == {"preparing": False} and "could not be drawn" in out
 
 
 async def test_famous_people_get_the_upload_offer():
