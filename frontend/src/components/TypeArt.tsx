@@ -1,36 +1,38 @@
 "use client";
 
-/* Type Art: a full-screen artboard that types a picture out live, line by line, in letters, with a blinking cursor and
-   soft key clicks, like the typed portraits people share online.
+/* Type Art: a drawing board that types a picture out live, line by line, in letters, with a blinking cursor and soft
+   key clicks, like the typed portraits people share online.
+   The art is the hero: a big board (dark, or paper) in the middle of Jagora's own sky, a slim glass bar on top and
+   the tools in one compact glass toolbar below.
    Where the picture comes from:
-   - Jagora draws it with Muse Image when she asks ("draw a Nigerian woman in a gele"): the server sends "typeart".
+   - Jagora draws it with Muse Image when she asks, in any of her languages ("ya obìnrin tó wé gèlè"): the server
+     sends "typeart".
    - her own photo, attached in the chat (Jagora sends it the same way) or picked right here (that one never leaves
      her phone).
-   Options: letters (symbols, numbers, or words in her language), colour (full, one blue, black and white), detail,
-   a plain background behind the subject, and her name typed as the signature. She can save it as a picture or as a
-   video of it being typed. The work itself is in lib/typeart.ts. */
+   Saving: a picture at screen size, HD, 4K or print size (A4 or A3 at 300 dpi), typed again at that size so the
+   letters stay sharp in a frame; or a video of it being typed. The work itself is in lib/typeart.ts. */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X } from "@phosphor-icons/react";
+import { Mark } from "./Brand";
 import { reportScreen } from "@/lib/appctl";
 import { useApp } from "@/lib/store";
 import type { Lang } from "@/lib/i18n";
-import type { Art, ArtOpts, Colour, Detail, Letters } from "@/lib/typeart";
+import type { Art, ArtOpts, Board, Colour, Detail, Letters, SaveSize } from "@/lib/typeart";
 
-export type TypeArtEvent = { url?: string; subject?: string; letters?: Letters; colour?: Colour; detail?: Detail; restyle?: boolean; open?: boolean; own?: boolean; drawn_by?: string };
+export type TypeArtEvent = { url?: string; subject?: string; letters?: Letters; colour?: Colour; detail?: Detail; board?: Board; restyle?: boolean; open?: boolean; own?: boolean; drawn_by?: string };
 export const openTypeArt = (d: TypeArtEvent = {}) => dispatchEvent(new CustomEvent("jagora:typeart", { detail: { open: true, ...d } }));
 export const closeTypeArt = () => dispatchEvent(new CustomEvent("jagora:typeart", { detail: { open: false } }));
 
 const T: Record<string, Record<Lang, string>> = {
   title: { en: "Type Art", pcm: "Type Art", yo: "Type Art", ha: "Type Art", ig: "Type Art" },
-  letters: { en: "Letters", pcm: "Letters", yo: "Lẹ́tà", ha: "Haruffa", ig: "Mkpụrụedemede" },
   symbols: { en: "Symbols", pcm: "Symbols", yo: "Àmì", ha: "Alamomi", ig: "Akara" },
   numbers: { en: "Numbers", pcm: "Numbers", yo: "Nọ́mbà", ha: "Lambobi", ig: "Nọmba" },
   words: { en: "Words", pcm: "Words", yo: "Ọ̀rọ̀", ha: "Kalmomi", ig: "Okwu" },
-  colour: { en: "Colour", pcm: "Colour", yo: "Àwọ̀", ha: "Launi", ig: "Agba" },
-  full: { en: "Full colour", pcm: "Full colour", yo: "Gbogbo àwọ̀", ha: "Cikakken launi", ig: "Agba niile" },
-  one: { en: "One colour", pcm: "One colour", yo: "Àwọ̀ kan", ha: "Launi ɗaya", ig: "Otu agba" },
+  full: { en: "Colour", pcm: "Colour", yo: "Àwọ̀", ha: "Launi", ig: "Agba" },
+  one: { en: "Blue", pcm: "Blue", yo: "Búlúù", ha: "Shuɗi", ig: "Acha anụnụ" },
   bw: { en: "Black and white", pcm: "Black and white", yo: "Dúdú àti funfun", ha: "Baƙi da fari", ig: "Oji na ọcha" },
-  detail: { en: "Detail", pcm: "Detail", yo: "Kúlẹ̀kúlẹ̀", ha: "Cikakken bayani", ig: "Nkọwa" },
+  dark: { en: "Dark board", pcm: "Dark board", yo: "Pátákó dúdú", ha: "Allo baƙi", ig: "Bọọdụ ojii" },
+  paper: { en: "Paper", pcm: "Paper", yo: "Ìwé", ha: "Takarda", ig: "Akwụkwọ" },
   coarse: { en: "Big letters", pcm: "Big letters", yo: "Lẹ́tà ńlá", ha: "Manyan haruffa", ig: "Mkpụrụedemede buru ibu" },
   medium: { en: "Medium", pcm: "Medium", yo: "Àárín", ha: "Matsakaici", ig: "Etiti" },
   fine: { en: "Fine", pcm: "Fine", yo: "Kékeré", ha: "Ƙanana", ig: "Obere" },
@@ -38,14 +40,15 @@ const T: Record<string, Record<Lang, string>> = {
   sound: { en: "Sound", pcm: "Sound", yo: "Ohùn", ha: "Sauti", ig: "Ụda" },
   sign: { en: "Signature", pcm: "Signature", yo: "Ìbuwọ́lù", ha: "Sa hannu", ig: "Mbinye aka" },
   again: { en: "Draw again", pcm: "Draw am again", yo: "Tún un yà", ha: "Sake zana", ig: "See ọzọ" },
-  savePic: { en: "Save picture", pcm: "Save picture", yo: "Fi àwòrán pamọ́", ha: "Ajiye hoto", ig: "Chekwaa foto" },
+  save: { en: "Save picture", pcm: "Save picture", yo: "Fi àwòrán pamọ́", ha: "Ajiye hoto", ig: "Chekwaa foto" },
   saveVid: { en: "Save video", pcm: "Save video", yo: "Fi fídíò pamọ́", ha: "Ajiye bidiyo", ig: "Chekwaa vidiyo" },
+  size: { en: "Picture size", pcm: "Picture size", yo: "Ìwọ̀n àwòrán", ha: "Girman hoto", ig: "Nha foto" },
+  making: { en: "Typing it at full size...", pcm: "I dey type am for full size...", yo: "Ń tẹ̀ ẹ́ ní ìwọ̀n kíkún...", ha: "Ana rubuta shi a cikakken girma...", ig: "Ana ede ya n'ogo zuru ezu..." },
   recording: { en: "Recording the video...", pcm: "I dey record the video...", yo: "Ń gba fídíò sílẹ̀...", ha: "Ana ɗaukar bidiyo...", ig: "Ana edekọ vidiyo..." },
   pick: { en: "Pick a photo", pcm: "Pick photo", yo: "Yan fọ́tò", ha: "Zaɓi hoto", ig: "Họrọ foto" },
-  options: { en: "Options", pcm: "Options", yo: "Àṣàyàn", ha: "Zaɓuɓɓuka", ig: "Nhọrọ" },
-  ask: { en: "Or tell Jagora what to draw", pcm: "Or tell Jagora wetin make e draw", yo: "Tàbí sọ ohun tí Jagora máa yà", ha: "Ko faɗa wa Jagora abin da za ta zana", ig: "Ma ọ bụ gwa Jagora ihe ọ ga-ese" },
+  ask: { en: "Tell Jagora what to draw", pcm: "Tell Jagora wetin make e draw", yo: "Sọ ohun tí Jagora máa yà", ha: "Faɗa wa Jagora abin da za ta zana", ig: "Gwa Jagora ihe ọ ga-ese" },
   draw: { en: "Draw", pcm: "Draw", yo: "Yà á", ha: "Zana", ig: "See" },
-  try: { en: "Or try one of ours", pcm: "Or try one of our own", yo: "Tàbí gbìyànjú ọ̀kan nínú tiwa", ha: "Ko gwada ɗaya daga cikin namu", ig: "Ma ọ bụ nwalee otu n'ime nke anyị" },
+  ours: { en: "Or try one of ours", pcm: "Or try one of our own", yo: "Tàbí gbìyànjú ọ̀kan nínú tiwa", ha: "Ko gwada ɗaya daga cikin namu", ig: "Ma ọ bụ nwalee otu n'ime nke anyị" },
   empty: { en: "Your picture, typed out in letters.", pcm: "Your picture, typed out for letters.", yo: "Àwòrán yín, tí a tẹ̀ ní lẹ́tà.", ha: "Hotonka, an rubuta shi da haruffa.", ig: "Foto gị, e dere ya n'mkpụrụedemede." },
   getting: { en: "Jagora is drawing your picture...", pcm: "Jagora dey draw your picture...", yo: "Jagora ń ya àwòrán yín...", ha: "Jagora na zana hotonka...", ig: "Jagora na-ese foto gị..." },
   example: { en: "a Nigerian woman in a gele", pcm: "Naija woman wey tie gele", yo: "obìnrin Yorùbá tó wé gèlè", ha: "mace 'yar Najeriya mai ɗankwali", ig: "nwanyị Naịjirịa kechiri ịchafụ" },
@@ -55,6 +58,14 @@ const SAMPLES = [
   { url: "/typeart/portrait-03.webp", name: "Gele portrait" },
   { url: "/typeart/people-06.webp", name: "Agbada and fila" },
   { url: "/typeart/portrait-06.webp", name: "Baba in a white fila" },
+];
+
+/* culture-rich prompts for Jagora to draw (Muse Image); they run when Jagora is connected */
+const PROMPTS = [
+  "Hausa man in babban riga and a hula cap",
+  "Igbo chief in isiagu with a red cap and coral beads",
+  "Yoruba woman in gele, iro and buba",
+  "Fulani woman with facial beads and braided hair",
 ];
 
 /* soft typewriter clicks, made on the spot (no sound files); only after she has tapped, as browsers require */
@@ -92,7 +103,7 @@ async function loadPicture(url: string): Promise<ImageBitmap> {
 function save(blob: Blob, name: string) {
   const file = new File([blob], name, { type: blob.type });
   const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
-  if (matchMedia("(pointer: coarse)").matches && nav.canShare?.({ files: [file] })) {
+  if (matchMedia("(pointer: coarse)").matches && blob.size < 40_000_000 && nav.canShare?.({ files: [file] })) {
     void navigator.share({ files: [file], title: "Type Art" }).catch(() => {});
     return;
   }
@@ -101,17 +112,20 @@ function save(blob: Blob, name: string) {
   a.download = name;
   document.body.appendChild(a);
   a.click();
-  setTimeout(() => (URL.revokeObjectURL(a.href), a.remove()), 4000);
+  setTimeout(() => (URL.revokeObjectURL(a.href), a.remove()), 8000);
 }
 
-const Chip = ({ on, children, onClick }: { on: boolean; children: React.ReactNode; onClick: () => void }) => (
+/** one option in the toolbar; the chosen one in our blue */
+const Seg = ({ on, children, onClick }: { on: boolean; children: React.ReactNode; onClick: () => void }) => (
   <button
     onClick={onClick}
-    className={`h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-[13.5px] font-bold transition ${on ? "bg-white text-[#0b1220]" : "bg-white/10 text-white/85 hover:bg-white/15"}`}
+    aria-pressed={on}
+    className={`h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-[13.5px] font-bold transition ${on ? "bg-accent text-[#fff] shadow-[0_6px_14px_-8px_rgba(29,99,237,.9)]" : "text-ink hover:bg-white/40 dark:hover:bg-white/10"}`}
   >
     {children}
   </button>
 );
+const Gap = () => <span className="mx-1 h-6 w-px shrink-0 bg-ink/15" aria-hidden="true" />;
 
 export function TypeArt() {
   const lang = useApp((s) => s.lang);
@@ -119,17 +133,18 @@ export function TypeArt() {
   const [on, setOn] = useState(false);
   const [pic, setPic] = useState<{ bmp: ImageBitmap; subject: string } | null>(null);
   const [waiting, setWaiting] = useState(false);
-  const [opts, setOpts] = useState<Omit<ArtOpts, "lang">>({ letters: "symbols", colour: "full", detail: "medium", plain: true });
+  const [opts, setOpts] = useState<Omit<ArtOpts, "lang">>({ letters: "symbols", colour: "full", detail: "medium", board: "dark", plain: true });
   const [sign, setSign] = useState("");
   const [sound, setSound] = useState(true);
   const [phase, setPhase] = useState<"idle" | "typing" | "done">("idle");
   const [rec, setRec] = useState(false);
-  const [panel, setPanel] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [making, setMaking] = useState(-1);
   const [prompt, setPrompt] = useState("");
   const board = useRef<HTMLDivElement>(null);
   const cv = useRef<HTMLCanvasElement>(null);
   const file = useRef<HTMLInputElement>(null);
-  const art = useRef<{ a: Art; layer: HTMLCanvasElement; order: number[]; sig: string; dpr: number } | null>(null);
+  const art = useRef<{ a: Art; sig: string } | null>(null);
   const run = useRef(0);
   const soundRef = useRef(sound);
   soundRef.current = sound;
@@ -149,18 +164,16 @@ export function TypeArt() {
       if (d.letters) next.letters = d.letters;
       if (d.colour) next.colour = d.colour;
       if (d.detail) next.detail = d.detail;
+      if (d.board) next.board = d.board;
       if (Object.keys(next).length) setOpts((o) => ({ ...o, ...next }));
       if (d.url) {
         setWaiting(true);
         try {
-          const bmp = await loadPicture(d.url);
-          setPic({ bmp, subject: d.subject || "" });
+          setPic({ bmp: await loadPicture(d.url), subject: d.subject || "" });
         } catch {
           setPic(null);
         }
         setWaiting(false);
-      } else if (d.subject === undefined && !d.restyle && !d.url) {
-        // opened from the menu: keep what is on the board
       }
     };
     addEventListener("jagora:typeart", onEv);
@@ -169,7 +182,7 @@ export function TypeArt() {
 
   // Jagora knows what is on the artboard, so "make am blue" means this one
   useEffect(() => {
-    reportScreen("typeart", on ? `open${pic ? `, typing "${pic.subject || "her photo"}" in ${opts.letters}, ${opts.colour} colour, ${opts.detail} detail` : ", empty"}` : "");
+    reportScreen("typeart", on ? `open${pic ? `, typing "${pic.subject || "her photo"}" in ${opts.letters}, ${opts.colour} colour, ${opts.board} board, ${opts.detail} detail` : ", empty"}` : "");
   }, [on, pic, opts]);
 
   /* build the cells and type them out */
@@ -180,7 +193,7 @@ export function TypeArt() {
       const my = ++run.current;
       setPhase("typing");
       const { buildArt, FONT } = await import("@/lib/typeart");
-      const bw = box.clientWidth, bh = box.clientHeight;
+      const bw = box.clientWidth - 24, bh = box.clientHeight - 24;
       const a = await buildArt(pic.bmp, bw, bh, { ...opts, lang });
       if (my !== run.current) return;
       const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
@@ -200,7 +213,7 @@ export function TypeArt() {
       const order: number[] = [];
       a.cells.forEach((c, i) => c && order.push(i));
       const sig = sign.trim().slice(0, 24);
-      art.current = { a, layer, order, sig, dpr };
+      art.current = { a, sig };
       const g = canvas.getContext("2d")!;
       const total = order.length + sig.length;
       const ms = { coarse: 5200, medium: 6500, fine: 8000 }[opts.detail];
@@ -268,7 +281,7 @@ export function TypeArt() {
         }
         const finished = done >= total;
         if (!finished || Math.floor(now / 530) % 2 === 0) {
-          g.fillStyle = a.bg === "#050608" ? "rgba(232,237,245,0.92)" : "rgba(20,48,111,0.9)";
+          g.fillStyle = opts.board === "dark" ? "rgba(236,238,242,0.92)" : "rgba(14,15,18,0.85)";
           g.fillRect(cx, cy, Math.max(1.5, cwid), ch);
         }
         if (!finished && soundRef.current && now - lastClick > 55) {
@@ -301,73 +314,49 @@ export function TypeArt() {
   useEffect(() => {
     if (on && pic) void draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [on, pic, opts.letters, opts.colour, opts.detail, opts.plain, lang]);
+  }, [on, pic, opts.letters, opts.colour, opts.detail, opts.board, opts.plain, lang]);
 
   useEffect(() => {
     if (!on) {
       run.current++;
       setPhase("idle");
+      setSaveOpen(false);
     }
   }, [on]);
 
   useEffect(() => {
     if (!on) return;
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOn(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && (saveOpen ? setSaveOpen(false) : setOn(false));
     addEventListener("keydown", esc);
     return () => removeEventListener("keydown", esc);
-  }, [on]);
+  }, [on, saveOpen]);
 
-  const savePicture = async () => {
+  const savePicture = async (size: SaveSize) => {
     const st = art.current;
-    if (!st) return;
-    const { FONT } = await import("@/lib/typeart");
-    // drawn again at print size, so the letters stay sharp
-    const { a, order, sig } = st;
-    const W = a.cols * a.cw, H = (a.rows + 2) * a.lh;
-    const scale = Math.max(1, 1600 / W);
-    const c = document.createElement("canvas");
-    c.width = Math.round(W * scale);
-    c.height = Math.round(H * scale);
-    const g = c.getContext("2d")!;
-    g.scale(scale, scale);
-    g.fillStyle = a.bg;
-    g.fillRect(0, 0, W, H);
-    g.textBaseline = "middle";
-    let bold: boolean | null = null;
-    for (const i of order) {
-      const cell = a.cells[i]!;
-      if (cell.bold !== bold) {
-        g.font = `${cell.bold ? 800 : 500} ${a.font}px ${FONT}`;
-        bold = cell.bold;
-      }
-      g.fillStyle = cell.c;
-      g.fillText(cell.ch, (i % a.cols) * a.cw, Math.floor(i / a.cols) * a.lh + a.lh / 2);
-    }
-    if (sig) {
-      const f = Math.max(9, a.lh * 1.5);
-      g.font = `800 ${f}px ${FONT}`;
-      g.fillStyle = a.ink;
-      g.fillText(sig, W - sig.length * f * 0.6 - a.cw, (a.rows + 1) * a.lh);
-    }
-    c.toBlob((b) => b && save(b, "jagora-type-art.png"), "image/png");
+    if (!st || making >= 0) return;
+    setMaking(0);
+    try {
+      const { exportPNG } = await import("@/lib/typeart");
+      const blob = await exportPNG(st.a, sign.trim().slice(0, 24), size, (f) => setMaking(f));
+      save(blob, `jagora-type-art-${size}.png`);
+      setSaveOpen(false);
+    } catch {}
+    setMaking(-1);
   };
 
   const pickPhoto = async (f?: File | null) => {
     if (!f) return;
     try {
-      const bmp = await createImageBitmap(f); // stays on her phone
-      setPic({ bmp, subject: f.name });
+      setPic({ bmp: await createImageBitmap(f), subject: f.name }); // stays on her phone
     } catch {}
   };
-
   const sample = async (url: string, name: string) => {
     try {
       setPic({ bmp: await loadPicture(url), subject: name });
     } catch {}
   };
-
-  const askJagora = async () => {
-    const what = prompt.trim();
+  const askJagora = async (what: string) => {
+    what = what.trim();
     if (!what) return;
     setPrompt("");
     setWaiting(true);
@@ -378,123 +367,169 @@ export function TypeArt() {
   if (!on) return null;
   const set = <K extends keyof typeof opts>(k: K, v: (typeof opts)[K]) => setOpts((o) => ({ ...o, [k]: v }));
   const L = (k: string) => T[k][lang] ?? T[k].en;
-
-  const optionRows = (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="w-full text-[12.5px] font-bold uppercase tracking-wide text-white/55">{L("letters")}</span>
-        {(["symbols", "numbers", "words"] as Letters[]).map((v) => (
-          <Chip key={v} on={opts.letters === v} onClick={() => set("letters", v)}>{L(v)}</Chip>
-        ))}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="w-full text-[12.5px] font-bold uppercase tracking-wide text-white/55">{L("colour")}</span>
-        {(["full", "one", "bw"] as Colour[]).map((v) => (
-          <Chip key={v} on={opts.colour === v} onClick={() => set("colour", v)}>{L(v)}</Chip>
-        ))}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="w-full text-[12.5px] font-bold uppercase tracking-wide text-white/55">{L("detail")}</span>
-        {(["coarse", "medium", "fine"] as Detail[]).map((v) => (
-          <Chip key={v} on={opts.detail === v} onClick={() => set("detail", v)}>{L(v)}</Chip>
-        ))}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Chip on={opts.plain} onClick={() => set("plain", !opts.plain)}>{L("plain")}</Chip>
-        <Chip on={sound} onClick={() => setSound(!sound)}>{L("sound")}</Chip>
-        <label className="flex h-9 items-center gap-2 rounded-full bg-white/10 pl-3.5 pr-1.5 text-[13.5px] font-bold text-white/85">
-          {L("sign")}
-          <input
-            value={sign}
-            onChange={(e) => setSign(e.target.value.toUpperCase().slice(0, 24))}
-            onBlur={() => pic && void draw()}
-            className="h-7 w-[120px] rounded-full bg-black/40 px-3 text-[13px] font-bold tracking-wide text-white outline-none"
-            aria-label={L("sign")}
-          />
-        </label>
-      </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void askJagora();
-        }}
-        className="flex items-center gap-2"
-      >
-        <input
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder={`${L("ask")}: ${L("example")}`}
-          className="h-11 min-w-0 flex-1 rounded-full bg-white/10 px-4 text-[14.5px] font-semibold text-white placeholder:text-white/45 outline-none focus:bg-white/15"
-        />
-        <button type="submit" className="h-11 shrink-0 rounded-full bg-white px-5 text-[14.5px] font-bold text-[#0b1220]">{L("draw")}</button>
-      </form>
-    </div>
-  );
+  const dark = opts.board === "dark";
 
   return (
-    <div className="fixed inset-0 z-[90] flex flex-col bg-[#030405] text-white" role="dialog" aria-label="Type Art" onPointerDown={() => actx?.state === "suspended" && void actx.resume()}>
-      {/* top bar */}
-      <div className="flex items-center gap-3 px-4 pt-[max(12px,env(safe-area-inset-top))] pb-2">
-        <div className="min-w-0 flex-1">
-          <p className="font-head text-[19px] font-bold leading-tight">{L("title")}</p>
-          {pic && <p className="truncate text-[13px] font-semibold text-white/55">{pic.subject}</p>}
-        </div>
-        <button onClick={() => setOn(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 hover:bg-white/15" aria-label="Close">
-          <X size={20} weight="bold" />
-        </button>
-      </div>
+    <div className="fixed inset-0 z-[90] flex flex-col text-ink" role="dialog" aria-label="Type Art" onPointerDown={() => actx?.state === "suspended" && void actx.resume()}>
+      {/* Jagora's own sky behind everything */}
+      <div className="sky-bg absolute inset-0 -z-10" aria-hidden="true" />
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-      {/* the board */}
-      <div ref={board} className="relative mx-3 flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[22px] lg:mb-4">
-        {pic ? (
-          <canvas ref={cv} className="max-h-full max-w-full rounded-[10px]" />
-        ) : (
-          <div className="flex max-w-[520px] flex-col items-center gap-4 px-4 text-center">
-            <p className="font-head text-[24px] font-bold leading-tight sm:text-[30px]">{waiting ? L("getting") : L("empty")}</p>
-            {waiting ? (
-              <span className="h-6 w-3 animate-pulse bg-white/85" />
-            ) : (
-              <>
-                <button onClick={() => file.current?.click()} className="h-12 rounded-full bg-white px-6 text-[15.5px] font-bold text-[#0b1220]">{L("pick")}</button>
-                <p className="mt-2 text-[13.5px] font-bold text-white/55">{L("try")}</p>
-                <div className="flex gap-3">
-                  {SAMPLES.map((s) => (
-                    <button key={s.url} onClick={() => void sample(s.url, s.name)} className="h-20 w-16 overflow-hidden rounded-[14px] ring-1 ring-white/15 transition hover:ring-white/50" aria-label={s.name}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={s.url} alt="" className="h-full w-full object-cover" />
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+      {/* the slim glass bar */}
+      <div className="px-3 pt-[max(10px,env(safe-area-inset-top))]">
+        <div className="glass mx-auto flex max-w-[1180px] items-center gap-3 rounded-full py-1.5 pl-2 pr-1.5">
+          {/* the orb as the still mark (no extra 3D canvas: the page behind may already hold several) */}
+          <Mark size={30} />
+          <div className="min-w-0 flex-1">
+            <p className="font-head text-[17px] font-bold leading-tight">{L("title")}</p>
+            {pic && <p className="truncate text-[12.5px] font-semibold text-ink-2">{pic.subject}</p>}
           </div>
-        )}
-        {pic && waiting && (
-          <div className="absolute inset-x-0 top-3 mx-auto w-fit rounded-full bg-white/10 px-4 py-2 text-[13.5px] font-bold backdrop-blur">{L("getting")}</div>
-        )}
-        {rec && <div className="absolute left-3 top-3 rounded-full bg-[#e5484d] px-3 py-1.5 text-[12.5px] font-bold">{L("recording")}</div>}
+          <button onClick={() => setOn(false)} className="btn btn-glass h-10 w-10" aria-label="Close">
+            <X size={19} weight="bold" />
+          </button>
+        </div>
       </div>
 
-      {/* actions and options: below the board on phones, beside it on computers */}
-      <div className="px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 lg:w-[430px] lg:shrink-0 lg:overflow-y-auto lg:pr-5 lg:pt-0">
-        <div className="mx-auto flex max-w-[980px] flex-col gap-3 lg:flex-col-reverse lg:justify-end">
-          <div className={`${panel ? "block" : "hidden"} rounded-[20px] bg-white/[0.06] p-3 sm:block`}>{optionRows}</div>
+      {/* the board: the art is the hero */}
+      <div ref={board} className="relative flex min-h-0 flex-1 items-center justify-center px-3 py-3">
+        <div
+          className={`relative flex max-h-full max-w-full items-center justify-center overflow-hidden rounded-[22px] p-3 shadow-[0_30px_70px_-30px_rgba(10,25,60,.65)] ring-1 ${dark ? "bg-[#0e0f12] ring-[#fff]/25" : "bg-[#fff] ring-[#0e0f12]/10"} ${pic ? "" : "h-full w-full max-w-[680px]"}`}
+        >
+          {pic ? (
+            <canvas ref={cv} className="block max-h-full max-w-full" />
+          ) : (
+            <div className={`flex max-w-[560px] flex-col items-center gap-4 overflow-y-auto px-3 py-4 text-center ${dark ? "text-[#eceef2]" : "text-[#0e0f12]"}`}>
+              <p className="font-head text-[23px] font-bold leading-tight sm:text-[28px]">{waiting ? L("getting") : L("empty")}</p>
+              {waiting ? (
+                <span className={`h-6 w-3 animate-pulse ${dark ? "bg-[#eceef2]/85" : "bg-[#0e0f12]/80"}`} />
+              ) : (
+                <>
+                  <button onClick={() => file.current?.click()} className="btn h-12 bg-accent px-6 text-[15.5px] font-bold text-[#fff]">{L("pick")}</button>
+                  <p className={`text-[13.5px] font-bold ${dark ? "text-[#eceef2]/65" : "text-[#55545b]"}`}>{L("ours")}</p>
+                  <div className="flex gap-3">
+                    {SAMPLES.map((s) => (
+                      <button key={s.url} onClick={() => void sample(s.url, s.name)} className="h-20 w-16 overflow-hidden rounded-[14px] ring-1 ring-[#fff]/20 transition hover:ring-accent" aria-label={s.name}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={s.url} alt="" className="h-full w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                  <p className={`mt-1 text-[13.5px] font-bold ${dark ? "text-[#eceef2]/65" : "text-[#55545b]"}`}>{L("ask")}</p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {PROMPTS.map((p) => (
+                      <button key={p} onClick={() => void askJagora(p)} className={`rounded-full px-3.5 py-2 text-[13px] font-bold transition ${dark ? "bg-[#fff]/10 text-[#eceef2] hover:bg-[#fff]/20" : "bg-[#e4ecff] text-[#154bb8] hover:bg-[#d6e2ff]"}`}>
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {pic && waiting && <div className="absolute inset-x-0 top-3 mx-auto w-fit rounded-full bg-[#fff]/90 px-4 py-2 text-[13.5px] font-bold text-[#0e0f12]">{L("getting")}</div>}
+          {rec && <div className="absolute left-3 top-3 rounded-full bg-danger px-3 py-1.5 text-[12.5px] font-bold text-[#fff]">{L("recording")}</div>}
+        </div>
+      </div>
+
+      {/* the compact glass toolbar */}
+      <div className="px-3 pb-[max(10px,env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex max-w-[1180px] flex-col gap-2">
+          <div className="glass flex items-center gap-1 overflow-x-auto rounded-full p-1.5 [scrollbar-width:none]">
+            {(["symbols", "numbers", "words"] as Letters[]).map((v) => (
+              <Seg key={v} on={opts.letters === v} onClick={() => set("letters", v)}>{L(v)}</Seg>
+            ))}
+            <Gap />
+            {(["full", "one", "bw"] as Colour[]).map((v) => (
+              <Seg key={v} on={opts.colour === v} onClick={() => set("colour", v)}>{L(v)}</Seg>
+            ))}
+            <Gap />
+            {(["dark", "paper"] as Board[]).map((v) => (
+              <Seg key={v} on={opts.board === v} onClick={() => set("board", v)}>{L(v)}</Seg>
+            ))}
+            <Gap />
+            {(["coarse", "medium", "fine"] as Detail[]).map((v) => (
+              <Seg key={v} on={opts.detail === v} onClick={() => set("detail", v)}>{L(v)}</Seg>
+            ))}
+            <Gap />
+            <Seg on={opts.plain} onClick={() => set("plain", !opts.plain)}>{L("plain")}</Seg>
+            <Seg on={sound} onClick={() => setSound(!sound)}>{L("sound")}</Seg>
+          </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => setPanel(!panel)} className="h-11 rounded-full bg-white/10 px-4 text-[14.5px] font-bold sm:hidden">{L("options")}</button>
-            <button onClick={() => file.current?.click()} className="h-11 rounded-full bg-white/10 px-4 text-[14.5px] font-bold hover:bg-white/15">{L("pick")}</button>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void askJagora(prompt);
+              }}
+              className="glass flex min-w-[220px] flex-1 items-center gap-1 rounded-full p-1 pl-4"
+            >
+              <input
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder={`${L("ask")}: ${L("example")}`}
+                className="h-9 min-w-0 flex-1 bg-transparent text-[14.5px] font-semibold text-ink outline-none placeholder:text-ink-3"
+              />
+              <button type="submit" className="btn btn-ink h-9 shrink-0 px-4 text-[14px] font-bold">{L("draw")}</button>
+            </form>
+            <button onClick={() => file.current?.click()} className="btn btn-glass h-11 px-4 text-[14.5px] font-bold">{L("pick")}</button>
             {pic && (
               <>
-                <button onClick={() => void draw()} className="h-11 rounded-full bg-white/10 px-4 text-[14.5px] font-bold hover:bg-white/15">{L("again")}</button>
-                <button onClick={() => void savePicture()} disabled={phase !== "done"} className="h-11 rounded-full bg-white px-4 text-[14.5px] font-bold text-[#0b1220] disabled:opacity-45">{L("savePic")}</button>
-                <button onClick={() => void draw(true)} disabled={rec} className="h-11 rounded-full bg-[#2f6bff] px-4 text-[14.5px] font-bold text-white disabled:opacity-45">{L("saveVid")}</button>
+                <button onClick={() => void draw()} className="btn btn-glass h-11 px-4 text-[14.5px] font-bold">{L("again")}</button>
+                <button onClick={() => void draw(true)} disabled={rec} className="btn btn-glass h-11 px-4 text-[14.5px] font-bold disabled:opacity-45">{L("saveVid")}</button>
+                <button onClick={() => setSaveOpen(true)} disabled={phase !== "done"} className="btn btn-ink h-11 px-5 text-[14.5px] font-bold disabled:opacity-45">{L("save")}</button>
               </>
             )}
           </div>
         </div>
       </div>
-      </div>
+
+      {/* the size sheet for saving */}
+      {saveOpen && (
+        <div className="absolute inset-0 z-10 flex items-end justify-center bg-black/30 p-3 sm:items-center" onClick={() => making < 0 && setSaveOpen(false)}>
+          <div className="glass-3 w-full max-w-[420px] rounded-[26px] p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <p className="font-head text-[18px] font-bold">{L("size")}</p>
+              <button onClick={() => setSaveOpen(false)} className="btn btn-glass h-9 w-9" aria-label="Close">
+                <X size={17} weight="bold" />
+              </button>
+            </div>
+            <label className="mt-3 flex items-center gap-3 text-[14px] font-bold text-ink-2">
+              {L("sign")}
+              <input
+                value={sign}
+                onChange={(e) => setSign(e.target.value.toUpperCase().slice(0, 24))}
+                onBlur={() => pic && void draw()}
+                className="h-10 min-w-0 flex-1 rounded-full bg-white/70 px-4 text-[14px] font-bold tracking-wide text-ink outline-none dark:bg-white/10"
+              />
+            </label>
+            <SizeList onPick={(s) => void savePicture(s)} busy={making} />
+            {making >= 0 && (
+              <div className="mt-3">
+                <p className="text-[13.5px] font-bold text-ink-2">{L("making")}</p>
+                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-ink/10">
+                  <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${Math.round(making * 100)}%` }} />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       <input ref={file} type="file" accept="image/*" hidden onChange={(e) => (void pickPhoto(e.target.files?.[0]), (e.target.value = ""))} />
+    </div>
+  );
+}
+
+function SizeList({ onPick, busy }: { onPick: (s: SaveSize) => void; busy: number }) {
+  const [sizes, setSizes] = useState<{ id: SaveSize; label: string; note: string }[]>([]);
+  useEffect(() => {
+    void import("@/lib/typeart").then((m) => setSizes(m.SIZES));
+  }, []);
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      {sizes.map((s) => (
+        <button key={s.id} disabled={busy >= 0} onClick={() => onPick(s.id)} className="btn btn-glass h-12 justify-between px-4 disabled:opacity-50">
+          <span className="text-[15px] font-bold">{s.label}</span>
+          <span className="text-[13px] font-semibold text-ink-3">{s.note}</span>
+        </button>
+      ))}
     </div>
   );
 }

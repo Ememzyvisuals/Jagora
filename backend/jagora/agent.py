@@ -354,12 +354,18 @@ COMMON = [
          "her artboard ('make am blue', 'use words', 'draw am bigger': restyle, no subject). Never draw a real or famous "
          "person by name: say you draw people in general and offer an ordinary person like them (e.g. 'a Nigerian "
          "musician in sunglasses'). Her own photo is fine.",
-         {"subject": {"type": "string", "description": "what to draw, in English, one subject (a person, a face, a figure): "
-                      "e.g. 'a smiling Nigerian woman in a green and gold gele, head and shoulders'. Leave out to restyle."},
+         {"subject": {"type": "string", "description": "what to draw, written in ENGLISH whatever language she asked in (she may "
+                      "ask in Yoruba, Hausa, Igbo or Pidgin: translate it), one subject (a person, a face, a figure), keeping "
+                      "every cultural detail she gave or that fits: the people (Yoruba, Hausa, Igbo, Fulani, Ijaw...), the "
+                      "attire by its own name (agbada and fila, gele, iro and buba, babban riga and hula cap, isiagu and red "
+                      "cap, coral beads, Fulani facial beads and braids, ankara, aso oke), and the setting. E.g. 'ya ọkùnrin "
+                      "Hausa tó wọ aṣọ ìbílẹ̀' is 'a Hausa man in a flowing babban riga and an embroidered hula cap, head "
+                      "and shoulders'. Leave out to restyle."},
           "use_photo": {"type": "boolean", "description": "type out the photo she attached in the chat"},
           "letters": {"type": "string", "enum": ["symbols", "numbers", "words"], "description": "words = words in her language"},
           "colour": {"type": "string", "enum": ["full", "one", "bw"], "description": "full colour, one colour (blue on paper), black and white"},
-          "detail": {"type": "string", "enum": ["coarse", "medium", "fine"], "description": "'bigger letters' is coarse, 'more detail' is fine"}},
+          "detail": {"type": "string", "enum": ["coarse", "medium", "fine"], "description": "'bigger letters' is coarse, 'more detail' is fine"},
+          "board": {"type": "string", "enum": ["dark", "paper"], "description": "the dark (black) board or light paper"}},
          []),
     tool("check_link", "Check a link before anyone opens it (one the user pasted, got by SMS or WhatsApp, or found on a page): where it "
          "really goes after redirects and shorteners, whether it is an IP logger that records who opens it, tracking codes, "
@@ -2832,8 +2838,9 @@ class Agent:
 
     async def _draw_art(self, a: dict) -> tuple[str, bool, None]:
         """Type Art: Muse Image draws the reference (or her own photo is used), and her artboard types it out live."""
-        opts = {k: str(a[k]) for k in ("letters", "colour", "detail") if a.get(k) in {
-            "letters": ("symbols", "numbers", "words"), "colour": ("full", "one", "bw"), "detail": ("coarse", "medium", "fine")}[k]}
+        opts = {k: str(a[k]) for k in ("letters", "colour", "detail", "board") if a.get(k) in {
+            "letters": ("symbols", "numbers", "words"), "colour": ("full", "one", "bw"), "detail": ("coarse", "medium", "fine"),
+            "board": ("dark", "paper")}[k]}
         subject = str(a.get("subject") or "").strip()
         if subject and FAMOUS.search(subject):
             return ("not drawn: that names a real, famous person. Tell her in one short line that you draw people in general, "

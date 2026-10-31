@@ -211,6 +211,8 @@ async def draw_guide(plan: dict, images: Images) -> list[tuple[str, bytes]]:
 ART_STYLE = ("A striking photographic portrait for typographic art. One single subject, centred, filling most of the frame, "
              "on a plain pure black background with nothing else in it. Strong soft key light from one side, deep shadows, "
              "high contrast, crisp edges, rich natural colours. An ordinary, fictional person, never a real or famous person. "
+             "Draw the culture faithfully and with respect: the exact traditional attire, fabrics, beads, caps and hairstyles "
+             "named, as Nigerians really wear them. "
              "No text, no letters, no logos, no watermark, no frame.")
 
 

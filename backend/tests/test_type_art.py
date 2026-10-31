@@ -76,3 +76,17 @@ async def test_her_own_photo_is_typed_out(tmp_path, monkeypatch):
 
 def test_the_prompt_asks_for_one_ordinary_person_on_black():
     assert "never a real or famous person" in muse.ART_STYLE and "black background" in muse.ART_STYLE
+
+
+async def test_the_board_choice_is_passed_on():
+    io_ = IOm()
+    a = ag.Agent(None, None, io_)
+    await a._act("draw_art", {"board": "paper", "colour": "bw"}, None)
+    assert [d for k, d in io_.sent if k == "typeart"] == [{"restyle": True, "colour": "bw", "board": "paper"}]
+
+
+def test_the_tool_asks_for_an_english_prompt_that_keeps_the_culture():
+    t = next(t for t in ag.COMMON if t["function"]["name"] == "draw_art")
+    desc = t["function"]["parameters"]["properties"]["subject"]["description"]
+    assert "ENGLISH" in desc and "Yoruba" in desc and "babban riga" in desc and "isiagu" in desc
+    assert "traditional attire" in muse.ART_STYLE

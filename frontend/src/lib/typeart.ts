@@ -18,7 +18,8 @@ import type { Lang } from "./i18n";
 export type Letters = "symbols" | "numbers" | "words";
 export type Colour = "full" | "one" | "bw";
 export type Detail = "coarse" | "medium" | "fine";
-export type ArtOpts = { letters: Letters; colour: Colour; detail: Detail; plain: boolean; lang: Lang };
+export type Board = "dark" | "paper";
+export type ArtOpts = { letters: Letters; colour: Colour; detail: Detail; board: Board; plain: boolean; lang: Lang };
 export type Glyph = { ch: string; c: string; bold: boolean };
 export type Art = { cols: number; rows: number; font: number; cw: number; lh: number; bg: string; ink: string; cells: (Glyph | null)[] };
 
@@ -100,9 +101,10 @@ function shapes(set: string): Shape[] {
 }
 
 /** the grid for this picture in this box: as many columns as the detail asks for, at most about 160 x 200 */
-export function grid(imgW: number, imgH: number, boxW: number, boxH: number, detail: Detail) {
+export function grid(imgW: number, imgH: number, boxW: number, boxH: number, detail: Detail, words = false) {
   const phone = boxW < 640;
-  const want = { coarse: phone ? 46 : 76, medium: phone ? 70 : 112, fine: phone ? 100 : 156 }[detail];
+  // words carry the picture only by how bright each letter is, so they sit on a finer grid
+  const want = Math.round({ coarse: phone ? 46 : 76, medium: phone ? 70 : 112, fine: phone ? 100 : 156 }[detail] * (words ? 1.7 : 1));
   const k = LINE / ADV; // cell height over width
   let cols = want, rows = Math.max(8, Math.round((cols * imgH) / imgW / k));
   const maxRows = phone ? 200 : 220;
@@ -195,8 +197,9 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
     await document.fonts?.load(`800 20px "Jagora Mono"`);
     await document.fonts?.load(`500 20px "Jagora Mono"`);
   } catch {}
-  const { cols, rows, font, cw, lh } = grid(img.width, img.height, boxW, boxH, o.detail);
-  const paper = o.colour === "one";
+  const words = o.letters === "words";
+  const { cols, rows, font, cw, lh } = grid(img.width, img.height, boxW, boxH, o.detail, words);
+  const paper = o.board === "paper";
   const W = cols * SW, H = rows * SH;
   const c = document.createElement("canvas");
   c.width = W;
@@ -251,7 +254,9 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
   }
   // local contrast (a simple CLAHE): each pixel against its own neighbourhood, so the features inside a dark face
   // (eyes, nose, lips, the light on the cheek) are typed as clearly as those in the bright cloth
-  const rad = Math.max(6, Math.round(Math.min(W, H) / 18));
+  // words show the picture only by brightness: they keep the large shapes (local contrast would flatten them)
+  const Lg = words ? L.slice() : null;
+  const rad = Math.max(6, Math.round(Math.min(W, H) / (words ? 10 : 18)));
   const mean = boxBlur(L, W, H, rad);
   const sq = new Float32Array(L.length);
   for (let i = 0; i < L.length; i++) sq[i] = L[i] * L[i];
@@ -261,10 +266,24 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
     const local = Math.max(0, Math.min(1, 0.5 + (L[i] - mean[i]) / (2.6 * sd + 0.04)));
     L[i] = 0.55 * L[i] + 0.45 * local;
   }
+  // skin is lifted in the modes without colour on the dark board (on paper a dark face is already dense ink): a dark-skinned face is darker than bright cloth, and without its
+  // warm colour to tell it apart it would sink into the background. Warm, moderately saturated pixels count as skin.
+  if (!paper && (o.colour !== "full" || words)) {
+    const sk = new Float32Array(W * H);
+    for (let i = 0; i < sk.length; i++) {
+      const R = d[i * 4], G = d[i * 4 + 1], B = d[i * 4 + 2];
+      const warm = R > G && G >= B * 0.92 && R - B > 14 && R - B < 150 && R > 38;
+      sk[i] = warm ? Math.min(1, (R - B) / 50) : 0;
+    }
+    const skin = boxBlur(sk, W, H, 3);
+    for (let i = 0; i < L.length; i++) L[i] = L[i] + skin[i] * 0.42 * (1 - L[i]);
+  }
   const soft = boxBlur(L, W, H, 2);
   const ink = new Float32Array(W * H);
+  const tone = new Float32Array(W * H); // how bright each spot is (0..1), the same for every mode
   for (let i = 0; i < L.length; i++) {
     const v = Math.max(0, Math.min(1, L[i] + 0.8 * (L[i] - soft[i])));
+    tone[i] = (Lg ? 0.5 * Lg[i] + 0.5 * v : v) * (mask ? mask[i] : 1);
     // dark board: light parts are dense; paper: dark parts are dense
     // (the mid tones are lifted: thin letters like : and ' vanish at small sizes, so a face needs the fuller ones)
     ink[i] = Math.pow(paper ? 1 - v : v, paper ? 0.8 : 0.6) * (mask ? mask[i] : 1);
@@ -308,16 +327,22 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
     return best;
   };
 
-  // the colours
-  const blueLo = [156, 186, 236], blueHi = [14, 44, 120];
-  const greyLo = [70, 76, 86], greyHi = [246, 248, 252];
-  const words = (WORDS[o.lang] ?? WORDS.en).join("  ") + "  ";
+  /* the colours, from the app's own tokens: the board is --color-ink (#0e0f12), the paper is --color-paper (#ffffff)
+     with --color-accent (#1d63ed) and --color-accent-deep (#154bb8) for the one-colour mode */
+  const BG = [14, 15, 18], PAPER = [255, 255, 255], INK = [14, 15, 18];
+  const ACCENT = [29, 99, 237], DEEP = [21, 75, 184], ACCENT_DK = [79, 134, 247], SOFT = [228, 236, 255]; // --color-accent light / dark, accent-deep, accent-soft
+  // brightness of a letter from the picture's tone: an S curve, so the face stands out from what is around it
+  const curve = (x: number) => {
+    const t = Math.max(0, Math.min(1, (x - 0.03) / 0.9));
+    return Math.pow(t * t * (3 - 2 * t), 0.72);
+  };
+  const stream = (WORDS[o.lang] ?? WORDS.en).join(" ") + " ";
   let wi = 0;
   const cells: (Glyph | null)[] = new Array(cols * rows).fill(null);
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
-      // cell colour and ink, averaged over the cell
-      let r = 0, gg = 0, b = 0, s = 0, n = 0;
+      // cell colour, ink and tone, averaged over the cell
+      let r = 0, gg = 0, b = 0, s = 0, tt = 0, mm = 0, n = 0;
       for (let yy = y * SH + 1; yy < (y + 1) * SH; yy += 3)
         for (let xx = x * SW + 1; xx < (x + 1) * SW; xx += 2) {
           const i = yy * W + xx;
@@ -325,18 +350,22 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
           gg += d[i * 4 + 1];
           b += d[i * 4 + 2];
           s += ink[i];
+          tt += tone[i];
+          mm += mask ? mask[i] : 1;
           n++;
         }
       r /= n;
       gg /= n;
       b /= n;
-      const amount = s / n;
-      if (amount < (o.letters === "words" ? 0.1 : 0.05)) continue;
+      const amount = s / n, tn = tt / n, inside = mm / n;
       let ch: string;
-      if (o.letters === "words") {
-        ch = words[wi++ % words.length];
-        if (ch === " ") continue; // the gap between words stays a gap, so the words can be read
+      if (words) {
+        // the words run on through the whole subject, so they can be read; the picture is in their brightness
+        if (inside < 0.12) continue;
+        ch = stream[wi++ % stream.length];
+        if (ch === " ") continue;
       } else {
+        if (amount < 0.05) continue;
         // the six circles, pushed against the neighbours, then within the cell
         const v = inOff.map((off) => at(x, y, off));
         const ext = outOff.map((off) => at(x, y, off));
@@ -349,24 +378,205 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
         ch = nearest(v);
         if (ch === " ") continue;
       }
+      // for words a dark spot is nearly invisible and only the light parts glow, like a lit sculpture
+      const base = curve(paper ? 1 - tn / Math.max(0.05, inside) : tn);
+      const lit = words ? Math.pow(base, 1.25) : base;
       let col: number[];
-      const t = Math.min(1, amount * 1.15);
+      const floor = words ? 0.06 : 0.32; // how visible the faintest letter is
+      const k = floor + (1 - floor) * lit;
       if (o.colour === "full") {
-        // the picture's own colour, a little richer, and bright enough to read on the dark board
+        // the picture's own colour, a little richer
         const avg = (r + gg + b) / 3;
-        const sat = [r, gg, b].map((v) => avg + (v - avg) * 1.4);
+        const sat = [r, gg, b].map((v) => avg + (v - avg) * 1.45);
         const top = Math.max(1, ...sat);
-        // letters carry the shape in symbol modes; words carry it only by how bright each letter is
-        const want = o.letters === "words" ? 45 + 210 * Math.pow(t, 1.15) : 135 + 120 * t;
-        col = sat.map((v) => (v / top) * want);
-      } else if (o.colour === "one") col = mix(blueLo, blueHi, Math.pow(t, 0.8));
-      else col = mix(o.letters === "words" ? [28, 30, 36] : greyLo, greyHi, t);
-      cells[y * cols + x] = { ch, c: hex(col[0], col[1], col[2]), bold: o.letters !== "words" || amount > 0.5 };
+        const hue = sat.map((v) => (v / top) * 255);
+        if (paper) {
+          // on paper the colour is deepened so it reads as ink
+          const deep = hue.map((v) => v * 0.62);
+          col = mix(PAPER, deep, k);
+        } else col = words ? mix(BG, hue, k) : hue.map((v) => v * (0.5 + 0.5 * lit));
+      } else if (o.colour === "one") {
+        // one blue, from the app's accents
+        col = paper
+          ? k < 0.6 ? mix(PAPER, ACCENT, 0.1 + (k / 0.6) * 0.9) : mix(ACCENT, DEEP, (k - 0.6) / 0.4)
+          : k < 0.55 ? mix(BG, ACCENT_DK, k / 0.55) : mix(ACCENT_DK, SOFT, (k - 0.55) / 0.45);
+      } else col = paper ? mix(PAPER, INK, k) : mix(BG, [250, 251, 253], k);
+      cells[y * cols + x] = { ch, c: hex(col[0], col[1], col[2]), bold: !words || lit > 0.45 };
     }
     if (y % 24 === 23) await new Promise((r) => setTimeout(r));
   }
-  return { cols, rows, font, cw, lh, bg: paper ? "#f3f5f9" : "#050608", ink: paper ? "#14306f" : "#e8edf5", cells };
+  return { cols, rows, font, cw, lh, bg: paper ? "#ffffff" : "#0e0f12", ink: paper ? "#0e0f12" : "#eceef2", cells };
+}
+
+
+/** draw finished art onto a canvas (used to save the picture, and in checks) */
+export function paintArt(a: Art, g: CanvasRenderingContext2D) {
+  g.fillStyle = a.bg;
+  g.fillRect(0, 0, a.cols * a.cw, (a.rows + 2) * a.lh);
+  g.textBaseline = "middle";
+  let bold: boolean | null = null;
+  for (let i = 0; i < a.cells.length; i++) {
+    const c = a.cells[i];
+    if (!c) continue;
+    if (c.bold !== bold) {
+      g.font = `${c.bold ? 800 : 500} ${a.font}px ${FONT}`;
+      bold = c.bold;
+    }
+    g.fillStyle = c.c;
+    g.fillText(c.ch, (i % a.cols) * a.cw, Math.floor(i / a.cols) * a.lh + a.lh / 2);
+  }
+}
+
+/* ---- saving at print size --------------------------------------------------------------------------------------- */
+
+export type SaveSize = "screen" | "hd" | "4k" | "a4" | "a3";
+export const SIZES: { id: SaveSize; label: string; note: string }[] = [
+  { id: "screen", label: "Screen", note: "1080 px" },
+  { id: "hd", label: "HD 2K", note: "2048 px" },
+  { id: "4k", label: "4K", note: "3840 px" },
+  { id: "a4", label: "Print A4", note: "300 dpi, 2480 x 3508" },
+  { id: "a3", label: "Print A3", note: "300 dpi, 3508 x 4961" },
+];
+
+/** the page for a size: its pixels, where the art sits on it and how much it is scaled */
+export function pageFor(a: Art, size: SaveSize) {
+  const aw = a.cols * a.cw, ah = (a.rows + 2) * a.lh;
+  if (size === "a4" || size === "a3") {
+    const [W, H] = size === "a4" ? [2480, 3508] : [3508, 4961];
+    const m = Math.round(Math.min(W, H) * 0.08); // a white (or dark) margin all round, for the frame
+    const s = Math.min((W - 2 * m) / aw, (H - 2 * m) / ah);
+    return { W, H, s, ox: (W - aw * s) / 2, oy: (H - ah * s) / 2, dpi: 300 };
+  }
+  const s = size === "screen" ? 1080 / aw : size === "hd" ? 2048 / aw : 3840 / Math.max(aw, ah);
+  return { W: Math.round(aw * s), H: Math.round(ah * s), s, ox: 0, oy: 0, dpi: 0 };
+}
+
+/** draw the letters (and the signature) of the part of the page between rows y0 and y1, typed again at full size */
+function drawPart(g: CanvasRenderingContext2D, a: Art, sig: string, p: ReturnType<typeof pageFor>, y0: number, y1: number) {
+  g.fillStyle = a.bg;
+  g.fillRect(0, 0, p.W, y1 - y0);
+  g.save();
+  g.translate(p.ox, p.oy - y0);
+  g.scale(p.s, p.s);
+  g.textBaseline = "middle";
+  const top = (y0 - p.oy) / p.s - a.lh, bottom = (y1 - p.oy) / p.s + a.lh;
+  const r0 = Math.max(0, Math.floor(top / a.lh)), r1 = Math.min(a.rows - 1, Math.ceil(bottom / a.lh));
+  let bold: boolean | null = null;
+  for (let r = r0; r <= r1; r++)
+    for (let x = 0; x < a.cols; x++) {
+      const c = a.cells[r * a.cols + x];
+      if (!c) continue;
+      if (c.bold !== bold) {
+        g.font = `${c.bold ? 800 : 500} ${a.font}px ${FONT}`;
+        bold = c.bold;
+      }
+      g.fillStyle = c.c;
+      g.fillText(c.ch, x * a.cw, r * a.lh + a.lh / 2);
+    }
+  if (sig) {
+    const f = Math.max(9, a.lh * 1.5), sy = (a.rows + 1) * a.lh;
+    if (sy > top && sy < bottom + f) {
+      g.font = `800 ${f}px ${FONT}`;
+      g.fillStyle = a.ink;
+      g.fillText(sig, a.cols * a.cw - sig.length * f * 0.6 - a.cw, sy);
+    }
+  }
+  g.restore();
+}
+
+const CRC = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function chunk(type: string, data: Uint8Array): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(12 + data.length);
+  const v = new DataView(out.buffer);
+  v.setUint32(0, data.length);
+  for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i);
+  out.set(data, 8);
+  let c = 0xffffffff;
+  for (let i = 4; i < 8 + data.length; i++) c = CRC[(c ^ out[i]) & 255] ^ (c >>> 8);
+  v.setUint32(8 + data.length, (c ^ 0xffffffff) >>> 0);
+  return out;
+}
+
+/** The art as a PNG at the chosen size. The page is typed and compressed a strip at a time, so even A3 at 300 dpi
+    (17 million pixels) never needs one huge canvas, which phones cannot make. Print sizes carry 300 dpi in the file. */
+export async function exportPNG(a: Art, sig: string, size: SaveSize, onProgress?: (f: number) => void): Promise<Blob> {
+  const p = pageFor(a, size);
+  try {
+    await document.fonts?.load(`800 40px "Jagora Mono"`);
+  } catch {}
+  const CS = (globalThis as { CompressionStream?: new (f: string) => TransformStream<Uint8Array, Uint8Array> }).CompressionStream;
+  if (!CS) {
+    // an older browser: one canvas, made smaller if it would be too big for the browser
+    const k = Math.min(1, Math.sqrt(16_000_000 / (p.W * p.H)));
+    const q = { ...p, W: Math.round(p.W * k), H: Math.round(p.H * k), s: p.s * k, ox: p.ox * k, oy: p.oy * k };
+    const c = document.createElement("canvas");
+    c.width = q.W;
+    c.height = q.H;
+    drawPart(c.getContext("2d")!, a, sig, q, 0, q.H);
+    return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("no picture"))), "image/png"));
+  }
+  const STRIP = 256;
+  const c = document.createElement("canvas");
+  c.width = p.W;
+  c.height = STRIP;
+  const g = c.getContext("2d", { willReadFrequently: true })!;
+  const cs = new CS("deflate"); // zlib, as PNG wants it
+  const writer = cs.writable.getWriter();
+  const collected = new Response(cs.readable).arrayBuffer();
+  const row = 1 + p.W * 3;
+  for (let y0 = 0; y0 < p.H; y0 += STRIP) {
+    const h = Math.min(STRIP, p.H - y0);
+    drawPart(g, a, sig, p, y0, y0 + h);
+    const px = g.getImageData(0, 0, p.W, h).data;
+    const raw = new Uint8Array(h * row);
+    for (let y = 0; y < h; y++) {
+      const o = y * row;
+      raw[o] = 1; // the Sub filter: each byte minus the one to its left, which packs flat areas well
+      for (let x = 0; x < p.W; x++) {
+        const i = (y * p.W + x) * 4, j = o + 1 + x * 3;
+        if (x === 0) {
+          raw[j] = px[i];
+          raw[j + 1] = px[i + 1];
+          raw[j + 2] = px[i + 2];
+        } else {
+          raw[j] = (px[i] - px[i - 4]) & 255;
+          raw[j + 1] = (px[i + 1] - px[i - 3]) & 255;
+          raw[j + 2] = (px[i + 2] - px[i - 2]) & 255;
+        }
+      }
+    }
+    await writer.write(raw);
+    onProgress?.(Math.min(1, (y0 + h) / p.H));
+    await new Promise((r) => setTimeout(r));
+  }
+  await writer.close();
+  const idat = new Uint8Array(await collected);
+  const ihdr = new Uint8Array(13);
+  const hv = new DataView(ihdr.buffer);
+  hv.setUint32(0, p.W);
+  hv.setUint32(4, p.H);
+  ihdr.set([8, 2, 0, 0, 0], 8); // 8-bit RGB
+  const parts: BlobPart[] = [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr)];
+  if (p.dpi) {
+    const ph = new Uint8Array(9);
+    const pv = new DataView(ph.buffer);
+    const ppm = Math.round(p.dpi / 0.0254);
+    pv.setUint32(0, ppm);
+    pv.setUint32(4, ppm);
+    ph[8] = 1;
+    parts.push(chunk("pHYs", ph));
+  }
+  parts.push(chunk("IDAT", idat), chunk("IEND", new Uint8Array(0)));
+  return new Blob(parts, { type: "image/png" });
 }
 
 // for checks in development builds only
-if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") (window as unknown as { __typeart?: unknown }).__typeart = { buildArt };
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") (window as unknown as { __typeart?: unknown }).__typeart = { buildArt, paintArt, exportPNG, pageFor };
