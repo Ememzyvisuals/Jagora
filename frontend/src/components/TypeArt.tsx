@@ -12,7 +12,7 @@
    Saving: a picture at screen size, HD, 4K or print size (A4 or A3 at 300 dpi), typed again at that size so the
    letters stay sharp in a frame; or a video of it being typed. The work itself is in lib/typeart.ts. */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DownloadSimple, X } from "@phosphor-icons/react";
+import { DownloadSimple, Microphone, Sparkle, X } from "@phosphor-icons/react";
 import { Mark } from "./Brand";
 import { reportScreen } from "@/lib/appctl";
 import { API, getToken } from "@/lib/account";
@@ -21,7 +21,7 @@ import { useApp } from "@/lib/store";
 import type { Lang } from "@/lib/i18n";
 import type { Art, ArtOpts, Board, Colour, Detail, Letters, SaveSize } from "@/lib/typeart";
 
-export type TypeArtEvent = { url?: string; subject?: string; letters?: Letters; colour?: Colour; detail?: Detail; board?: Board; mode?: "type" | "paint"; style?: Style; title?: string; restyle?: boolean; open?: boolean; own?: boolean; drawn_by?: string };
+export type TypeArtEvent = { more?: boolean; url?: string; subject?: string; letters?: Letters; colour?: Colour; detail?: Detail; board?: Board; mode?: "type" | "paint"; style?: Style; title?: string; restyle?: boolean; open?: boolean; own?: boolean; drawn_by?: string };
 export const openTypeArt = (d: TypeArtEvent = {}) => dispatchEvent(new CustomEvent("jagora:typeart", { detail: { open: true, ...d } }));
 export const closeTypeArt = () => dispatchEvent(new CustomEvent("jagora:typeart", { detail: { open: false } }));
 
@@ -36,6 +36,10 @@ const T: Record<string, Record<Lang, string>> = {
   dark: { en: "Dark board", pcm: "Dark board", yo: "Pátákó dúdú", ha: "Allo baƙi", ig: "Bọọdụ ojii" },
   paper: { en: "Paper", pcm: "Paper", yo: "Ìwé", ha: "Takarda", ig: "Akwụkwọ" },
   coarse: { en: "Large", pcm: "Big", yo: "Ńlá", ha: "Babba", ig: "Ibu" },
+  realistic: { en: "Realistic", pcm: "Like real", yo: "Bí òótọ́", ha: "Kamar gaske", ig: "Dị ka ezigbo" },
+  keep: { en: "Keep detailing", pcm: "Add more detail", yo: "Ṣe é kúnná sí i", ha: "Ƙara bayani", ig: "Tinyekwuo nkọwa" },
+  finest: { en: "As fine as it goes", pcm: "E don reach the finest", yo: "Ó ti dé òpin", ha: "Ya kai iyaka", ig: "O ruola njedebe" },
+  talk: { en: "Talk to Jagora", pcm: "Talk to Jagora", yo: "Bá Jagora sọ̀rọ̀", ha: "Yi magana da Jagora", ig: "Gwa Jagora okwu" },
   medium: { en: "Medium", pcm: "Medium", yo: "Àárín", ha: "Matsakaici", ig: "Etiti" },
   fine: { en: "Fine", pcm: "Fine", yo: "Kékeré", ha: "Ƙanana", ig: "Obere" },
   plain: { en: "Plain background", pcm: "Plain background", yo: "Ẹ̀yìn kan ṣoṣo", ha: "Bango mara komai", ig: "Azụ dị nkịtị" },
@@ -219,6 +223,15 @@ export function TypeArt() {
   const paintPlan = useRef<Painting | null>(null);
   const [planning, setPlanning] = useState(false);
   const [cat, setCat] = useState<"letters" | "colour" | "board" | "detail" | "style" | "more">("letters");
+  const [extra, setExtra] = useState(0); // Keep detailing in type mode: each one types it again with smaller letters
+  const [finest, setFinest] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
+  const liveOn = useApp((s) => s.live);
+  const orb = useApp((s) => s.orb);
+  /* what is on the board, kept so a zoom can draw it again sharp, and Keep detailing can paint on top */
+  const typed = useRef<{ a: Art; sig: string; rest: HTMLCanvasElement } | null>(null);
+  const painted = useRef<{ plan: Painting; k: number; dpr: number; W: number; H: number; layer: HTMLCanvasElement; sigRoom: number; sig: string; ink: string; rest?: HTMLCanvasElement } | null>(null);
+  const view = useRef({ z: 1, ox: 0, oy: 0, zr: 1, oxr: 0, oyr: 0 });
   const board = useRef<HTMLDivElement>(null);
   const cv = useRef<HTMLCanvasElement>(null);
   const file = useRef<HTMLInputElement>(null);
@@ -247,6 +260,8 @@ export function TypeArt() {
       if (Object.keys(next).length) setOpts((o) => ({ ...o, ...next }));
       if (d.mode) setMode(d.mode);
       if (d.style) setStyle(d.style);
+      if (d.more) dispatchEvent(new CustomEvent("jagora:typeart-cmd", { detail: { action: "art_more" } }));
+      if (d.detail || d.letters || d.colour || d.board || d.mode || d.style || d.url) setExtra(0);
       if (d.url) {
         setWaiting(true);
         try {
@@ -266,8 +281,13 @@ export function TypeArt() {
 
   // Jagora knows what is on the artboard, so "make am blue" means this one
   useEffect(() => {
-    reportScreen("typeart", on ? `open${pic ? (mode === "paint" ? `, painting "${pic.subject || "her photo"}" in ${style} style, ${opts.detail} detail` : `, typing "${pic.subject || "her photo"}" in ${opts.letters}, ${opts.colour} colour, ${opts.board} board, ${opts.detail} detail`) : ", empty"}` : "");
-  }, [on, pic, opts, mode, style]);
+    reportScreen(
+      "typeart",
+      on
+        ? `open${pic ? (mode === "paint" ? `, painting "${pic.subject || "her photo"}" in ${style} style, ${opts.detail} detail` : `, typing "${pic.subject || "her photo"}" in ${opts.letters}, ${opts.colour} colour, ${opts.board} board, ${opts.detail} detail`) + (extra ? `, detailed ${extra} more times` : "") + (zoomed ? ", zoomed in" : "") + (phase === "done" ? ", finished" : ", drawing now") : ", empty"}`
+        : "",
+    );
+  }, [on, pic, opts, mode, style, extra, zoomed, phase]);
 
   /* build the cells and type them out */
   const draw = useCallback(
@@ -279,7 +299,7 @@ export function TypeArt() {
       setPhase("typing");
       const { buildArt, FONT } = await import("@/lib/typeart");
       const bw = box.clientWidth - 24, bh = box.clientHeight - 24;
-      const a = await buildArt(pic.bmp, bw, bh, { ...opts, lang });
+      const a = await buildArt(pic.bmp, bw, bh, { ...opts, lang, extra });
       if (my !== run.current) return;
       const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
       const W = Math.ceil(a.cols * a.cw), H = Math.ceil((a.rows + 2) * a.lh);
@@ -301,7 +321,8 @@ export function TypeArt() {
       art.current = { a, sig };
       const g = canvas.getContext("2d")!;
       const total = order.length + sig.length;
-      const ms = { coarse: 5200, medium: 6500, fine: 8000 }[opts.detail];
+      const ms = { coarse: 5200, medium: 6500, fine: 8000, realistic: 9000 }[opts.detail] + extra * 900;
+      resetView(canvas);
       let done = 0, lastClick = 0, curBold: boolean | null = null;
       const sigFont = Math.max(9, a.lh * 1.5);
       const sigX = W - sig.length * sigFont * 0.6 - a.cw, sigY = (a.rows + 1) * a.lh;
@@ -334,6 +355,10 @@ export function TypeArt() {
           if (done < order.length) {
             const i = order[done];
             const c = a.cells[i]!;
+            if (c.t) {
+              lg.fillStyle = c.t;
+              lg.fillRect((i % a.cols) * a.cw, Math.floor(i / a.cols) * a.lh, a.cw + 0.3, a.lh + 0.3);
+            }
             setFont(c.bold);
             lg.fillStyle = c.c;
             lg.fillText(c.ch, (i % a.cols) * a.cw, Math.floor(i / a.cols) * a.lh + a.lh / 2);
@@ -375,6 +400,13 @@ export function TypeArt() {
         }
         if (finished && !doneAt) {
           doneAt = now;
+          // the finished board without the cursor, kept for zooming back out
+          const rest = document.createElement("canvas");
+          rest.width = layer.width;
+          rest.height = layer.height;
+          rest.getContext("2d")!.drawImage(layer, 0, 0);
+          typed.current = { a, sig, rest };
+          painted.current = null;
           setPhase("done");
         }
         if (finished && recorder && now - t0 > ms + 1400) {
@@ -387,26 +419,29 @@ export function TypeArt() {
           };
           r.stop();
         }
-        // the cursor blinks on for a while after the last letter, then the board rests
+        // the cursor blinks on for a while after the last letter, then the board rests (not while she zooms)
+        if (view.current.z > 1) return;
         if (!doneAt || recorder || now - doneAt < 15000) requestAnimationFrame(frame);
       };
       requestAnimationFrame(frame);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pic, opts, lang, sign, mode, style],
+    [pic, opts, lang, sign, mode, style, extra],
   );
 
-  /* paint mode: plan every stroke, then paint them one by one with the brush on the board */
+  /* paint mode: plan every stroke, then paint them with a real brush that travels along each one */
   const paintRun = async (record: boolean) => {
     const box = board.current, canvas = cv.current;
     if (!pic || !box || !canvas) return;
     const my = ++run.current;
     setPhase("typing");
     setPlanning(true);
+    setFinest(false);
+    resetView(canvas);
     const P = await import("@/lib/paint");
     // her own photo: the person cut out by SAM 3.1 (only with her yes, when Jagora is connected), else an estimate
     let mask: Float32Array | null = null;
-    const long = P.paintSize(), kk = long / Math.max(pic.bmp.width, pic.bmp.height);
+    const long = opts.detail === "realistic" ? 1024 : P.paintSize(), kk = long / Math.max(pic.bmp.width, pic.bmp.height);
     const pw = Math.round(pic.bmp.width * kk), ph = Math.round(pic.bmp.height * kk);
     if (own.current) {
       if (!own.current.cut && API && getToken()) own.current.cut = cutOut(own.current.dataUrl, lang);
@@ -431,86 +466,295 @@ export function TypeArt() {
     layer.width = canvas.width;
     layer.height = canvas.height;
     const lg = layer.getContext("2d")!;
-    lg.scale(dpr, dpr);
-    const ground = style === "water" ? "#ffffff" : "#0e0f12";
-    lg.fillStyle = ground;
-    lg.fillRect(0, 0, W, H);
+    lg.fillStyle = plan.ground;
+    lg.fillRect(0, 0, layer.width, layer.height);
+    painted.current = { plan, k, dpr, W, H, layer, sigRoom, sig: sign.trim().slice(0, 24), ink: style === "water" ? "#0e0f12" : "#eceef2" };
+    typed.current = null;
+    // the first brushes get the most time, so every big stroke is painted where she can see it
+    animatePaint(my, 0, record, (li) => (li === 0 ? 10000 : li === 1 ? 6000 : 3000));
+  };
+
+  /** paint strokes [from..] of the painting with the brush (also used by Keep detailing, on top of what is there) */
+  const animatePaint = async (my: number, from: number, record: boolean, budget: (li: number) => number) => {
+    const st = painted.current, canvas = cv.current;
+    if (!st || !canvas) return;
+    const P = await import("@/lib/paint");
+    const { plan, k, dpr, layer, sigRoom } = st;
+    const lg = layer.getContext("2d")!;
     const g = canvas.getContext("2d")!;
-    const sig = sign.trim().slice(0, 24);
-    const ms = { coarse: 9000, medium: 11500, fine: 14000 }[opts.detail];
-    const total = plan.strokes.length;
-    // [first stroke, count] of each brush size
-    const layers: [number, number][] = [];
-    plan.strokes.forEach((st, i) => {
-      if (!layers[st.layer]) layers[st.layer] = [i, 0];
-      layers[st.layer][1]++;
-    });
-    let done = 0, lastClick = 0, finishedAt = 0;
+    const { steps, total } = P.schedule(plan.strokes, from, (li) => budget(li));
     const rec = record ? startRecorder(canvas, setRec) : null;
     const t0 = performance.now();
-    const frame = (now: number) => {
-      if (my !== run.current) return;
-      // each brush size gets its own share of the time, so she sees the big colour shapes blocked in first, then
-      // each finer brush adding detail, like a painter
-      const f = Math.min(1, (now - t0) / ms);
-      const li = Math.min(layers.length - 1, Math.floor(f * layers.length));
-      const within = f >= 1 ? 1 : f * layers.length - li;
-      const want = f >= 1 ? total : Math.min(total, layers[li][0] + Math.floor(within * layers[li][1]));
+    let j = 0, batched = -1, lastClick = 0, finishedAt = 0;
+    let prev: [number, number] | null = null; // where the brush lifted
+    const commit = (a: number, b: number) => {
       lg.save();
       lg.beginPath();
-      lg.rect(0, 0, plan.W * k, plan.H * k);
+      lg.rect(0, 0, plan.W * k * dpr, plan.H * k * dpr);
       lg.clip();
-      // a budget per frame, so the page stays smooth on any phone (if it falls behind, the painting just takes longer)
-      const t1 = performance.now();
-      while (done < want && performance.now() - t1 < 9) for (let n = 0; n < 24 && done < want; n++) P.drawStroke(lg, plan.strokes[done++], plan.style, k);
+      for (let i = a; i < b; i++) P.drawStroke(lg, plan.strokes[i], plan.style, k * dpr);
       lg.restore();
-      const finished = done >= total;
-      if (finished && !finishedAt) {
-        finishedAt = now;
-        lg.save();
-        lg.beginPath();
-        lg.rect(0, 0, plan.W * k, plan.H * k);
-        lg.clip();
-        P.grain(lg, plan.W * k, plan.H * k, plan.style, plan.seed);
-        lg.restore();
-        if (sig) {
-          lg.font = `800 ${Math.max(9, sigRoom * k * 0.45)}px "Jagora Mono", ui-monospace, monospace`;
-          lg.fillStyle = style === "water" ? "#0e0f12" : "#eceef2";
-          lg.textBaseline = "middle";
-          lg.textAlign = "right";
-          lg.fillText(sig, plan.W * k, (plan.H + sigRoom / 2) * k);
-          lg.textAlign = "left";
-        }
-        setPhase("done");
-      }
+    };
+    const art = () => {
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.drawImage(layer, 0, 0);
-      if (!finished && done > 0) {
-        // the brush at the tip of the stroke being painted
-        const s = plan.strokes[done - 1], p = s.pts, n = p.length;
-        const ang = n >= 4 ? Math.atan2(p[n - 1] - p[n - 3], p[n - 2] - p[n - 4]) : 0;
-        g.scale(dpr, dpr);
-        P.drawBrush(g, p[n - 2] * k, p[n - 1] * k, ang, Math.max(18, Math.min(46, s.r * k * 2.2)), s.c);
-        if (soundRef.current && now - lastClick > 90) {
-          lastClick = now;
-          click();
-        }
+    };
+    const finish = () => {
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.save();
+      g.beginPath();
+      g.rect(0, 0, plan.W * k * dpr, plan.H * k * dpr);
+      g.clip();
+      P.grain(g, plan.W * k * dpr, plan.H * k * dpr, plan.style, plan.seed);
+      g.restore();
+      if (st.sig) {
+        g.font = `800 ${Math.max(9, sigRoom * k * 0.45) * dpr}px "Jagora Mono", ui-monospace, monospace`;
+        g.fillStyle = st.ink;
+        g.textBaseline = "middle";
+        g.textAlign = "right";
+        g.fillText(st.sig, plan.W * k * dpr, (plan.H + sigRoom / 2) * k * dpr);
+        g.textAlign = "left";
       }
-      if (finished && rec && now - finishedAt > 1400) {
-        const r = rec;
-        void r.stop().then((b) => b && save(b, `jagora-painting.${b.type.includes("mp4") ? "mp4" : "webm"}`));
+    };
+    const frame = (now: number) => {
+      if (my !== run.current) return;
+      const t = now - t0;
+      // strokes whose time has passed go onto the canvas for good
+      while (j < steps.length && t >= steps[j].start + steps[j].hop + steps[j].dur) {
+        const sp = steps[j];
+        commit(batched === j ? sp.i : sp.from, sp.to);
+        const p = plan.strokes[sp.i].pts;
+        prev = [p[p.length - 2], p[p.length - 1]];
+        j++;
+      }
+      art();
+      if (j < steps.length) {
+        const sp = steps[j], s = plan.strokes[sp.i];
+        if (t >= sp.start && batched !== j) {
+          commit(sp.from, sp.i); // the small strokes of this group appear while the brush lifts
+          batched = j;
+          art();
+        }
+        const flat = s.layer === 0;
+        const size = flat ? Math.max(18, Math.min(70, s.r * k * 2.6)) : Math.max(15, Math.min(42, s.r * k * 3.2));
+        const wob = Math.sin(t / 95) * 0.07; // the hand is never perfectly still
+        g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (t < sp.start + sp.hop) {
+          // between strokes: the brush lifts and travels to the start of the next one (a new brush between layers)
+          const u = Math.max(0, (t - sp.start) / sp.hop);
+          const to: [number, number] = [s.pts[0], s.pts[1]];
+          const fromPt = prev ?? [to[0] - 40 / k, to[1] - 60 / k];
+          const e = u * u * (3 - 2 * u);
+          const x = (fromPt[0] + (to[0] - fromPt[0]) * e) * k, y = (fromPt[1] + (to[1] - fromPt[1]) * e) * k;
+          const ang = Math.atan2(to[1] - fromPt[1], to[0] - fromPt[0]);
+          const grow = sp.swap ? (u < 0.5 ? 1 - u * 2 : (u - 0.5) * 2) : 1;
+          P.drawBrush(g, x, y, ang + wob, size, s.c, flat, Math.sin(u * Math.PI), Math.max(0.05, grow));
+        } else {
+          // the stroke grows behind the brush tip
+          const f = Math.min(1, (t - sp.start - sp.hop) / sp.dur);
+          const part = P.partOf(s, f);
+          g.save();
+          g.beginPath();
+          g.rect(0, 0, plan.W * k, plan.H * k);
+          g.clip();
+          P.drawStroke(g, part, plan.style, k);
+          g.restore();
+          const q = part.pts, n = q.length;
+          const ang = n >= 4 ? Math.atan2(q[n - 1] - q[n - 3], q[n - 2] - q[n - 4]) : 0;
+          P.drawBrush(g, q[n - 2] * k, q[n - 1] * k, ang + wob, size, s.c, flat, 0, 1);
+          if (soundRef.current && now - lastClick > 120) {
+            lastClick = now;
+            click();
+          }
+        }
+      } else if (!finishedAt) {
+        finishedAt = now;
+        finish();
+        const rest = document.createElement("canvas");
+        rest.width = canvas.width;
+        rest.height = canvas.height;
+        rest.getContext("2d")!.drawImage(canvas, 0, 0);
+        st.rest = rest;
+        setPhase("done");
+      } else finish();
+      if (finishedAt && rec && now - finishedAt > 1400) {
+        void rec.stop().then((b) => b && save(b, `jagora-painting.${b.type.includes("mp4") ? "mp4" : "webm"}`));
         return;
       }
-      if (!finished || rec) requestAnimationFrame(frame);
+      if (!finishedAt || rec) requestAnimationFrame(frame);
     };
+    if (!total) {
+      setFinest(true);
+      setPhase("done");
+      return;
+    }
     requestAnimationFrame(frame);
   };
+
+  /* Keep detailing: paint: one more, finer pass on top; type: typed again with smaller letters */
+  const keepDetailing = async () => {
+    if (!pic || phase !== "done") return;
+    if (mode === "paint" && painted.current) {
+      const my = ++run.current;
+      setPhase("typing");
+      resetView(cv.current);
+      const P = await import("@/lib/paint");
+      const from = painted.current.plan.strokes.length;
+      const add = await P.morePass(painted.current.plan);
+      if (my !== run.current) return;
+      if (!add.length) {
+        setFinest(true);
+        setPhase("done");
+        return;
+      }
+      animatePaint(my, from, false, () => 6000);
+    } else if (mode === "type") {
+      const { MAX_EXTRA } = await import("@/lib/typeart");
+      if (extra >= MAX_EXTRA) return setFinest(true);
+      setExtra((e) => e + 1);
+    }
+  };
+
+  /* ---- zoom: pinch, double tap and the wheel; the view is drawn again at that size, so letters stay sharp ---- */
+  const resetView = (canvas: HTMLCanvasElement | null) => {
+    view.current = { z: 1, ox: 0, oy: 0, zr: 1, oxr: 0, oyr: 0 };
+    setZoomed(false);
+    if (canvas) canvas.style.transform = "";
+  };
+  const redrawTimer = useRef(0);
+  const renderView = async () => {
+    const canvas = cv.current, v = view.current;
+    if (!canvas) return;
+    const g = canvas.getContext("2d")!;
+    const w = parseFloat(canvas.style.width), h = parseFloat(canvas.style.height);
+    const dpr = canvas.width / w;
+    if (v.z <= 1.001) {
+      const rest = typed.current?.rest ?? painted.current?.rest;
+      if (rest) {
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        g.drawImage(rest, 0, 0);
+      }
+    } else if (typed.current) {
+      const { drawView } = await import("@/lib/typeart");
+      drawView(g, typed.current.a, typed.current.sig, w, h, dpr, v.z, v.ox, v.oy);
+    } else if (painted.current) {
+      const { drawPaintView } = await import("@/lib/paint");
+      const st = painted.current;
+      drawPaintView(g, st.plan, st.k, st.sig, st.ink, w, h, dpr, v.z, v.ox, v.oy);
+    }
+    v.zr = v.z;
+    v.oxr = v.ox;
+    v.oyr = v.oy;
+    canvas.style.transform = "";
+  };
+  /** set the view (zoom z, art point (ox, oy) at the top-left), show it at once by stretching, then draw it sharp */
+  const setView = (z: number, ox: number, oy: number) => {
+    const canvas = cv.current, v = view.current;
+    if (!canvas || phase !== "done") return;
+    const w = parseFloat(canvas.style.width), h = parseFloat(canvas.style.height);
+    z = Math.max(1, Math.min(8, z));
+    v.z = z;
+    v.ox = Math.max(0, Math.min(w - w / z, ox));
+    v.oy = Math.max(0, Math.min(h - h / z, oy));
+    setZoomed(z > 1.001);
+    canvas.style.transformOrigin = "0 0";
+    canvas.style.transform = `translate(${(v.oxr - v.ox) * z}px, ${(v.oyr - v.oy) * z}px) scale(${z / v.zr})`;
+    clearTimeout(redrawTimer.current);
+    redrawTimer.current = window.setTimeout(() => void renderView(), 140);
+  };
+  /** zoom by a factor around a point of the canvas (in its CSS pixels) */
+  const zoomAt = (factor: number, px: number, py: number) => {
+    const v = view.current;
+    const ax = v.ox + px / v.z, ay = v.oy + py / v.z; // the art point under her finger stays under it
+    const z = Math.max(1, Math.min(8, v.z * factor));
+    setView(z, ax - px / z, ay - py / z);
+  };
+  const pts = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ d: number; mx: number; my: number; z: number; ox: number; oy: number } | null>(null);
+  const lastTap = useRef({ t: 0, x: 0, y: 0 });
+  const local = (e: React.PointerEvent | React.WheelEvent) => {
+    const r = cv.current!.getBoundingClientRect(), v = view.current;
+    // the canvas may be stretched for the moment: work in the drawn view's own pixels
+    const q = v.z / v.zr;
+    return { x: (e.clientX - r.left) / q, y: (e.clientY - r.top) / q };
+  };
+  const onDown = (e: React.PointerEvent) => {
+    if (!cv.current || phase !== "done") return;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const v = view.current;
+    if (pts.current.size === 2) {
+      const [a, b] = [...pts.current.values()];
+      const r = cv.current.getBoundingClientRect();
+      pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2 - r.left, my: (a.y + b.y) / 2 - r.top, z: v.z, ox: v.ox, oy: v.oy };
+    } else if (pts.current.size === 1) {
+      pinch.current = { d: 0, mx: e.clientX, my: e.clientY, z: v.z, ox: v.ox, oy: v.oy };
+    }
+  };
+  const onMove = (e: React.PointerEvent) => {
+    if (!pts.current.has(e.pointerId) || !pinch.current || !cv.current) return;
+    pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const p0 = pinch.current;
+    if (pts.current.size >= 2 && p0.d) {
+      const [a, b] = [...pts.current.values()];
+      const r = cv.current.getBoundingClientRect();
+      const q = view.current.z / view.current.zr;
+      const mx = ((a.x + b.x) / 2 - r.left) / q, my = ((a.y + b.y) / 2 - r.top) / q;
+      const z = Math.max(1, Math.min(8, (p0.z * Math.hypot(a.x - b.x, a.y - b.y)) / p0.d));
+      const ax = p0.ox + p0.mx / p0.z, ay = p0.oy + p0.my / p0.z;
+      setView(z, ax - mx / z, ay - my / z);
+    } else if (pts.current.size === 1 && view.current.z > 1) {
+      setView(view.current.z, p0.ox - (e.clientX - p0.mx) / p0.z, p0.oy - (e.clientY - p0.my) / p0.z);
+    }
+  };
+  const onUp = (e: React.PointerEvent) => {
+    const was = pts.current.size;
+    pts.current.delete(e.pointerId);
+    if (pts.current.size === 1) {
+      const [a] = [...pts.current.values()];
+      const v = view.current;
+      pinch.current = { d: 0, mx: a.x, my: a.y, z: v.z, ox: v.ox, oy: v.oy };
+    } else if (!pts.current.size) pinch.current = null;
+    if (was === 1 && phase === "done") {
+      // a double tap zooms in on that spot, or back out
+      const now = performance.now(), L = lastTap.current;
+      if (now - L.t < 320 && Math.hypot(e.clientX - L.x, e.clientY - L.y) < 24) {
+        const { x, y } = local(e);
+        if (view.current.z > 1.05) setView(1, 0, 0);
+        else zoomAt(3, x, y);
+        lastTap.current = { t: 0, x: 0, y: 0 };
+      } else lastTap.current = { t: now, x: e.clientX, y: e.clientY };
+    }
+  };
+  const onWheel = (e: React.WheelEvent) => {
+    if (phase !== "done") return;
+    const { x, y } = local(e);
+    zoomAt(Math.exp(-e.deltaY * 0.0022), x, y);
+  };
+
+  /* her voice (through Jagora) and the app: zoom, save, video, draw again, keep detailing */
+  useEffect(() => {
+    const onCmd = (e: Event) => {
+      const d = ((e as CustomEvent).detail || {}) as { action: string; value?: string };
+      const canvas = cv.current;
+      const w = canvas ? parseFloat(canvas.style.width) || 0 : 0, h = canvas ? parseFloat(canvas.style.height) || 0 : 0;
+      if (d.action === "art_zoom") {
+        if (d.value === "reset") setView(1, 0, 0);
+        else zoomAt(d.value === "out" ? 1 / 1.8 : 1.8, w / 2, h / 2);
+      } else if (d.action === "art_save") void savePicture((["screen", "hd", "4k", "a4", "a3"].includes(d.value || "") ? d.value : "screen") as SaveSize);
+      else if (d.action === "art_video") void draw(true);
+      else if (d.action === "art_again") void draw();
+      else if (d.action === "art_more") void keepDetailing();
+    };
+    addEventListener("jagora:typeart-cmd", onCmd);
+    return () => removeEventListener("jagora:typeart-cmd", onCmd);
+  });
 
   // a new picture or new settings: type it again
   useEffect(() => {
     if (on && pic) void draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [on, pic, opts.letters, opts.colour, opts.detail, opts.board, opts.plain, lang, mode, style]);
+  }, [on, pic, opts.letters, opts.colour, opts.detail, opts.board, opts.plain, lang, mode, style, extra]);
 
   useEffect(() => {
     // other parts of the app (Amina) know the board is covering the screen
@@ -595,13 +839,14 @@ export function TypeArt() {
   const set = <K extends keyof typeof opts>(k: K, v: (typeof opts)[K]) => setOpts((o) => ({ ...o, [k]: v }));
   const L = (k: string) => T[k][lang] ?? T[k].en;
   const dark = mode === "paint" ? style !== "water" : opts.board === "dark";
+  const inApp = typeof location !== "undefined" && location.pathname.startsWith("/app");
   const cats = (mode === "paint" ? ["style", "detail", "more"] : ["letters", "colour", "board", "detail", "more"]) as (typeof cat)[];
   const cur = cats.includes(cat) ? cat : cats[0];
   const groups: Record<typeof cat, React.ReactNode> = {
     letters: (["symbols", "numbers", "words"] as Letters[]).map((v) => <Seg key={v} on={opts.letters === v} onClick={() => set("letters", v)}>{L(v)}</Seg>),
     colour: (["full", "one", "bw"] as Colour[]).map((v) => <Seg key={v} on={opts.colour === v} onClick={() => set("colour", v)}>{L(v)}</Seg>),
     board: (["dark", "paper"] as Board[]).map((v) => <Seg key={v} on={opts.board === v} onClick={() => set("board", v)}>{L(v)}</Seg>),
-    detail: (["coarse", "medium", "fine"] as Detail[]).map((v) => <Seg key={v} on={opts.detail === v} onClick={() => set("detail", v)}>{L(v)}</Seg>),
+    detail: (["coarse", "medium", "fine", "realistic"] as Detail[]).map((v) => <Seg key={v} on={opts.detail === v} onClick={() => (setExtra(0), set("detail", v))}>{L(v)}</Seg>),
     style: (["bold", "oil", "water"] as Style[]).map((v) => <Seg key={v} on={style === v} onClick={() => setStyle(v)}>{L(v)}</Seg>),
     more: [
       ...(mode === "type" ? [<Seg key="plain" on={opts.plain} onClick={() => set("plain", !opts.plain)}>{L("plain")}</Seg>] : []),
@@ -623,6 +868,26 @@ export function TypeArt() {
             <p className="font-head text-[17px] font-bold leading-tight">{L("title")}</p>
             {pic && <p className="truncate text-[12.5px] font-semibold text-ink-2">{pic.subject}</p>}
           </div>
+          {/* talk to Jagora while the board is open: the same Live voice as the app */}
+          {inApp && (
+            <button
+              onClick={() => useApp.getState().setLive(!liveOn)}
+              aria-pressed={liveOn}
+              aria-label={L("talk")}
+              className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${liveOn ? "bg-accent text-[#fff]" : "btn btn-glass"}`}
+            >
+              {liveOn && orb === "listening" && <span className="absolute inset-0 animate-ping rounded-full bg-accent/40" aria-hidden="true" />}
+              {liveOn && orb === "speaking" ? (
+                <span className="relative flex h-4 items-end gap-[3px]" aria-hidden="true">
+                  {[0, 1, 2].map((i) => (
+                    <span key={i} className="w-[3px] animate-pulse rounded-full bg-[#fff]" style={{ height: `${[10, 16, 8][i]}px`, animationDelay: `${i * 120}ms` }} />
+                  ))}
+                </span>
+              ) : (
+                <Microphone size={19} weight={liveOn ? "fill" : "bold"} className="relative" />
+              )}
+            </button>
+          )}
           {/* Type or Paint */}
           <div className="flex shrink-0 rounded-full bg-ink/[0.07] p-0.5 dark:bg-[#fff]/10">
             {(["type", "paint"] as const).map((v) => (
@@ -648,7 +913,16 @@ export function TypeArt() {
           className={`relative flex max-h-full max-w-full items-center justify-center overflow-hidden rounded-[22px] p-3 shadow-[0_30px_70px_-30px_rgba(10,25,60,.65)] ring-1 ${dark ? "bg-[#0e0f12] ring-[#fff]/25" : "bg-[#fff] ring-[#0e0f12]/10"} ${pic ? "" : "h-full w-full max-w-[680px]"}`}
         >
           {pic ? (
-            <canvas ref={cv} className="block max-h-full max-w-full" />
+            <canvas
+              ref={cv}
+              className="block max-h-full max-w-full"
+              style={{ touchAction: phase === "done" ? "none" : "auto", cursor: zoomed ? "grab" : phase === "done" ? "zoom-in" : "default" }}
+              onPointerDown={onDown}
+              onPointerMove={onMove}
+              onPointerUp={onUp}
+              onPointerCancel={onUp}
+              onWheel={onWheel}
+            />
           ) : (
             <div className={`flex max-w-[560px] flex-col items-center gap-4 overflow-y-auto px-3 py-4 text-center ${dark ? "text-[#eceef2]" : "text-[#0e0f12]"}`}>
               <p className="font-head text-[23px] font-bold leading-tight sm:text-[28px]">{waiting ? L(mode === "paint" ? "painting" : "getting") : L("empty")}</p>
@@ -682,6 +956,21 @@ export function TypeArt() {
             <div className="absolute inset-x-0 top-1/2 mx-auto w-fit -translate-y-1/2 rounded-full bg-[#fff]/90 px-4 py-2 text-[13.5px] font-bold text-[#0e0f12]">{L("painting")}</div>
           )}
           {pic && waiting && <div className="absolute inset-x-0 top-3 mx-auto w-fit rounded-full bg-[#fff]/90 px-4 py-2 text-[13.5px] font-bold text-[#0e0f12]">{L("getting")}</div>}
+          {pic && phase === "done" && (
+            <div className="absolute right-3 top-3 flex gap-2">
+              {zoomed && (
+                <button onClick={() => setView(1, 0, 0)} className="btn h-9 bg-[#fff]/90 px-3 text-[13px] font-bold text-[#0e0f12] shadow-md">1x</button>
+              )}
+              <button
+                onClick={() => void keepDetailing()}
+                disabled={finest}
+                className="btn h-9 gap-1.5 bg-[#fff]/90 px-3 text-[13px] font-bold text-[#0e0f12] shadow-md disabled:opacity-60"
+              >
+                <Sparkle size={15} weight="fill" className="text-accent" />
+                {finest ? L("finest") : L("keep")}
+              </button>
+            </div>
+          )}
           {pic && title && (
             <p className={`pointer-events-none absolute bottom-2 left-4 max-w-[60%] truncate text-[12.5px] font-bold ${dark ? "text-[#eceef2]/80" : "text-[#0e0f12]/75"}`}>
               {title}, {new Date().getFullYear()}

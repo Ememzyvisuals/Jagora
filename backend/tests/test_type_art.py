@@ -123,3 +123,28 @@ async def test_the_cutout_endpoint_needs_her_sign_in():
     from jagora.server import app
     r = TestClient(app).post("/art/cutout", json={"image": "data:image/jpeg;base64,AAAA"})
     assert r.status_code == 401
+
+
+async def test_realistic_detail_works_for_type_and_paint():
+    io_ = IOm()
+    a = ag.Agent(None, None, io_)
+    await a._act("draw_art", {"detail": "realistic"}, None)
+    await a._act("draw_art", {"detail": "realistic", "mode": "paint"}, None)
+    assert [d for k, d in io_.sent if k == "typeart"] == [{"restyle": True, "detail": "realistic"},
+                                                          {"restyle": True, "detail": "realistic", "mode": "paint"}]
+
+
+async def test_keep_detailing_adds_a_pass_without_a_new_picture():
+    io_, imgs = IOm(), FakeImages()
+    a = ag.Agent(None, None, io_)
+    a.images = imgs
+    out, _, _ = await a._act("draw_art", {"more": True}, None)
+    assert "finer pass" in out and not imgs.prompts
+    assert [d for k, d in io_.sent if k == "typeart"] == [{"restyle": True, "more": True}]
+
+
+def test_the_tool_offers_realistic_and_more_detail():
+    t = next(t for t in ag.COMMON if t["function"]["name"] == "draw_art")
+    props = t["function"]["parameters"]["properties"]
+    assert "realistic" in props["detail"]["enum"] and props["more"]["type"] == "boolean"
+    assert "keep detailing" in t["function"]["description"]

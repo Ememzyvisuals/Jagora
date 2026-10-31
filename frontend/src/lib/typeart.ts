@@ -17,10 +17,12 @@ import type { Lang } from "./i18n";
 
 export type Letters = "symbols" | "numbers" | "words";
 export type Colour = "full" | "one" | "bw";
-export type Detail = "coarse" | "medium" | "fine";
+export type Detail = "coarse" | "medium" | "fine" | "realistic";
 export type Board = "dark" | "paper";
-export type ArtOpts = { letters: Letters; colour: Colour; detail: Detail; board: Board; plain: boolean; lang: Lang };
-export type Glyph = { ch: string; c: string; bold: boolean };
+/** extra: how many times she asked for more detail (Keep detailing); each time the letters get smaller */
+export type ArtOpts = { letters: Letters; colour: Colour; detail: Detail; board: Board; plain: boolean; lang: Lang; extra?: number };
+/** one typed letter: the letter, its colour, its weight, and (realistic only) a faint tone behind it */
+export type Glyph = { ch: string; c: string; bold: boolean; t?: string };
 export type Art = { cols: number; rows: number; font: number; cw: number; lh: number; bg: string; ink: string; cells: (Glyph | null)[] };
 
 export const FONT = '"Jagora Mono", ui-monospace, Menlo, Consolas, monospace';
@@ -101,18 +103,24 @@ function shapes(set: string): Shape[] {
 }
 
 /** the grid for this picture in this box: as many columns as the detail asks for, at most about 160 x 200 */
-export function grid(imgW: number, imgH: number, boxW: number, boxH: number, detail: Detail, words = false) {
+/** the most letters across: with zoom up to 8x the smallest letters still read as letters */
+export const MAX_COLS = (phone: boolean) => (phone ? 210 : 290);
+export const MAX_EXTRA = 3;
+
+export function grid(imgW: number, imgH: number, boxW: number, boxH: number, detail: Detail, words = false, extra = 0) {
   const phone = boxW < 640;
-  // words carry the picture only by how bright each letter is, so they sit on a finer grid
-  const want = Math.round({ coarse: phone ? 46 : 76, medium: phone ? 70 : 112, fine: phone ? 100 : 156 }[detail] * (words ? 1.7 : 1));
+  // words carry the picture only by how bright each letter is, so they sit on a finer grid; realistic goes much finer,
+  // and each Keep detailing makes the letters smaller again, up to MAX_COLS
+  const base = { coarse: phone ? 46 : 76, medium: phone ? 70 : 112, fine: phone ? 100 : 156, realistic: phone ? 130 : 190 }[detail];
+  const want = Math.min(MAX_COLS(phone), Math.round(base * (words ? 1.5 : 1) * Math.pow(1.22, Math.min(MAX_EXTRA, extra))));
   const k = LINE / ADV; // cell height over width
   let cols = want, rows = Math.max(8, Math.round((cols * imgH) / imgW / k));
-  const maxRows = phone ? 200 : 220;
+  const maxRows = detail === "realistic" || extra ? (phone ? 320 : 380) : phone ? 200 : 220;
   if (rows > maxRows) {
     rows = maxRows;
     cols = Math.max(20, Math.round((rows * k * imgW) / imgH));
   }
-  const font = Math.max(3, Math.min((boxW * 0.96) / (cols * ADV), (boxH * 0.96) / ((rows + 2) * LINE)));
+  const font = Math.max(1.2, Math.min((boxW * 0.96) / (cols * ADV), (boxH * 0.96) / ((rows + 2) * LINE)));
   return { cols, rows, font, cw: font * ADV, lh: font * LINE };
 }
 
@@ -198,7 +206,8 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
     await document.fonts?.load(`500 20px "Jagora Mono"`);
   } catch {}
   const words = o.letters === "words";
-  const { cols, rows, font, cw, lh } = grid(img.width, img.height, boxW, boxH, o.detail, words);
+  const { cols, rows, font, cw, lh } = grid(img.width, img.height, boxW, boxH, o.detail, words, o.extra || 0);
+  const real = o.detail === "realistic" || (o.extra || 0) > 0;
   const paper = o.board === "paper";
   const W = cols * SW, H = rows * SH;
   const c = document.createElement("canvas");
@@ -401,7 +410,17 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
           ? k < 0.6 ? mix(PAPER, ACCENT, 0.1 + (k / 0.6) * 0.9) : mix(ACCENT, DEEP, (k - 0.6) / 0.4)
           : k < 0.55 ? mix(BG, ACCENT_DK, k / 0.55) : mix(ACCENT_DK, SOFT, (k - 0.55) / 0.45);
       } else col = paper ? mix(PAPER, INK, k) : mix(BG, [250, 251, 253], k);
-      cells[y * cols + x] = { ch, c: hex(col[0], col[1], col[2]), bold: !words || lit > 0.45 };
+      // realistic: a faint tone of the picture behind each letter, so from afar it reads as a photo and up close
+      // as letters
+      let behind: string | undefined;
+      if (real) {
+        const tc = o.colour === "full" ? [r, gg, b] : o.colour === "one" ? (paper ? ACCENT : ACCENT_DK) : paper ? INK : [250, 251, 253];
+        const tt = (paper ? 0.1 : 0.16) * (0.35 + 0.65 * lit);
+        const base = paper ? PAPER : BG;
+        const m = mix(base, tc, tt);
+        behind = hex(m[0], m[1], m[2]);
+      }
+      cells[y * cols + x] = { ch, c: hex(col[0], col[1], col[2]), bold: !words || lit > 0.45, ...(behind ? { t: behind } : {}) };
     }
     if (y % 24 === 23) await new Promise((r) => setTimeout(r));
   }
@@ -418,6 +437,10 @@ export function paintArt(a: Art, g: CanvasRenderingContext2D) {
   for (let i = 0; i < a.cells.length; i++) {
     const c = a.cells[i];
     if (!c) continue;
+    if (c.t) {
+      g.fillStyle = c.t;
+      g.fillRect((i % a.cols) * a.cw, Math.floor(i / a.cols) * a.lh, a.cw + 0.3, a.lh + 0.3);
+    }
     if (c.bold !== bold) {
       g.font = `${c.bold ? 800 : 500} ${a.font}px ${FONT}`;
       bold = c.bold;
@@ -425,6 +448,41 @@ export function paintArt(a: Art, g: CanvasRenderingContext2D) {
     g.fillStyle = c.c;
     g.fillText(c.ch, (i % a.cols) * a.cw, Math.floor(i / a.cols) * a.lh + a.lh / 2);
   }
+}
+
+/** The part of the art seen through a zoom: z times bigger, the art point (ox, oy) at the top-left, typed again at
+    that size so the letters stay sharp text (the canvas is w x h CSS pixels at dpr). */
+export function drawView(g: CanvasRenderingContext2D, a: Art, sig: string, w: number, h: number, dpr: number, z: number, ox: number, oy: number) {
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.fillStyle = a.bg;
+  g.fillRect(0, 0, g.canvas.width, g.canvas.height);
+  g.setTransform(dpr * z, 0, 0, dpr * z, -ox * dpr * z, -oy * dpr * z);
+  g.textBaseline = "middle";
+  const c0 = Math.max(0, Math.floor(ox / a.cw) - 1), c1 = Math.min(a.cols - 1, Math.ceil((ox + w / z) / a.cw) + 1);
+  const r0 = Math.max(0, Math.floor(oy / a.lh) - 1), r1 = Math.min(a.rows - 1, Math.ceil((oy + h / z) / a.lh) + 1);
+  let bold: boolean | null = null;
+  for (let r = r0; r <= r1; r++)
+    for (let x = c0; x <= c1; x++) {
+      const c = a.cells[r * a.cols + x];
+      if (!c) continue;
+      if (c.t) {
+        g.fillStyle = c.t;
+        g.fillRect(x * a.cw, r * a.lh, a.cw + 0.3 / z, a.lh + 0.3 / z);
+      }
+      if (c.bold !== bold) {
+        g.font = `${c.bold ? 800 : 500} ${a.font}px ${FONT}`;
+        bold = c.bold;
+      }
+      g.fillStyle = c.c;
+      g.fillText(c.ch, x * a.cw, r * a.lh + a.lh / 2);
+    }
+  if (sig) {
+    const f = Math.max(9, a.lh * 1.5);
+    g.font = `800 ${f}px ${FONT}`;
+    g.fillStyle = a.ink;
+    g.fillText(sig, a.cols * a.cw - sig.length * f * 0.6 - a.cw, (a.rows + 1) * a.lh);
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
 }
 
 /* ---- saving at print size --------------------------------------------------------------------------------------- */
@@ -458,6 +516,10 @@ function drawPart(g: CanvasRenderingContext2D, a: Art, sig: string, p: ReturnTyp
     for (let x = 0; x < a.cols; x++) {
       const c = a.cells[r * a.cols + x];
       if (!c) continue;
+      if (c.t) {
+        g.fillStyle = c.t;
+        g.fillRect(x * a.cw, r * a.lh, a.cw + 0.6 / p.s, a.lh + 0.6 / p.s);
+      }
       if (c.bold !== bold) {
         g.font = `${c.bold ? 800 : 500} ${a.font}px ${FONT}`;
         bold = c.bold;

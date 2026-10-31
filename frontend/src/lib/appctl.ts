@@ -54,7 +54,10 @@ export function describeScreen(): string {
     const pos = c.length ? ` At ${clock(c.time)} of ${clock(c.length)}${c.paused ? ", paused" : ""}, volume ${c.volume}${c.muted ? " (muted)" : ""}, speed ${c.speed}x${c.big ? ", filling the screen" : ""}.` : "";
     lines.push(`Playing on her screen now: "${s.playing.queue?.[s.mediaAt]?.name ?? s.playing.name}" (${s.playing.type === "youtube" ? "YouTube video" : s.playing.type}).${pos} Do not start it again; stop_media closes it (her place is kept).`);
   }
-  if (facts.typeart) lines.push(`Type Art artboard: ${facts.typeart}. draw_art with no subject types it again with new letters, colour or detail; with a subject it draws something new.`);
+  if (facts.typeart)
+    lines.push(
+      `Type Art artboard: ${facts.typeart}. draw_art with no subject changes the art on it (colour, letters, board, mode, style, detail including realistic, or more=true for Keep detailing); with a subject it draws something new. app_control art_zoom, art_save, art_video, art_again and type_art off work the board. While the board is open, answer in a few words only (e.g. "Done, blue now.").`,
+    );
   if (s.live) lines.push(`Live voice: ${s.liveSmall || s.playing ? "folded to the small bar at the top" : "full screen"}.`);
   const chats = listed();
   if (chats.length)
@@ -191,6 +194,11 @@ export function runApp(action: string, value = "") {
     }
     case "amina":
       return setAminaHidden(!on);
+    case "art_zoom": // the art board: zoom in, out or back to the whole picture
+    case "art_save": // save the picture at a size (screen, hd, 4k, a4, a3)
+    case "art_video":
+    case "art_again":
+      return void window.dispatchEvent(new CustomEvent("jagora:typeart-cmd", { detail: { action, value } }));
     case "type_art": // the Type Art artboard (drawing on it is the draw_art tool)
       return void window.dispatchEvent(new CustomEvent("jagora:typeart", { detail: { open: on } }));
     case "my_details":

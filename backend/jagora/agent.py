@@ -43,7 +43,7 @@ from jagora.config import FILES_DIR, settings
 from jagora.guard import guard, registrable
 from jagora import llm
 from jagora.llm import Model, image_part, tool
-from jagora import muse
+from jagora import artvoice, muse
 from jagora import sam as sam_mod
 from jagora.safety import INSTALLER, Decision, Verdict, check_click, check_navigate, check_type, site
 
@@ -352,7 +352,9 @@ COMMON = [
          "online) or Paint (a picture painted live with brush strokes, coarse to fine, like a painter). Use when she asks "
          "you to draw or paint someone or something ('draw a Nigerian woman in a gele', 'paint a Fulani woman at "
          "sunset', 'paint me a portrait'), to turn her photo into art (use_photo), or to change the art already on her "
-         "board ('make am blue', 'use words', 'paint am like oil', 'draw am bigger': restyle, no subject). mode is paint "
+         "board ('make am blue', 'use words', 'paint am like oil', 'draw am bigger': restyle, no subject). For art she "
+         "wants to look real (typed or painted), use detail realistic; 'make am more realistic', 'add more detail', 'keep "
+         "detailing' on the art already on her board is more=true (one more, finer pass, no new subject). mode is paint "
          "when she says paint, painting or portrait painting; otherwise type. Never draw or paint a real or famous "
          "person by name: say kindly that you make art of people in general, and offer an ordinary person like them "
          "(e.g. 'a Nigerian musician in sunglasses') or that she can upload her own photo.",
@@ -366,7 +368,9 @@ COMMON = [
           "use_photo": {"type": "boolean", "description": "type out the photo she attached in the chat"},
           "letters": {"type": "string", "enum": ["symbols", "numbers", "words"], "description": "words = words in her language"},
           "colour": {"type": "string", "enum": ["full", "one", "bw"], "description": "full colour, one colour (blue on paper), black and white"},
-          "detail": {"type": "string", "enum": ["coarse", "medium", "fine"], "description": "'bigger letters' is coarse, 'more detail' is fine"},
+          "detail": {"type": "string", "enum": ["coarse", "medium", "fine", "realistic"], "description": "'bigger letters' is coarse, "
+                     "'more detail' is fine; realistic keeps going with ever smaller letters or brushes until it looks real"},
+          "more": {"type": "boolean", "description": "keep detailing the art on her board: one more, finer pass"},
           "board": {"type": "string", "enum": ["dark", "paper"], "description": "the dark (black) board or light paper"},
           "mode": {"type": "string", "enum": ["type", "paint"], "description": "type art (letters) or a painting"},
           "style": {"type": "string", "enum": ["bold", "oil", "water"], "description": "painting style: bold colour, oil, watercolour"}},
@@ -595,7 +599,7 @@ ACT_TOOLS = [
 ]
 APP_ACTIONS = ["show_page", "hide_page", "show_chat", "hide_chat", "show_tabs", "hide_tabs", "open_chat", "new_chat",
                "close_chat", "scroll_chat", "set_language", "set_mode", "voice", "data_saver", "theme", "fullscreen",
-               "end_live", "hide_live", "show_live", "stop_media", "media_next", "media_previous", "media_pause", "media_play", "media_seek", "media_save", "media_resume", "media_volume", "media_speed", "media_mute", "media_unmute", "media_big", "media_restart", "amina", "my_details", "go_home", "show_history", "hide_history", "type_art"]
+               "end_live", "hide_live", "show_live", "stop_media", "media_next", "media_previous", "media_pause", "media_play", "media_seek", "media_save", "media_resume", "media_volume", "media_speed", "media_mute", "media_unmute", "media_big", "media_restart", "amina", "my_details", "go_home", "show_history", "hide_history", "type_art", "art_zoom", "art_save", "art_video", "art_again"]
 APP_TOOL = tool(
     "app_control",
     "Control the Jagora app itself on the user's screen (not the website): show or hide the live web page, show or hide "
@@ -610,8 +614,10 @@ APP_TOOL = tool(
     "faster or slower (media_speed 1.5, 0.75, +0.25; 1 is normal), make it fill the screen or back to normal "
     "(media_big on / off), pause it and keep her place in this chat to "
     "watch later (media_save: 'save it for later', 'I will continue later'), play the saved one on from where she stopped "
-    "(media_resume: 'continue my video'), show or hide Amina, open or close the Type Art artboard (type_art on / off; "
-    "to draw on it use draw_art), open their "
+    "(media_resume: 'continue my video'), show or hide Amina, open or close the art board (type_art on / off; "
+    "to draw on it or change it use draw_art), on the art board zoom in, out or back to the whole picture (art_zoom in / out / "
+    "reset), save the picture (art_save screen, hd, 4k, a4 or a3 for print), save the video (art_video), draw it again "
+    "(art_again), open their "
     "saved details, go to the start screen. Use it whenever they ask for something on the screen ('close this', 'show me "
     "the browser', 'go back to my last chat', 'make it dark', 'scroll up'). 'This' and 'that' mean what is on their "
     "screen now (see 'On the user's screen'). Do it at once, no need to ask.",
@@ -871,6 +877,19 @@ class Agent:
             await self.io.say(SAY["refuse"].get(self.lang, SAY["refuse"]["en"]).format(r=why))
             self._record("refused", {"kind": no})
             return Result(False, why, 0, time.monotonic() - t0, self.model.usage.__dict__ if hasattr(self.model, "usage") else {}, str(self._log_path))
+        if not start_url and self.screen is not None:
+            # the art board is open: a short spoken command ("make am blue", "ajiye a 4K") is done at once, no model call
+            try:
+                board_open = "Type Art artboard: open" in (self.screen() or "")
+            except Exception:  # noqa: BLE001
+                board_open = False
+            cmd = artvoice.parse(goal, self.lang) if board_open else None
+            if cmd:
+                await self.io.event(cmd.kind, cmd.data)
+                said = artvoice.reply(cmd, self.lang)
+                await self.io.say(said)
+                self._record("art_voice", {"kind": cmd.kind, **cmd.data})
+                return Result(True, said, 0, time.monotonic() - t0, self.model.usage.__dict__ if hasattr(self.model, "usage") else {}, str(self._log_path))
         if start_url:
             await self._ensure_browser()
             self.home_site = site(start_url)
@@ -2843,9 +2862,15 @@ class Agent:
     async def _draw_art(self, a: dict) -> tuple[str, bool, None]:
         """Type Art: Muse Image draws the reference (or her own photo is used), and her artboard types it out live."""
         opts = {k: str(a[k]) for k in ("letters", "colour", "detail", "board", "mode", "style") if a.get(k) in {
-            "letters": ("symbols", "numbers", "words"), "colour": ("full", "one", "bw"), "detail": ("coarse", "medium", "fine"),
+            "letters": ("symbols", "numbers", "words"), "colour": ("full", "one", "bw"), "detail": ("coarse", "medium", "fine", "realistic"),
             "board": ("dark", "paper"), "mode": ("type", "paint"), "style": ("bold", "oil", "water")}[k]}
         paint = opts.get("mode") == "paint"
+        if a.get("more") and not str(a.get("subject") or "").strip():
+            # keep detailing: one more, finer pass on the art already on her board (paint: finer strokes on top;
+            # type: typed again with smaller letters)
+            await self.io.event("typeart", {"restyle": True, "more": True, **({"mode": opts["mode"]} if opts.get("mode") else {})})
+            return ("one more, finer pass is being made on her art now. Say one short line (it is getting sharper), then "
+                    "finish."), False, None
         subject = str(a.get("subject") or "").strip()
         if subject and FAMOUS.search(subject):
             return ("not drawn: that names a real, famous person. Tell her kindly in one short line that you make art of "
