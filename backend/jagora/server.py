@@ -2295,6 +2295,14 @@ class WsIO:
             data = {k: v for k, v in data.items() if k != "seen_on_photo"}
             await s.send({"type": "msg", "task": t, "msg": {"id": mid(), "kind": "reading", **data}})
             await db.remember(s.user_id, t, "agent", f"[read {data.get('kind')} with {data.get('read_by')}] {data.get('summary', '')}")
+        elif kind == "typeart":
+            # her Type Art artboard opens and types the picture out (or types the one on it again with new settings)
+            url = str(data.get("url") or "")
+            if url.startswith("/"):
+                url = settings.public_url.rstrip("/") + url
+            await s.send({"type": "typeart", "task": t, **{k: v for k, v in data.items() if k != "url"}, **({"url": url} if url else {})})
+            if data.get("subject") and not data.get("own"):
+                await db.remember(s.user_id, t, "agent", f"[type art] {data.get('subject')}")
         elif kind == "pictures":
             await self.close_step()
             base = settings.public_url.rstrip("/")

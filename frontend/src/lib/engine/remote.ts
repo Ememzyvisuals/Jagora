@@ -246,6 +246,9 @@ function handle(ev: Record<string, unknown>) {
       for (const t of s.tasks) if ((t.status === "working" || t.status === "waiting") && !busy.has(t.id)) s.setStatus(t.id, "stopped");
       break;
     }
+    case "typeart": // Type Art: a picture to type out on her artboard, or new settings for the one on it
+      window.dispatchEvent(new CustomEvent("jagora:typeart", { detail: { open: true, ...ev } }));
+      break;
     case "app": // Jagora changes something in the app on her screen
       runApp(ev.action as string, (ev.value as string) || "");
       break;

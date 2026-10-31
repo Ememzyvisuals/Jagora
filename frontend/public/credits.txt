@@ -16,3 +16,6 @@ portrait-07.webp: Unsplash photographer, Unsplash, Unsplash License, https://uns
 portrait-08.webp: Ab Pixels, Pexels, Pexels License, https://www.pexels.com/photo/nigerian-woman-in-traditional-ankara-attire-portrait-34249461/
 
 Earth imagery: NASA Blue Marble (public domain), via the three-globe package (MIT).
+
+Font: JetBrains Mono (Type Art), Copyright 2020 The JetBrains Mono Project Authors, SIL Open Font License 1.1, https://github.com/JetBrains/JetBrainsMono
+Type Art samples (typeart/portrait-03.webp, typeart/people-06.webp, typeart/portrait-06.webp): crops of the photos of the same names above, same licences.

@@ -1,0 +1,78 @@
+"""Type Art: draw_art asks Muse Image for the picture and opens her artboard; restyling sends no new picture; real,
+famous people are never drawn from a prompt; her own photo is typed out."""
+import pytest
+
+from jagora import agent as ag
+from jagora import muse
+
+
+
+
+class IOm:
+    def __init__(self):
+        self.sent = []
+
+    async def event(self, k, d):
+        self.sent.append((k, d))
+
+    async def say(self, t):
+        self.sent.append(("say", t))
+
+
+class FakeImages:
+    def __init__(self):
+        self.prompts = []
+
+    async def generate(self, prompt):
+        self.prompts.append(prompt)
+        from PIL import Image
+        import io
+        b = io.BytesIO()
+        Image.new("RGB", (64, 64), (200, 120, 40)).save(b, "PNG")
+        return b.getvalue()
+
+
+async def test_draw_art_draws_with_muse_image_and_opens_the_artboard(tmp_path, monkeypatch):
+    monkeypatch.setattr(ag, "FILES_DIR", tmp_path)
+    io_, imgs = IOm(), FakeImages()
+    a = ag.Agent(None, None, io_, lang="pcm")
+    a.images = imgs
+    out, _, _ = await a._act("draw_art", {"subject": "a Nigerian woman in a green and gold gele", "letters": "words", "colour": "full"}, None)
+    assert "artboard is typing" in out
+    assert imgs.prompts and "black background" in imgs.prompts[0] and "gele" in imgs.prompts[0]
+    ev = [d for k, d in io_.sent if k == "typeart"]
+    assert ev and ev[0]["url"].startswith("/files/") and ev[0]["letters"] == "words" and ev[0]["colour"] == "full"
+    assert (tmp_path / ev[0]["url"].split("/")[2] / "art.webp").exists()
+    assert [t for k, t in io_.sent if k == "say"]  # she hears one line while it draws
+
+
+async def test_restyle_sends_only_the_new_settings():
+    io_ = IOm()
+    a = ag.Agent(None, None, io_)
+    out, _, _ = await a._act("draw_art", {"colour": "one", "detail": "coarse", "letters": "nonsense"}, None)
+    ev = [d for k, d in io_.sent if k == "typeart"]
+    assert ev == [{"restyle": True, "colour": "one", "detail": "coarse"}]
+
+
+async def test_famous_people_are_not_drawn():
+    io_, imgs = IOm(), FakeImages()
+    a = ag.Agent(None, None, io_)
+    a.images = imgs
+    out, _, _ = await a._act("draw_art", {"subject": "Burna Boy in sunglasses"}, None)
+    assert out.startswith("not drawn") and not imgs.prompts and not io_.sent
+
+
+async def test_her_own_photo_is_typed_out(tmp_path, monkeypatch):
+    monkeypatch.setattr(ag, "FILES_DIR", tmp_path / "files")
+    from PIL import Image
+    p = tmp_path / "me.jpg"
+    Image.new("RGB", (40, 40), (10, 10, 10)).save(p)
+    io_ = IOm()
+    a = ag.Agent(None, None, io_, files={"me.jpg": str(p)})
+    out, _, _ = await a._act("draw_art", {"use_photo": True}, None)
+    ev = [d for k, d in io_.sent if k == "typeart"]
+    assert ev and ev[0]["own"] is True and ev[0]["url"].endswith("photo.webp")
+
+
+def test_the_prompt_asks_for_one_ordinary_person_on_black():
+    assert "never a real or famous person" in muse.ART_STYLE and "black background" in muse.ART_STYLE

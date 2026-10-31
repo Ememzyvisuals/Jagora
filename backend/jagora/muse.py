@@ -208,6 +208,17 @@ async def draw_guide(plan: dict, images: Images) -> list[tuple[str, bytes]]:
     return [(panels[0]["caption"], first)] + [(p["caption"], img) for p, img in zip(panels[1:], rest)]
 
 
+ART_STYLE = ("A striking photographic portrait for typographic art. One single subject, centred, filling most of the frame, "
+             "on a plain pure black background with nothing else in it. Strong soft key light from one side, deep shadows, "
+             "high contrast, crisp edges, rich natural colours. An ordinary, fictional person, never a real or famous person. "
+             "No text, no letters, no logos, no watermark, no frame.")
+
+
+async def draw_art_picture(subject: str, images: "Images") -> bytes:
+    """Muse Image: the reference picture Type Art types out (a portrait or a figure, alone on black)."""
+    return await images.generate(f"{ART_STYLE} Subject: {subject.strip()[:300]}")
+
+
 # ---- open weights -----------------------------------------------------------------------------------------------------
 
 def open_model():

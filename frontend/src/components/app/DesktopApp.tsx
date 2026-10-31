@@ -29,7 +29,7 @@ import {
   List,
   MagnifyingGlass,
   CellSignalFull,
-  CellSignalLow, DownloadSimple, Eraser, Globe } from "@phosphor-icons/react";
+  CellSignalLow, DownloadSimple, Eraser, Globe, PaintBrush } from "@phosphor-icons/react";
 import { hush, remoteInput, remoteTakeover } from "@/lib/engine/remote";
 import { fly } from "../Effects";
 import { setAutoFullscreen, toggleFullscreen, useAutoFullscreen } from "../Pwa";
@@ -37,6 +37,7 @@ import { Starters, openSite, useTopSites } from "./NewTabBits";
 import { TranslateButton } from "../PageView";
 import { startPageWars } from "../PageWars";
 import { startScamSmash } from "../ScamSmash";
+import { openTypeArt } from "../TypeArt";
 import { aminaHidden, setAminaHidden } from "../mascot/Amina";
 import { reportScreen } from "@/lib/appctl";
 import { deleteChats } from "@/lib/sync";
@@ -442,6 +443,9 @@ function DeskProfile({ lang, setLang, langOpen, setLangOpen, theme, initial }: {
             </button>
             <button onClick={() => (startScamSmash(), setOpen(false))} className={item}>
               <ChatCircleText size={18} /> Play Scam Smash
+            </button>
+            <button onClick={() => (openTypeArt(), setOpen(false))} className={item}>
+              <PaintBrush size={18} /> Type Art
             </button>
             <button onClick={() => (void downloadSessionLog(), setOpen(false))} className={item}>
               <DownloadSimple size={18} /> Download session log

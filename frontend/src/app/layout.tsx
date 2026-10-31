@@ -5,6 +5,7 @@ import { Pwa } from "@/components/Pwa";
 import { Effects } from "@/components/Effects";
 import { PageWars } from "@/components/PageWars";
 import { ScamSmash } from "@/components/ScamSmash";
+import { TypeArt } from "@/components/TypeArt";
 import { THEME_SCRIPT } from "@/lib/themeScript";
 
 export const metadata: Metadata = {
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <Toast />
         <PageWars />
         <ScamSmash />
+        <TypeArt />
         {children}
       </body>
     </html>
