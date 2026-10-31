@@ -11,6 +11,7 @@ import { remoteWake } from "@/lib/engine/remote";
 import { refreshPush } from "@/lib/push";
 import { syncAccount } from "@/lib/sync";
 import { Amina } from "@/components/mascot/Amina";
+import { PaySheet } from "@/components/PaySheet";
 
 export default function AppPage() {
   const ready = useHydrated();
@@ -68,6 +69,7 @@ export default function AppPage() {
     <>
       {desktop ? <DesktopApp /> : <MobileApp />}
       <Amina app />
+      <PaySheet />
     </>
   );
 }

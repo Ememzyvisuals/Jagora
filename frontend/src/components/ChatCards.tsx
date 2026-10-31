@@ -586,7 +586,7 @@ export function RecordCard({ m }: { m: Extract<Msg, { kind: "record" }> }) {
 
 /* ---- her payment record: what to pay, to whom, and where it stands. Saved on the server the moment it appears, so
    she can leave for her bank app and come back (even on another device) and still see exactly what she paid. ---- */
-const PAY: Record<"title" | "amount" | "to" | "account" | "bank" | "ref" | "copy" | "copied" | "paid" | "check" | "kept" | "payNow", Record<Lang, string>> = {
+export const PAY: Record<"title" | "amount" | "to" | "account" | "bank" | "ref" | "copy" | "copied" | "paid" | "check" | "kept" | "payNow", Record<Lang, string>> = {
   title: { en: "Payment record", pcm: "Payment record", yo: "Àkọsílẹ̀ ìsanwó", ha: "Rikodin biya", ig: "Ndekọ ịkwụ ụgwọ" },
   amount: { en: "Amount", pcm: "Amount", yo: "Iye owó", ha: "Adadi", ig: "Ego ole" },
   to: { en: "Pay to", pcm: "Pay to", yo: "Sanwó fún", ha: "Biya zuwa", ig: "Kwụọ" },
@@ -607,7 +607,7 @@ const PAY: Record<"title" | "amount" | "to" | "account" | "bank" | "ref" | "copy
   },
 };
 /* the steps on the checkout she opens in her own browser (Jagora cannot see that page, so they are written here) */
-const PAY_STEPS: Record<Lang, { title: string; steps: string[] }> = {
+export const PAY_STEPS: Record<Lang, { title: string; steps: string[] }> = {
   en: {
     title: "How to pay",
     steps: [
