@@ -637,9 +637,10 @@ LIMITS YOU KEEP
 - Payments (electricity tokens, fees, tickets): only on the official site, the amount and meter or account confirmed with them, card details and OTP through ask_private, and their yes before paying.
 - Before any payment, read the whole order back in one short message and wait for their yes: what it is (route, date, time, class, seats, names), the total amount, and who receives the money.
 - Account names: when a page shows the name that belongs to an account number (a transfer, "verify account", a bank-transfer payment), tell them that exact name and compare it with who should get the money. If it is a person's name or anything other than the company or its payment company (Flutterwave, Paystack, Remita), say plainly that it does not match and do not pay. You cannot send money from their bank; when a page asks them to transfer, show the account number, bank, name and amount as written, and after they say they have paid, press the page's "I have paid" button and wait for the confirmation.
+- Train stations: keep the stations she named (she said Agege: the trip is from Agege). Check another station only when she picks it, and when she changes the date or train, go back to her own stations; say the boarding station in the read-back before payment.
 - Train tickets: book only on NRC's own booking sites (Lagos-Ibadan nrc.gsds.ng, Abuja-Kaduna nrc.tps.ng, Warri-Itakpe nrc-fane.ng, all listed on nrc.gov.ng). Tickets are paid by card on Flutterwave from that site. NRC warns that anyone asking for payment into a personal bank account for train tickets is a scammer: say so if you see it. Booking needs an account with their NIN (through ask_private) and opens about a day ahead; tell them if the date they want is not open yet. At the end, show the ticket or booking reference with show_evidence and tell them to keep it for the station.
 - nrc.gsds.ng (Lagos-Ibadan), the route that works: on the home page form use choose on "From" with the exact station name (Lagos side: "Mobolaji Johnson Station Ebute Metta", "Babatunde Raji Fashola Station Agege"; Ibadan side: "Obafemi Awolowo Station Moniya"; others as the list shows), then choose on "To", set_date, then "Find My Train". On /searchResult the form at the top shows "Select Originating Station" again: that is normal, her search is done; never go back and search again. Ask her which train and class (time, class, price), then press that train's "Book Now". On /bookTrain: the class is set; the Coach box is a dropdown: use choose on it (options like "C05-(R-41)" mean coach C05 with 41 seats left; take one with seats unless she cares). The seat map then shows ("Numbered boxes grouped by look" and the legend Selected / Available / Not available): offer her up to 6 real free seat numbers from the available group as choices, click the one she picks, check it is selected, then go on to passenger details and payment. Before asking her to pay, read the trip back from the page's own summary (departure and arrival times, date, class, coach and seat, total), word for word, never from memory: a wrong time on the ticket is a real loss.
-- A "Verify you are human" check (Cloudflare) on a payment page (checkout.paystack.com, Flutterwave, Remita) keeps coming back in Jagora's browser however often she ticks it. Ask her to tick it at most once; if it comes back, stop waiting on it: call keep_payment (status waiting, the amount, what it is for) with pay_url = the checkout address without anything after "?" (e.g. https://checkout.paystack.com/abc123): her payment card then shows a Pay button that opens it in her own browser, where the check passes. Never paste the link in the chat. Then walk her through it in a few short lines, in her language, before she goes (you cannot see that page once it opens in her browser, so say what it normally shows): 1) tap Pay in the card, the payment page opens in her own browser; 2) it lets her pick how to pay, usually Card or Transfer (also USSD or her bank); 3) Transfer: it shows an account number, bank and account name for this payment only; she sends exactly ₦X from her bank app before it expires, then taps the page's "I've sent the money" button; the account name must be the payment company (Paystack, Paystack-Titan, Flutterwave) or the site itself, never a person's name, and if it is a person she must stop; 4) Card: card number, expiry date and CVV, then the OTP code her bank sends; 5) when the page says it is successful, come back here and tap "I have paid" in the card. Then finish; do not repeat it. keep_payment stays waiting; when she says she has paid, check the booking on the site (its bookings or ticket page) and confirm or say it is not there yet.
+- A "Verify you are human" check (Cloudflare) on a payment page (checkout.paystack.com, Flutterwave, Remita) keeps coming back in Jagora's browser however often it is ticked. Never tick it yourself. Call keep_payment (status waiting, the amount, what it is for) with pay_url = the checkout address without anything after "?" (e.g. https://checkout.paystack.com/abc123): her payment card then shows a Pay button that opens it in her own browser, where the check passes, with the payment steps written under it. Never paste the link. Say ONE short line ("Tap Pay in the payment card and follow the steps there, then come back and tap I have paid") and finish at once: do not touch the checkout, its check, or go back from it (that can lose the reserved seat). When she says she has paid, check the booking on the site (its bookings or ticket page) and confirm it or say it is not there yet.
 
 HOW YOU WORK
 - Talk only through tell_user, ask_user, point_at, hand_over, ask_private, give_verdict and finish, always in {lang}. Never mention element numbers, tools, code or technical words. Numbers, dates and money stay as digits.
@@ -782,6 +783,8 @@ class Agent:
     _label_run: tuple = ("", 0)  # the small box pressed last, and how many times in a row
     _seat_line: str = ""  # the last seat-map reading, logged when it changes
     _pay_url: str = ""  # the checkout she was given a Pay button for
+    _handed_over: bool = False  # the payment is in her hands now (Pay button with the steps in her card)
+    _pay_line_said: bool = False  # the one line telling her to tap Pay has been said
     route_carry: dict | None = None  # this chat's route so far, across her messages (a booking takes several)  # (question, her answer) asked in this task
     _last_app: tuple = ("", "")  # the last app_control done (the same one twice in a row is refused)
     _video_searches: set = field(default_factory=set)  # video searches already made in this task
@@ -1327,11 +1330,26 @@ class Agent:
 
     async def _act(self, name: str, a: dict[str, Any], snap: Snapshot | None) -> tuple[str, bool, tuple[bool, str] | None]:
         """Returns (what happened, whether to look at the page again before going on, (success, summary) when finished)."""
+        if self._handed_over and name in ("click", "click_at", "go_back", "go_to", "new_tab", "type_text", "choose",
+                                          "scroll", "wait_for_page", "search", "keep_payment"):
+            # the checkout is hers now: touching it here (its human check, going back) can lose the reserved seat
+            return ("the payment is in her hands now (the Pay button and the steps are in her payment card). Do not "
+                    "touch the checkout or leave it. Say one short line if not said yet, then finish now."), False, None
         if snap is None and name in PAGE_ONLY:
             return f"{name} needs a web page, and none is open: open one first (go_to or search)", False, None
         try:
             if a.get("step"):
                 await self.io.event("step", {"text": str(a["step"])[:120]})
+            if name == "tell_user" and self._handed_over and not self._pay_line_said:
+                # the one line that sends her to the Pay button is always said, even after a long answer
+                msg = re.sub(r"\[([^\]]*)\]\(https?://[^)]+\)", r"\1", str(a.get("message", "")))
+                msg = re.sub(r"https?://\S+", "", msg).strip()
+                if msg:
+                    self._pay_line_said = True
+                    self._said_last, self._told_since_act, self._heard_since_told = msg, True, False
+                    self._said_all = self._said_all + [msg]
+                    await self.io.say(msg[:SAY_MAX])
+                    return "told them. Now finish (one short summary, no link).", False, None
             if name == "tell_user":
                 msg = str(a.get("message", ""))
                 link = re.search(r"https://[^\s)\]]+", msg)
@@ -1341,13 +1359,9 @@ class Agent:
                         amt = re.search(r"[₦N]\s?[\d,]+(?:\.\d+)?", msg)
                         await self._keep_payment({"what": self._goal[:120] or "Payment", "amount": amt.group(0) if amt else "",
                                                   "status": "waiting", "pay_url": link.group(0)})
-                    return ("not said as a link: a Pay button that opens the checkout in her own browser is now in her payment "
-                            "card. Walk her through it in a few short lines, in her language: tap Pay in the card; on that page pick "
-                            "Card or Transfer; Transfer shows an account number, bank and name for this payment only, she sends "
-                            "the exact amount from her bank app and taps the page's \"I've sent the money\" (the name must be "
-                            "Paystack, Paystack-Titan, Flutterwave or the site, never a person); Card asks for the card number, "
-                            "expiry, CVV and the OTP from her bank; when it says successful she comes back and taps \"I have "
-                            "paid\" in the card, and you check the booking on the site. Then finish."), False, None
+                    return ("not said as a link: the Pay button and the payment steps are now in her payment card. Say ONE "
+                            "short line in her language: tap Pay in the card and follow the steps there, then come back and "
+                            "tap \"I have paid\". Then finish."), False, None
                 key = re.sub(r"\W+", " ", msg).strip().lower()
                 if key and key == self._said_key:
                     return "already told them that; do not repeat it", False, None
@@ -1520,6 +1534,16 @@ class Agent:
                 return (f"not finished: the summary is too long to speak ({len(str(a['summary']))} characters). Finish again "
                         f"with at most 3 short sentences (under {SAY_MAX} characters)."), False, None
             if name == "finish":
+                if a.get("summary"):
+                    # a checkout address is never said or shown as a link: the Pay button carries it
+                    sm = re.sub(r"\[([^\]]*)\]\(https?://[^)]+\)", r"\1", str(a["summary"]))
+                    a["summary"] = re.sub(r"https?://(?:checkout\.paystack\.com|[\w.-]*flutterwave\.com|[\w.-]*remita\.net)\S*", "", sm).strip()
+                if self._handed_over:
+                    a["success"] = True  # the work up to the money is done; she pays in her own browser
+                    if not self._pay_line_said:
+                        self._pay_line_said = True
+                        await self.io.say(str(a.get("summary", ""))[:SAY_MAX])
+                    return "finished", False, (True, a.get("summary", ""))
                 if a.get("success"):
                     await self._give_official_pdf()
                 if False and a.get("success") and self.searched and not self.evidence and not self._nudged_evidence:
@@ -2126,6 +2150,13 @@ class Agent:
         self._trail_add("payment", f'{rec["status"]}: {rec["what"][:60]} {rec["amount"]}')
         if rec["status"] in ("confirmed", "failed"):
             self._payment_id = ""
+        if rec.get("pay_url") and rec["status"] == "waiting":
+            self._handed_over = True
+            return ("payment handed to her: her payment card now has a Pay button that opens the checkout in her own "
+                    "browser, with the steps written under it (Card or Transfer, the account name to expect, the OTP). "
+                    "Say ONE short line in her language, e.g. \"Tap Pay in the payment card and follow the steps there. "
+                    "When it says successful, come back and tap I have paid.\" Then finish at once. Do not touch the "
+                    "checkout, its human check, or go back from it."), False, None
         return f'payment record kept ({rec["status"]}); she can see it in the chat even if she leaves', False, None
 
     async def _ask_form(self, snap, a):

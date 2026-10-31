@@ -606,6 +606,60 @@ const PAY: Record<"title" | "amount" | "to" | "account" | "bank" | "ref" | "copy
     ig: "Echekwara ya na mkparịta ụka a. Ị nwere ike ịga ngwa ụlọ akụ gị wee laghachi; Jagora ga-edebe ibe ahụ meghere maka gị.",
   },
 };
+/* the steps on the checkout she opens in her own browser (Jagora cannot see that page, so they are written here) */
+const PAY_STEPS: Record<Lang, { title: string; steps: string[] }> = {
+  en: {
+    title: "How to pay",
+    steps: [
+      "Tap Pay. The payment page opens in your own browser.",
+      "Choose Card or Transfer.",
+      'Transfer: send the exact amount to the account it shows, from your bank app. The account name must be Paystack, Paystack-Titan or Flutterwave, never a person\'s name. Then tap "I\'ve sent the money".',
+      "Card: type your card number, expiry date and CVV, then the OTP code your bank sends you.",
+      'When it says successful, come back here and tap "I have paid". Jagora then checks it on the site.',
+    ],
+  },
+  pcm: {
+    title: "How to pay",
+    steps: [
+      "Tap Pay. The payment page go open for your own browser.",
+      "Pick Card or Transfer.",
+      'Transfer: send the exact amount go the account wey e show, from your bank app. The account name must be Paystack, Paystack-Titan or Flutterwave, no be person name. Then tap "I\'ve sent the money".',
+      "Card: type your card number, expiry date and CVV, then the OTP wey your bank send you.",
+      'When e talk say successful, come back here tap "I don pay". Jagora go check am for the site.',
+    ],
+  },
+  yo: {
+    title: "Bí ẹ ṣe máa sanwó",
+    steps: [
+      "Tẹ San. Ojú ìwé ìsanwó á ṣí nínú browser tiyín.",
+      "Yan Káàdì tàbí Transfer.",
+      'Transfer: fi iye owó gangan ránṣẹ́ sí àkáǹtì tó hàn, láti inú áàpù báǹkì yín. Orúkọ àkáǹtì gbọ́dọ̀ jẹ́ Paystack, Paystack-Titan tàbí Flutterwave, kì í ṣe orúkọ ènìyàn. Lẹ́yìn náà, tẹ "I\'ve sent the money".',
+      "Káàdì: tẹ nọ́mbà káàdì, ọjọ́ tí yóò parí àti CVV, lẹ́yìn náà kóòdù OTP tí báǹkì yín fi ránṣẹ́.",
+      'Tí ó bá sọ pé ó ti yọrí sí rere, ẹ padà síbí kí ẹ tẹ "Mo ti sanwó". Jagora á ṣàyẹ̀wò rẹ̀ lórí ojú òpó náà.',
+    ],
+  },
+  ha: {
+    title: "Yadda za ka biya",
+    steps: [
+      "Danna Biya. Shafin biyan kuɗi zai buɗe a burauzarka.",
+      "Zaɓi Kati ko Transfer.",
+      'Transfer: aika daidai adadin zuwa asusun da ya nuna, daga manhajar bankinka. Sunan asusun dole ya zama Paystack, Paystack-Titan ko Flutterwave, ba sunan mutum ba. Sannan danna "I\'ve sent the money".',
+      "Kati: rubuta lambar katinka, ranar karewa da CVV, sannan lambar OTP da bankinka ya aiko maka.",
+      'Idan ya ce an yi nasara, dawo nan ka danna "Na biya". Jagora za ta duba a shafin.',
+    ],
+  },
+  ig: {
+    title: "Otu esi akwụ ụgwọ",
+    steps: [
+      "Pịa Kwụọ. Peeji ịkwụ ụgwọ ga-emepe na ihe nchọgharị gị.",
+      "Họrọ Kaadị ma ọ bụ Transfer.",
+      'Transfer: ziga kpọmkwem ego ahụ na akaụntụ ọ gosiri, site na ngwa ụlọ akụ gị. Aha akaụntụ ga-abụ Paystack, Paystack-Titan ma ọ bụ Flutterwave, ọ bụghị aha mmadụ. Mgbe ahụ pịa "I\'ve sent the money".',
+      "Kaadị: pịnye nọmba kaadị gị, ụbọchị ọ ga-agwụ na CVV, mgbe ahụ koodu OTP ụlọ akụ gị zitere gị.",
+      'Mgbe ọ sịrị na ọ gara nke ọma, laghachi ebe a pịa "Akwụọla m". Jagora ga-elele ya na saịtị ahụ.',
+    ],
+  },
+};
+
 const PAY_STATUS: Record<Extract<Msg, { kind: "payment" }>["status"], Record<Lang, string>> = {
   waiting: { en: "Waiting for your payment", pcm: "E dey wait make you pay", yo: "Ń dúró de ìsanwó yín", ha: "Ana jiran biyanka", ig: "Na-eche ịkwụ ụgwọ gị" },
   paid_by_her: { en: "You said you paid, checking", pcm: "You talk say you don pay, I dey check", yo: "Ẹ ní ẹ ti sanwó, à ń ṣàyẹ̀wò", ha: "Ka ce ka biya, ana dubawa", ig: "Ị sịrị na ị kwụọla, a na-elele" },
@@ -686,6 +740,19 @@ export function PaymentCard({ m, task }: { m: Extract<Msg, { kind: "payment" }>;
           >
             {PAY.check[lang]}
           </button>
+        </div>
+      )}
+      {m.status === "waiting" && m.pay_url?.startsWith("https://") && (
+        <div className="mt-3 rounded-[16px] bg-white/45 p-3 dark:bg-white/5">
+          <p className="text-[14px] font-bold text-ink">{PAY_STEPS[lang].title}</p>
+          <ol className="mt-1.5 space-y-1.5">
+            {PAY_STEPS[lang].steps.map((t, i) => (
+              <li key={i} className="flex gap-2 text-[13.5px] font-medium leading-snug text-ink-2">
+                <span className="mt-[1px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink text-[11.5px] font-bold text-paper">{i + 1}</span>
+                <span>{t}</span>
+              </li>
+            ))}
+          </ol>
         </div>
       )}
     </div>

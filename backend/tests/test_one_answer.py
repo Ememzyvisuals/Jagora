@@ -93,3 +93,25 @@ async def test_a_pasted_checkout_link_becomes_the_pay_button():
     pay = [d for k, d in sent if k == "payment"]
     assert pay and pay[0]["pay_url"] == "https://checkout.paystack.com/91t5igr1dirojs4" and pay[0]["amount"] == "₦3887"
     assert not [x for x in sent if x[0] == "say"]
+
+
+async def test_after_the_hand_over_she_gets_one_line_and_the_checkout_is_left_alone():
+    from jagora import agent as ag
+    sent = []
+
+    class IOm:
+        async def event(self, k, d): sent.append((k, d))
+        async def say(self, t): sent.append(("say", t))
+
+    a = ag.Agent(None, None, IOm())
+    a._goal = "Train ticket Agege to Moniya"
+    a._long_told = True  # she was already told a long answer earlier in this task
+    out, _, _ = await a._keep_payment({"what": "Train ticket", "amount": "₦3887", "status": "waiting",
+                                       "pay_url": "https://checkout.paystack.com/oump270rpwpm4dp"})
+    assert "handed to her" in out and a._handed_over
+    out, _, _ = await a._act("click_at", {"x": 295, "y": 360}, None)
+    assert out.startswith("the payment is in her hands")
+    out, _, _ = await a._act("tell_user", {"message": "Tap Pay for the payment card, follow the steps wey dey there. When e say successful, come back tap I don pay. " * 2}, None)
+    assert out.startswith("told them") and [x for x in sent if x[0] == "say"]
+    out, _, fin = await a._act("finish", {"success": False, "summary": "Seat hold. Pay here https://checkout.paystack.com/oump270rpwpm4dp"}, None)
+    assert fin and fin[0] is True and "paystack" not in fin[1]
