@@ -31,7 +31,7 @@ const LINE = 1.0; // line height, in em: tight, like the typed portraits
 
 /* the letters each mode may use (space is the empty cell) */
 const SETS: Record<Exclude<Letters, "words">, string> = {
-  symbols: " .:;-_~^!?|/\\()[]{}<>+=*%#@&$3",
+  symbols: " .'`:;-_~^!?|/\\()[]{}<>+=*%#@&$3",
   numbers: " .,:0123456789",
 };
 
@@ -107,15 +107,17 @@ function shapes(set: string): Shape[] {
 export const MAX_COLS = (phone: boolean) => (phone ? 210 : 290);
 export const MAX_EXTRA = 3;
 
-export function grid(imgW: number, imgH: number, boxW: number, boxH: number, detail: Detail, words = false, extra = 0) {
+export function grid(imgW: number, imgH: number, boxW: number, boxH: number, detail: Detail, words = false, extra = 0, busy = 0) {
   const phone = boxW < 640;
   // words carry the picture only by how bright each letter is, so they sit on a finer grid; realistic goes much finer,
   // and each Keep detailing makes the letters smaller again, up to MAX_COLS
-  const base = { coarse: phone ? 46 : 76, medium: phone ? 70 : 112, fine: phone ? 100 : 156, realistic: phone ? 130 : 190 }[detail];
-  const want = Math.min(MAX_COLS(phone), Math.round(base * (words ? 1.5 : 1) * Math.pow(1.22, Math.min(MAX_EXTRA, extra))));
+  // the first result is already fine enough to look finished, like the typed portraits people share; a busy picture
+  // (a group, a street, signage) gets smaller letters still (busy: 0 for a plain portrait .. 1 for a crowded scene)
+  const base = { coarse: phone ? 64 : 96, medium: phone ? 104 : 150, fine: phone ? 132 : 190, realistic: phone ? 160 : 230 }[detail];
+  const want = Math.min(MAX_COLS(phone), Math.round(base * (1 + 0.4 * Math.max(0, Math.min(1, busy))) * (words ? 1.3 : 1) * Math.pow(1.18, Math.min(MAX_EXTRA, extra))));
   const k = LINE / ADV; // cell height over width
   let cols = want, rows = Math.max(8, Math.round((cols * imgH) / imgW / k));
-  const maxRows = detail === "realistic" || extra ? (phone ? 320 : 380) : phone ? 200 : 220;
+  const maxRows = detail === "realistic" || extra ? (phone ? 320 : 380) : phone ? 260 : 300;
   if (rows > maxRows) {
     rows = maxRows;
     cols = Math.max(20, Math.round((rows * k * imgW) / imgH));
@@ -199,6 +201,24 @@ const hex = (r: number, g: number, b: number) =>
   "#" + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("");
 const mix = (a: number[], b: number[], t: number) => a.map((x, i) => x + (b[i] - x) * t);
 
+/** how busy the picture is: the share of it with clear light-and-dark edges (0 plain .. 1 crowded) */
+function busyness(img: CanvasImageSource & { width: number; height: number }): number {
+  const w = 160, h = Math.max(8, Math.round((160 * img.height) / img.width));
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const g = c.getContext("2d", { willReadFrequently: true })!;
+  g.drawImage(img, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data;
+  const l = (i: number) => 0.3 * d[i * 4] + 0.59 * d[i * 4 + 1] + 0.11 * d[i * 4 + 2];
+  let edges = 0;
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x;
+    if (Math.abs(l(i + 1) - l(i - 1)) + Math.abs(l(i + w) - l(i - w)) > 28) edges++;
+  }
+  return Math.min(1, (edges / ((w - 2) * (h - 2)) - 0.04) / 0.16);
+}
+
 /** the whole picture as typed cells */
 export async function buildArt(img: CanvasImageSource & { width: number; height: number }, boxW: number, boxH: number, o: ArtOpts): Promise<Art> {
   try {
@@ -206,7 +226,8 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
     await document.fonts?.load(`500 20px "Jagora Mono"`);
   } catch {}
   const words = o.letters === "words";
-  const { cols, rows, font, cw, lh } = grid(img.width, img.height, boxW, boxH, o.detail, words, o.extra || 0);
+  const busy = busyness(img);
+  const { cols, rows, font, cw, lh } = grid(img.width, img.height, boxW, boxH, o.detail, words, o.extra || 0, busy);
   const real = o.detail === "realistic" || (o.extra || 0) > 0;
   const paper = o.board === "paper";
   const W = cols * SW, H = rows * SH;
@@ -218,15 +239,25 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
   const d = g.getImageData(0, 0, W, H).data;
   await new Promise((r) => setTimeout(r)); // let the page breathe between the heavy steps
 
-  const mask = o.plain ? backgroundMask(d, W, H) : null;
+  let mask = o.plain ? backgroundMask(d, W, H) : null;
+  if (mask) {
+    // when most of the picture would go (a sky, a sea, a field), it is a landscape, not a person on a plain
+    // background: nothing is removed
+    let kept = 0;
+    for (let i = 0; i < mask.length; i += 7) kept += mask[i];
+    // a wide picture is a scene (a landscape, a group, a street): it is typed whole, never cut to a portrait oval
+    if (kept / Math.ceil(mask.length / 7) < 0.5 || img.width > img.height * 1.15) mask = null;
+  }
   if (mask) {
     // the subject is also framed with a soft oval, so the corners fade like a typed portrait; when the background
     // is busy (a room, a street) and could not be grown in from the edges, the oval is tighter and does the work
     let sum = 0;
     for (let i = 0; i < mask.length; i += 13) sum += mask[i];
-    const busy = sum / Math.ceil(mask.length / 13) > 0.8;
-    const [rx, ry, fade] = busy ? [0.46, 0.5, 0.2] : [0.62, 0.62, 0.15];
-    for (let y = 0; y < H; y++)
+    // (a busy background, a group or a street, is not framed: the people at the sides are as important as the middle;
+    // its flat parts get light letters instead, below)
+    const plainBg = sum / Math.ceil(mask.length / 13) <= 0.8;
+    const [rx, ry, fade] = [0.62, 0.62, 0.15];
+    if (plainBg) for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
         const dx = (x - W / 2) / (W * rx), dy = (y - H * 0.48) / (H * ry);
         const dd = Math.sqrt(dx * dx + dy * dy);
@@ -296,6 +327,27 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
     // dark board: light parts are dense; paper: dark parts are dense
     // (the mid tones are lifted: thin letters like : and ' vanish at small sizes, so a face needs the fuller ones)
     ink[i] = Math.pow(paper ? 1 - v : v, paper ? 0.8 : 0.6) * (mask ? mask[i] : 1);
+  }
+  // big flat parts (a wall, the sky, the inside of a big letter) get light letters (. : ' |), so they never turn into
+  // dense blocks that fight the people; where the picture has detail (faces, people, edges of letters) and on skin
+  // the letters stay full
+  if (!words) {
+    const E = new Float32Array(W * H), wsk = new Float32Array(W * H);
+    for (let y = 1; y < H - 1; y++)
+      for (let x = 1; x < W - 1; x++) {
+        const i = y * W + x;
+        E[i] = Math.abs(L[i + 1] - L[i - 1]) + Math.abs(L[i + W] - L[i - W]);
+      }
+    for (let i = 0; i < wsk.length; i++) {
+      const R = d[i * 4], G = d[i * 4 + 1], B = d[i * 4 + 2];
+      wsk[i] = R > G && G >= B * 0.92 && R - B > 14 && R - B < 150 && R > 38 ? 1 : 0;
+    }
+    const Es = boxBlur(E, W, H, SW), sk = boxBlur(wsk, W, H, SW);
+    const sample: number[] = [];
+    for (let i = 0; i < Es.length; i += 61) sample.push(Es[i]);
+    sample.sort((p, q) => p - q);
+    const top = Math.max(0.02, sample[Math.floor(sample.length * 0.85)]);
+    for (let i = 0; i < ink.length; i++) ink[i] *= Math.max(Math.min(1, 0.3 + (0.7 * Es[i]) / top), Math.min(1, sk[i] * 1.5));
   }
   await new Promise((r) => setTimeout(r));
 

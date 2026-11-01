@@ -483,7 +483,7 @@ export function TypeArt() {
     paintPlan.current = plan;
     const sigRoom = plan.H * 0.06;
     const k = Math.min((box.clientWidth - 24) / plan.W, (box.clientHeight - 24) / (plan.H + sigRoom));
-    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2); // (a painting is strokes, not letters: 2x is sharp, and every stroke costs less to paint)
     const W = Math.ceil(plan.W * k), H = Math.ceil((plan.H + sigRoom) * k);
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
@@ -503,7 +503,7 @@ export function TypeArt() {
       while (my === run.current && (await P.nextLayer(plan))) performance.mark(`art:layer${n++}`);
     })();
     // the first brushes get the most time, so every big stroke is painted where she can see it
-    animatePaint(my, 0, record, (li) => (li === 0 ? 10000 : li === 1 ? 6000 : 3000));
+    animatePaint(my, 0, record, (li) => (li === 0 ? 10000 : li === 1 ? 6000 : 2500));
     // the brush is on; now her photo's cut-out is asked for (SAM 3.1, only with her yes, when Jagora is connected),
     // and followed from the next layer on if it comes
     await new Promise((r) => requestAnimationFrame(r));
@@ -580,10 +580,17 @@ export function TypeArt() {
         marked = true;
         performance.mark("art:frame");
       }
-      const dt = last < 0 ? 0 : Math.min(50, now - last);
+      const dt = last < 0 ? 0 : Math.min(250, now - last); // (a slow phone draws fewer frames: the brush keeps its pace, only a real stall is not skipped over)
       last = now;
+      // the steps whose time has passed
+      while (j < steps.length && vt >= steps[j].start + steps[j].hop + steps[j].dur) {
+        const p = plan.strokes[steps[j].i].pts;
+        prev = [p[p.length - 2], p[p.length - 1]];
+        j++;
+      }
       if (j >= steps.length && plan.strokes.length > covered) {
-        // the next layer is planned: a new brush, and on
+        // the next layer is planned: a new brush, and on (checked after the steps that just ended, so a layer
+        // that was planned early is never skipped and the painting never stops before it is finished)
         const more = P.schedule(plan.strokes, covered, (li) => budget(li)).steps;
         for (const sp of more) steps.push({ ...sp, start: sp.start + vt });
         covered = plan.strokes.length;
@@ -592,16 +599,11 @@ export function TypeArt() {
           waitFrom = 0;
         }
       }
-      // the steps whose time has passed
-      while (j < steps.length && vt >= steps[j].start + steps[j].hop + steps[j].dur) {
-        const p = plan.strokes[steps[j].i].pts;
-        prev = [p[p.length - 2], p[p.length - 1]];
-        j++;
-      }
       // what should be on the canvas by now: the finished steps, and the small strokes of the current group (they
       // appear while the brush lifts); the stroke under the brush is drawn growing, on top
       const target = j < steps.length ? (vt >= steps[j].start ? steps[j].i : steps[j].from) : covered;
-      const caught = commitTo(target, 9);
+      // (a few ms of strokes per frame; a phone that draws fewer frames commits a bigger share of each)
+      const caught = commitTo(target, Math.max(9, Math.min(60, dt * 0.35)));
       const ending = j < steps.length && !P.planned(plan) && steps.length - j < Math.max(4, steps.length * 0.08) && covered === plan.strokes.length;
       if (caught) vt += ending ? dt * 0.45 : dt;
       const t = vt;

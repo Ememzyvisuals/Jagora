@@ -7,9 +7,16 @@
      from the worst spot of each cell that is off by more than a threshold), so detail goes where the picture has it;
    - each stroke starts with the colour under it and runs across the light-and-dark lines of the picture (along the
      edges, at right angles to the gradient), bending smoothly, until the colour under it changes;
-   - the person is painted with every brush and the background only with the big ones, so the face is careful and
-     the background loose. The person comes from SAM 3.1 when Jagora is connected (and she agreed), or from an
-     estimate made on her phone.
+   - the painting finishes by itself: after the first layers it goes on with finer brushes for as long as each layer
+     still brings it clearly closer to the picture (measured against it, weighted toward the detail and the faces),
+     and stops at the plateau; Keep detailing is an extra, never needed;
+   - the fine brushes go where the picture has detail: the edges of every person, face, letter and object (not one
+     centre oval), so a group photo or a sign comes out as clean as a portrait. SAM 3.1's cut-out of the person (when
+     Jagora is connected and she agreed) or an estimate made on her phone adds weight to the subject;
+   - watercolour glazes are see-through, so each one is mixed a little past its target and lands on the picture's
+     colour instead of short of it (no pale veil); washes bleed softly inside a region but never across the edge of a
+     person or a letter, and a last multiplying glaze darkens whatever is still lighter than the picture, so the
+     paper shows only in true highlights.
    Styles: Bold colour (posterised, vivid colour blocks, hard edges), Oil (bristle lines in each stroke, slight colour
    play) and Watercolour (see-through washes that build up, soft blurred reference, paper grain).
    Every stroke is kept as a vector, so the painting can be painted again at print size, sharp. */
@@ -17,8 +24,10 @@ import type { Detail, SaveSize } from "./typeart";
 import { encodePNG, pageForSize } from "./typeart";
 
 export type Style = "bold" | "oil" | "water";
-export type Stroke = { pts: number[]; r: number; c: [number, number, number]; a: number; layer: number; box: [number, number, number, number] };
-export type Painting = { W: number; H: number; strokes: Stroke[]; style: Style; ground: string; seed: number };
+/** wet: a watercolour wash that bleeds softly into what is around it (never at the edge of a person or a letter) */
+export type Stroke = { pts: number[]; r: number; c: [number, number, number]; a: number; layer: number; box: [number, number, number, number]; wet?: boolean; glaze?: boolean };
+/** errs: how far the painting still was from the picture after each layer (for checks) */
+export type Painting = { W: number; H: number; strokes: Stroke[]; style: Style; ground: string; seed: number; errs?: number[] };
 
 /** the working size of a painting: smaller on phones, so planning and painting stay smooth */
 export const paintSize = () => (typeof window !== "undefined" && Math.min(screen.width, screen.height) < 700 ? 520 : 640);
@@ -174,9 +183,9 @@ export async function maskFromImage(src: string, w: number, h: number): Promise<
 
 const STYLE = {
   // threshold (how far off a spot must be to be painted again), stroke length, curve smoothing, blur factor, opacity
-  bold: { T: 34, maxLen: 9, minLen: 2, fc: 1, fs: 0.5, alpha: 1, posterize: 5, sat: 1.35 },
+  bold: { T: 30, maxLen: 9, minLen: 2, fc: 1, fs: 0.5, alpha: 1, posterize: 6, sat: 1.2 },
   oil: { T: 26, maxLen: 14, minLen: 3, fc: 0.65, fs: 0.5, alpha: 0.92, posterize: 0, sat: 1.12 },
-  water: { T: 30, maxLen: 12, minLen: 2, fc: 0.5, fs: 1.0, alpha: 0.5, posterize: 0, sat: 1.1 },
+  water: { T: 26, maxLen: 12, minLen: 2, fc: 0.5, fs: 1.0, alpha: 0.55, posterize: 0, sat: 1.1 },
 };
 
 /* What the planner keeps between passes: the next layers are planned while the brush paints the first, and Keep
@@ -186,25 +195,36 @@ type Ctx = {
   R: Float32Array; G: Float32Array; B: Float32Array; M: Float32Array; skin0: Float32Array; skin: Float32Array;
   cg: CanvasRenderingContext2D; rand: () => number; layer: number; r: number; T: number; floor: number;
   ready: boolean; done: boolean; stop: boolean; newMask: Float32Array | null;
+  /** where the detail is (edges of faces, people, letters, objects), 0..1 */
+  S: Float32Array;
+  /** the error after each layer; glazed: the last, value-matching glaze is on */
+  errs: number[]; glazed: boolean; plan: Painting;
 };
 const CTX = new WeakMap<Painting, Ctx>();
 const NONE = new Float32Array(0);
 
-/** the radii of the brushes, from the big flat one to the finest, in pixels at a 640-wide picture */
+/** the first brushes of every painting, from the big flat one down, in pixels at a 640-wide picture; after them the
+    painting goes on with finer and finer brushes for as long as each layer still brings it clearly closer to the
+    picture (measured), down to the finest brush of the chosen detail */
 const RADII: Record<Detail, number[]> = {
   coarse: [36, 16, 8],
-  medium: [36, 18, 9, 4.5, 3],
-  fine: [36, 18, 9, 5, 3, 2],
-  realistic: [36, 18, 9, 5, 3, 2, 1.4],
+  medium: [36, 18, 9, 5],
+  fine: [36, 18, 9, 5],
+  realistic: [36, 18, 9, 5, 3],
 };
+/** the finest brush of each detail, in pixels of the working size (small faces in a group photo need it) */
+const FLOOR: Record<Detail, number> = { coarse: 4, medium: 1.5, fine: 1.3, realistic: 1.1 };
+/** the working size: big enough that the people in a group photo get real brushwork */
+const LONG: Record<Detail, number> = { coarse: 640, medium: 900, fine: 1024, realistic: 1024 };
+const MAX_LAYERS = 11;
 
 /** Start a painting: only the first, biggest brush is planned now, from a small copy of the picture (a big brush only
     sees big colour shapes), so the brush is on the canvas within a moment. nextLayer() plans the finer layers after,
     in slices, while the brush works. */
 export async function startPainting(img: CanvasImageSource & { width: number; height: number }, style: Style, detail: Detail, seed = 7): Promise<Painting> {
   slice = performance.now();
-  const real = detail === "realistic";
-  const long = real ? 1024 : paintSize(); // realistic paints at a higher resolution, so the fine strokes stay sharp
+  const real = detail === "realistic" || detail === "fine";
+  const long = Math.min(LONG[detail], Math.max(img.width, img.height) * 1.5);
   const k = long / Math.max(img.width, img.height);
   const W = Math.round(img.width * k), H = Math.round(img.height * k);
   const st = STYLE[style];
@@ -233,9 +253,10 @@ export async function startPainting(img: CanvasImageSource & { width: number; he
   if (st.posterize) {
     const q = 255 / (st.posterize - 1);
     for (let i = 0; i < sR.length; i++) {
-      sR[i] = Math.round(sR[i] / q) * q;
-      sG[i] = Math.round(sG[i] / q) * q;
-      sB[i] = Math.round(sB[i] / q) * q;
+      const l0 = 0.3 * sR[i] + 0.59 * sG[i] + 0.11 * sB[i], lq = Math.round(l0 / q) * q, f = l0 > 1 ? lq / l0 : 1;
+      sR[i] = clamp(sR[i] * f);
+      sG[i] = clamp(sG[i] * f);
+      sB[i] = clamp(sB[i] * f);
     }
   }
   const sL = new Float32Array(sw * sh);
@@ -289,7 +310,7 @@ export async function startPainting(img: CanvasImageSource & { width: number; he
         y0 = Math.min(y0, pts[p + 1]);
         y1 = Math.max(y1, pts[p + 1]);
       }
-      layer.push({ pts, r: r0, c: jc, a: st.alpha, layer: 0, box: [x0 - r0 * 1.5, y0 - r0 * 1.5, x1 + r0 * 1.5, y1 + r0 * 1.5] });
+      layer.push({ pts, r: r0, c: jc, a: st.alpha, layer: 0, box: [x0 - r0 * 1.5, y0 - r0 * 1.5, x1 + r0 * 1.5, y1 + r0 * 1.5], wet: true });
     }
   for (let i = layer.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
@@ -303,10 +324,11 @@ export async function startPainting(img: CanvasImageSource & { width: number; he
   cg.fillStyle = style === "water" ? "#ffffff" : "#808080";
   cg.fillRect(0, 0, W, H);
   for (const s2 of layer) drawStroke(cg, s2, style, 1, true);
-  const plan: Painting = { W, H, strokes: layer, style, ground: style === "water" ? "#ffffff" : "#0e0f12", seed };
+  const plan: Painting = { W, H, strokes: layer, style, ground: style === "water" ? "#ffffff" : "#0e0f12", seed, errs: [] };
   CTX.set(plan, {
     W, H, style, img, real, radii, next: 1, R: NONE, G: NONE, B: NONE, M: NONE, skin0: NONE, skin: NONE, cg, rand,
-    layer: 1, r: r0, T: st.T, floor: (1.2 * W) / 640, ready: false, done: radii.length < 2, stop: false, newMask: null,
+    layer: 1, r: r0, T: st.T, floor: FLOOR[detail], ready: false, done: false, stop: false, newMask: null,
+    S: NONE, errs: plan.errs!, glazed: false, plan,
   });
   return plan;
 }
@@ -341,17 +363,50 @@ async function prepare(ctx: Ctx) {
   ctx.skin0 = await blurA(sk, W, H, Math.max(3, Math.round(W / 90)));
   ctx.skin = new Float32Array(W * H);
   for (let i = 0; i < W * H; i++) ctx.skin[i] = ctx.skin0[i] * ctx.M[i];
+  // where the detail is: the light-and-dark edges of the picture, spread a little, so every person, face, letter and
+  // object gets the fine brushes (not only one face in the middle), plus the skin and the estimated subject
+  const E = new Float32Array(W * H);
+  for (let y = 1; y < H - 1; y++) {
+    if ((y & 31) === 0) await breathe();
+    for (let x = 1; x < W - 1; x++) {
+      const i = y * W + x;
+      const l = (j: number) => 0.3 * R[j] + 0.59 * G[j] + 0.11 * B[j];
+      E[i] = Math.abs(l(i + 1) - l(i - 1)) + Math.abs(l(i + W) - l(i - W));
+    }
+  }
+  const Es = await blurA(E, W, H, Math.max(2, Math.round(W / 110)));
+  const sample: number[] = [];
+  for (let i = 0; i < Es.length; i += 97) sample.push(Es[i]);
+  sample.sort((p, q) => p - q);
+  const top = Math.max(4, sample[Math.floor(sample.length * 0.92)]);
+  ctx.S = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) ctx.S[i] = Math.min(1, Es[i] / top + 0.7 * ctx.skin[i] + 0.15 * ctx.M[i]);
   ctx.ready = true;
 }
 
-/** plan the next, finer layer of the painting and add its strokes (false when every layer is planned) */
+/** how far the painting so far is from the picture: the mean colour distance, weighted toward the detail and faces */
+async function canvasError(ctx: Ctx): Promise<number> {
+  const { W, H, R, G, B, S, skin } = ctx;
+  const d = ctx.cg.getImageData(0, 0, W, H).data;
+  let e = 0, ws = 0;
+  for (let y = 0; y < H; y += 2) {
+    if ((y & 31) === 0) await breathe();
+    for (let x = 0; x < W; x += 2) {
+      const i = y * W + x, w = 0.35 + S[i] + 0.6 * skin[i];
+      e += w * Math.hypot(d[i * 4] - R[i], d[i * 4 + 1] - G[i], d[i * 4 + 2] - B[i]);
+      ws += w;
+    }
+  }
+  return e / ws;
+}
+
+/** Plan the next, finer layer of the painting and add its strokes (false when the painting is finished). The first
+    layers are fixed; after them a finer layer is added only while the last one still brought the painting clearly
+    closer to the picture (it stops at the plateau, or at the finest brush of the detail). Then a last glaze matches
+    the values of the picture (darks stay dark, the paper shows only in true highlights), and it is finished. */
 export async function nextLayer(plan: Painting): Promise<boolean> {
   const ctx = CTX.get(plan);
-  if (!ctx || ctx.stop) return false;
-  if (ctx.next >= ctx.radii.length) {
-    ctx.done = true;
-    return false;
-  }
+  if (!ctx || ctx.stop || ctx.done) return false;
   slice = performance.now();
   if (!ctx.ready) await prepare(ctx);
   if (ctx.newMask) {
@@ -361,13 +416,40 @@ export async function nextLayer(plan: Painting): Promise<boolean> {
     for (let i = 0; i < ctx.skin.length; i++) ctx.skin[i] = ctx.skin0[i] * ctx.M[i];
   }
   if (ctx.stop) return false;
+  const st = STYLE[ctx.style];
+  let r: number, T: number, glaze = false;
+  const errs = ctx.errs;
+  if (ctx.next < ctx.radii.length) {
+    r = ctx.radii[ctx.next];
+    T = st.T * Math.max(0.5, 1 - 0.09 * ctx.next);
+  } else {
+    if (!errs.length) errs.push(await canvasError(ctx));
+    const n = errs.length, gain = n >= 2 ? (errs[n - 2] - errs[n - 1]) / errs[n - 2] : 1;
+    const finer = Math.max(ctx.floor, ctx.r * 0.72);
+    const end = gain < 0.04 || ctx.r <= ctx.floor * 1.02 || ctx.next >= MAX_LAYERS;
+    if (end && ctx.style !== "water") ctx.glazed = true; // (opaque paint already lands on the values: no glaze)
+    if (!ctx.glazed && end) {
+      // the last glaze: wherever the value (light and dark) is still off, a fuller layer of the picture's own colour
+      glaze = true;
+      r = Math.max(ctx.floor * 1.3, (2.2 * ctx.W) / 640);
+      T = 9;
+    } else if (ctx.glazed) {
+      ctx.done = true;
+      return false;
+    } else {
+      r = finer;
+      T = Math.max(st.T * 0.42, ctx.T * 0.86);
+    }
+  }
   const li = ctx.next++;
-  // each finer layer of a realistic painting is held to a closer match
-  const T = ctx.real ? STYLE[ctx.style].T * Math.max(0.42, 1 - 0.11 * li) : STYLE[ctx.style].T;
-  const add = await paintLayer(ctx, li, ctx.radii[li], T);
+  const add = await paintLayer(ctx, li, r, T, glaze);
   if (ctx.stop) return false;
   for (const s2 of add) plan.strokes.push(s2); // (no spread: a layer can hold 100k strokes)
-  if (ctx.next >= ctx.radii.length) ctx.done = true;
+  if (glaze) {
+    ctx.glazed = true;
+    ctx.done = true;
+  }
+  if (li >= 2) errs.push(await canvasError(ctx));
   return true;
 }
 /** every layer planned? */
@@ -398,21 +480,24 @@ export async function morePass(plan: Painting): Promise<Stroke[]> {
   if (!ctx) return [];
   while (await nextLayer(plan));
   slice = performance.now();
-  const r = Math.max(ctx.floor, ctx.r * 0.75);
-  const T = Math.max(STYLE[ctx.style].T * 0.32, ctx.T * 0.82);
-  if (r <= ctx.floor && T <= STYLE[ctx.style].T * 0.33 && ctx.layer >= 9) return [];
+  const floor = ctx.floor * 0.7; // a little finer than the finished painting, never a photo
+  const r = Math.max(floor, ctx.r * 0.75);
+  const T = Math.max(STYLE[ctx.style].T * 0.3, ctx.T * 0.82);
+  if (r <= floor * 1.01 && ctx.layer >= MAX_LAYERS + 2) return [];
   const add = await paintLayer(ctx, ctx.layer, r, T);
   for (const st2 of add) plan.strokes.push(st2);
   return add;
 }
 
-async function paintLayer(ctx: Ctx, li: number, r: number, T: number): Promise<Stroke[]> {
-  const { W, H, style, R, G, B, M, skin, cg, rand } = ctx;
+async function paintLayer(ctx: Ctx, li: number, r: number, T: number, glaze = false): Promise<Stroke[]> {
+  const { W, H, style, R, G, B, S, skin, cg, rand } = ctx;
   const st = STYLE[style];
   ctx.layer = li + 1;
   ctx.r = r;
   ctx.T = T;
-  const br = Math.max(1, Math.round(st.fs * r));
+  // each layer paints from the picture blurred to its brush (watercolour's first washes blur most, the later ones
+  // less, so its detail stays crisp)
+  const br = Math.max(1, Math.round((style === "water" && li > 1 ? 0.55 : st.fs) * r));
   const rR = await blurA(R, W, H, br), rG = await blurA(G, W, H, br), rB = await blurA(B, W, H, br);
   // the brightness of the reference, for the stroke directions (and Bold colour cut to a few flat steps)
   const Lm = new Float32Array(W * H);
@@ -420,29 +505,42 @@ async function paintLayer(ctx: Ctx, li: number, r: number, T: number): Promise<S
   for (let i = 0; i < Lm.length; i++) {
     if ((i & 32767) === 0) await breathe();
     if (q) {
-      rR[i] = Math.round(rR[i] / q) * q;
-      rG[i] = Math.round(rG[i] / q) * q;
-      rB[i] = Math.round(rB[i] / q) * q;
+      const l0 = 0.3 * rR[i] + 0.59 * rG[i] + 0.11 * rB[i], lq = Math.round(l0 / q) * q, f = l0 > 1 ? lq / l0 : 1;
+      rR[i] = clamp(rR[i] * f);
+      rG[i] = clamp(rG[i] * f);
+      rB[i] = clamp(rB[i] * f);
     }
     Lm[i] = 0.3 * rR[i] + 0.59 * rG[i] + 0.11 * rB[i];
   }
   const cd = cg.getImageData(0, 0, W, H).data;
+  // how far a spot is off: its colour, or for the last glaze mainly its value (light and dark)
   const diff = (i: number) => Math.hypot(cd[i * 4] - rR[i], cd[i * 4 + 1] - rG[i], cd[i * 4 + 2] - rB[i]);
+  const dv = (i: number) => 0.3 * (cd[i * 4] - rR[i]) + 0.59 * (cd[i * 4 + 1] - rG[i]) + 0.11 * (cd[i * 4 + 2] - rB[i]);
+  const fineBrush = r < (3.2 * W) / 640;
   const first = li === 0;
-  const grid = Math.max(1, Math.round(r));
+  // (fine brushes on a slightly wider grid: their strokes are long and 2r wide, so they still cover it, with half
+  // as many strokes to paint)
+  const grid = Math.max(1, Math.round(r * (fineBrush && !glaze ? 1.6 : 1)));
   const layer: Stroke[] = [];
   for (let gy = 0; gy < H; gy += grid) {
     await breathe();
     if (ctx.stop) return [];
     for (let gx = 0; gx < W; gx += grid) {
-      let sum = 0, n = 0, best = -1, bx = gx, by = gy, inside = 0, face = 0;
+      let sum = 0, n = 0, best = -1, bx = gx, by = gy, sal = 0, face = 0, val = 0, dr = 0, dg = 0, db = 0, mr = 0, mg = 0, mb = 0;
       for (let y = gy; y < Math.min(H, gy + grid); y++)
         for (let x = gx; x < Math.min(W, gx + grid); x++) {
           const i = y * W + x;
           const e = first ? 999 : diff(i);
           sum += e;
+          if (glaze) val += dv(i);
+          mr += rR[i];
+          mg += rG[i];
+          mb += rB[i];
+          dr += rR[i] - cd[i * 4];
+          dg += rG[i] - cd[i * 4 + 1];
+          db += rB[i] - cd[i * 4 + 2];
           n++;
-          inside += M[i];
+          sal += S[i];
           face += skin[i];
           if (e > best) {
             best = e;
@@ -451,24 +549,44 @@ async function paintLayer(ctx: Ctx, li: number, r: number, T: number): Promise<S
           }
         }
       if (!n) continue;
-      inside /= n;
+      sal /= n;
       face /= n;
-      // the background only gets the big brushes, the very fine ones only the person, and the face the most
-      if (li >= 2 && inside < 0.35) continue;
-      if (li >= 4 && inside < 0.55) continue;
-      const t = li >= 3 ? T * (face > 0.3 ? 0.6 : 1.15) : T;
-      if (!first && sum / n < t) continue;
+      // where the detail is (people, faces, letters, objects) the brush works hardest; flat walls and sky need no tiny
+      // brushes; faces are held to the closest match
+      if (!glaze && fineBrush && sal < 0.16 && face < 0.1) continue;
+      const t = glaze ? T : T * (1.3 - 0.6 * Math.min(1, sal)) * (face > 0.3 ? 0.7 : 1);
+      // (the glaze only darkens: where the paint is lighter than the picture, never where it is darker)
+      if (glaze ? val / n < t : !first && sum / n < t) continue;
       // the stroke: colour under its start, then across the light-and-dark lines until the colour changes
+      if (glaze) {
+        // a glaze is laid from the middle of the spot in its average colour (not from its sharpest edge)
+        bx = Math.min(W - 1, gx + (grid >> 1));
+        by = Math.min(H - 1, gy + (grid >> 1));
+      }
       const i0 = by * W + bx;
-      const col: [number, number, number] = [rR[i0], rG[i0], rB[i0]];
+      let col: [number, number, number] = [rR[i0], rG[i0], rB[i0]];
+      const alpha = glaze ? 1 : st.alpha;
+      if (glaze) {
+        // a transparent glaze over what is painted: it multiplies, so it darkens to the picture's value and keeps every
+        // stroke and detail under it visible
+        // (a round dab the size of the spot, a little short of the full ratio where dabs overlap)
+        const q = (m: number, dd: number) => clamp(255 * (1 - 0.85 * (1 - Math.min(1, m / n / Math.max(8, m / n - dd / n)))));
+        col = [q(mr, dr), q(mg, dg), q(mb, db)];
+      } else if (alpha < 1 && !first) {
+        // a see-through glaze only goes part of the way from what is under it to its own colour: it is mixed a little
+        // past the target so that it lands on the picture's colour, not short of it (no pale veil)
+        // (by how far the whole spot is off, so a speck in the paint is not amplified)
+        const o = Math.min(1.45, 1 / alpha) - 1;
+        col = [clamp(col[0] + (dr / n) * o), clamp(col[1] + (dg / n) * o), clamp(col[2] + (db / n) * o)];
+      }
       const pts = [bx, by];
       let x = bx, y = by, lx = 0, ly = 0;
       // a big brush makes short, broad strokes (a painter blocks in with dabs, not long ropes of paint)
-      const maxLen = Math.min(st.maxLen, Math.max(3, Math.round((110 * W) / 640 / r)));
+      const maxLen = glaze ? 0 : Math.min(st.maxLen, Math.max(3, Math.round((110 * W) / 640 / r)));
       for (let s = 1; s <= maxLen; s++) {
         const xi = clampI(Math.round(x), W), yi = clampI(Math.round(y), H), i = yi * W + xi;
         if (s > st.minLen) {
-          const toRef = Math.hypot(rR[i] - col[0], rG[i] - col[1], rB[i] - col[2]);
+          const toRef = Math.hypot(rR[i] - rR[i0], rG[i] - rG[i0], rB[i] - rB[i0]);
           const now = first ? 999 : Math.hypot(rR[i] - cd[i * 4], rG[i] - cd[i * 4 + 1], rB[i] - cd[i * 4 + 2]);
           if (now < toRef) break;
         }
@@ -499,7 +617,7 @@ async function paintLayer(ctx: Ctx, li: number, r: number, T: number): Promise<S
       }
       // a little life in the colour (a painter never mixes exactly the same twice)
       const j = style === "bold" ? 6 : 10;
-      const jc: [number, number, number] = [clamp(col[0] + (rand() - 0.5) * j), clamp(col[1] + (rand() - 0.5) * j), clamp(col[2] + (rand() - 0.5) * j)];
+      const jc: [number, number, number] = glaze ? col : [clamp(col[0] + (rand() - 0.5) * j), clamp(col[1] + (rand() - 0.5) * j), clamp(col[2] + (rand() - 0.5) * j)];
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       for (let p = 0; p < pts.length; p += 2) {
         x0 = Math.min(x0, pts[p]);
@@ -507,7 +625,9 @@ async function paintLayer(ctx: Ctx, li: number, r: number, T: number): Promise<S
         y0 = Math.min(y0, pts[p + 1]);
         y1 = Math.max(y1, pts[p + 1]);
       }
-      layer.push({ pts, r, c: jc, a: st.alpha, layer: li, box: [x0 - r * 1.5, y0 - r * 1.5, x1 + r * 1.5, y1 + r * 1.5] });
+      // watercolour: the first washes bleed softly inside a region, never across the edge of a person or a letter
+      const wet = style === "water" && li <= 1 && S[i0] < 0.45;
+      layer.push({ pts, r: glaze ? grid * 0.6 : r, c: jc, a: alpha, layer: li, box: [x0 - r * 1.5, y0 - r * 1.5, x1 + r * 1.5, y1 + r * 1.5], ...(wet ? { wet } : {}), ...(glaze ? { glaze } : {}) });
     }
   }
   // painted in a random order, like a painter moving around the canvas
@@ -549,6 +669,21 @@ export function partOf(s: Stroke, f: number): Stroke {
 export function drawStroke(g: CanvasRenderingContext2D, s: Stroke, style: Style, k: number, plain = false) {
   const p = s.pts;
   const [r, gg, b] = s.c;
+  if (s.glaze) {
+    g.globalCompositeOperation = "multiply";
+    g.globalAlpha = 1;
+    g.strokeStyle = `rgb(${r | 0},${gg | 0},${b | 0})`;
+    g.lineWidth = 2 * s.r * k;
+    g.lineCap = "round";
+    g.lineJoin = "round";
+    g.beginPath();
+    g.moveTo(p[0] * k, p[1] * k);
+    for (let i = 2; i < p.length; i += 2) g.lineTo(p[i] * k, p[i + 1] * k);
+    if (p.length === 2) g.lineTo(p[0] * k + 0.01, p[1] * k);
+    g.stroke();
+    g.globalCompositeOperation = "source-over";
+    return;
+  }
   const path = (dx: number, dy: number, from = 0, to = p.length) => {
     g.beginPath();
     g.moveTo((p[from] + dx) * k, (p[from + 1] + dy) * k);
@@ -561,11 +696,11 @@ export function drawStroke(g: CanvasRenderingContext2D, s: Stroke, style: Style,
   };
   g.lineCap = "round";
   g.lineJoin = "round";
-  if (style === "water") {
-    // a soft, wider halo first, so washes fade into each other with no hard edge
-    g.globalAlpha = s.a * 0.35;
+  if (style === "water" && s.wet) {
+    // a wet wash: a soft, slightly wider halo first, so washes fade into each other with no hard edge
+    g.globalAlpha = s.a * 0.3;
     g.strokeStyle = `rgb(${r | 0},${gg | 0},${b | 0})`;
-    g.lineWidth = 2.8 * s.r * k;
+    g.lineWidth = 2.3 * s.r * k;
     g.beginPath();
     g.moveTo(p[0] * k, p[1] * k);
     for (let i = 2; i < p.length; i += 2) g.lineTo(p[i] * k, p[i + 1] * k);
@@ -576,7 +711,7 @@ export function drawStroke(g: CanvasRenderingContext2D, s: Stroke, style: Style,
   g.strokeStyle = `rgb(${r | 0},${gg | 0},${b | 0})`;
   g.lineWidth = 2 * s.r * k;
   const n = p.length / 2;
-  if (style !== "water" && n >= 5 && !plain) {
+  if (style !== "water" && n >= 5 && !plain && s.r * k > 2) {
     // dry brush: the paint thins out near the end of a long stroke
     const cut = Math.max(4, Math.round(n * 0.78) * 2);
     path(0, 0, 0, cut);
