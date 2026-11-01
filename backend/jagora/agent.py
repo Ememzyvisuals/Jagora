@@ -376,6 +376,9 @@ COMMON = [
                      "'more detail' is fine; realistic keeps going with ever smaller letters or brushes until it looks real"},
           "more": {"type": "boolean", "description": "keep detailing the art on her board: one more, finer pass"},
           "open": {"type": "boolean", "description": "only open her art board (nothing to draw yet): then ask her what to make"},
+          "background": {"type": "string", "enum": ["remove", "keep"], "description": "remove: only the people (and any "
+                         "writing in the picture) on clean black, the default; keep: the whole picture with its background "
+                         "('no background', 'background less' is remove; 'keep the background', 'with background' is keep)"},
           "board": {"type": "string", "enum": ["dark", "paper"], "description": "the dark (black) board or light paper"},
           "mode": {"type": "string", "enum": ["type", "paint"], "description": "type art (letters) or a painting"},
           "style": {"type": "string", "enum": ["bold", "oil", "water"], "description": "painting style: bold colour, oil, watercolour"}},
@@ -2879,10 +2882,12 @@ class Agent:
         empty_board = "Type Art artboard: open, empty" in screen
         if "mode" not in opts and empty_board and "paint mode" in screen:
             opts["mode"] = "paint"  # she opened it for painting: what she asks for next is painted
+        if a.get("background") in ("remove", "keep"):
+            opts["plain"] = a["background"] == "remove"  # type: ignore[assignment]
         paint = opts.get("mode") == "paint"
         if a.get("open") and not str(a.get("subject") or "").strip() and not a.get("use_photo") and not a.get("more"):
             # only open the board: she then says what to make, or picks her own photo on it
-            await self.io.event("typeart", {k: v for k, v in opts.items() if k in ("mode", "style", "letters", "colour", "board")})
+            await self.io.event("typeart", {k: v for k, v in opts.items() if k in ("mode", "style", "letters", "colour", "board", "plain")})
             if "Type Art artboard: open" in screen and not empty_board:
                 return "her art board is open with her art on it. Finish with one short line.", False, None
             what = "paint" if paint else "draw"

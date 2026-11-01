@@ -84,3 +84,13 @@ async def test_the_board_answers_at_once_when_it_is_open(tmp_path, monkeypatch):
     r = await a.run("make am blue")
     assert r.success and ("typeart", {"restyle": True, "colour": "one"}) in io_.sent
     assert ("say", "Done, blue now.") in io_.sent
+
+
+def test_background_on_and_off_by_voice():
+    from jagora import artvoice
+    off = artvoice.parse("remove the background", "en")
+    assert off and off.data == {"restyle": True, "plain": True}
+    assert artvoice.parse("background less", "pcm").data["plain"] is True
+    on = artvoice.parse("keep the background", "en")
+    assert on and on.data == {"restyle": True, "plain": False}
+    assert artvoice.parse("cire bango", "ha").data["plain"] is True

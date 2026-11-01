@@ -197,3 +197,12 @@ async def test_board_opened_for_painting_paints_what_she_says_next(tmp_path, mon
     await a._act("draw_art", {"subject": "a Fulani woman at sunset"}, None)
     ev = [d for k, d in io_.sent if k == "typeart"]
     assert ev[-1]["mode"] == "paint"
+
+
+async def test_background_choice_goes_to_the_board():
+    io_ = IOm()
+    a = ag.Agent(None, None, io_)
+    a.screen = lambda: ""
+    await a._act("draw_art", {"background": "keep"}, None)
+    ev = [d for k, d in io_.sent if k == "typeart"]
+    assert ev == [{"restyle": True, "plain": False}]

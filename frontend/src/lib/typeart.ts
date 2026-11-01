@@ -15,7 +15,7 @@
    each letter takes the colour and strength of the picture there, so the face appears out of the words.
    Everything runs on her phone; her photo never leaves it. */
 import type { Lang } from "./i18n";
-import { findPeople, isPortrait, personMaskAt } from "./person";
+import { findPeople, isPortrait, peopleBox, personMaskAt, WHOLE, type Box } from "./person";
 
 export type Letters = "symbols" | "numbers" | "words";
 export type Colour = "full" | "one" | "bw";
@@ -109,14 +109,14 @@ function shapes(set: string): Shape[] {
 export const MAX_COLS = (phone: boolean) => (phone ? 210 : 290);
 export const MAX_EXTRA = 3;
 
-export function grid(imgW: number, imgH: number, boxW: number, boxH: number, detail: Detail, words = false, extra = 0, busy = 0) {
+export function grid(imgW: number, imgH: number, boxW: number, boxH: number, detail: Detail, words = false, extra = 0, busy = 0, more = 1) {
   const phone = boxW < 640;
   // words carry the picture only by how bright each letter is, so they sit on a finer grid; realistic goes much finer,
   // and each Keep detailing makes the letters smaller again, up to MAX_COLS
   // the first result is already fine enough to look finished, like the typed portraits people share; a busy picture
   // (a group, a street, signage) gets smaller letters still (busy: 0 for a plain portrait .. 1 for a crowded scene)
   const base = { coarse: phone ? 64 : 96, medium: phone ? 104 : 150, fine: phone ? 132 : 190, realistic: phone ? 160 : 230 }[detail];
-  const want = Math.min(MAX_COLS(phone), Math.round(base * (1 + 0.4 * Math.max(0, Math.min(1, busy))) * (words ? 1.3 : 1) * Math.pow(1.18, Math.min(MAX_EXTRA, extra))));
+  const want = Math.min(MAX_COLS(phone), Math.round(base * more * (1 + 0.4 * Math.max(0, Math.min(1, busy))) * (words ? 1.3 : 1) * Math.pow(1.18, Math.min(MAX_EXTRA, extra))));
   const k = LINE / ADV; // cell height over width
   let cols = want, rows = Math.max(8, Math.round((cols * imgH) / imgW / k));
   const maxRows = detail === "realistic" || extra ? (phone ? 320 : 380) : phone ? 260 : 300;
@@ -221,6 +221,92 @@ function busyness(img: CanvasImageSource & { width: number; height: number }): n
   return Math.min(1, (edges / ((w - 2) * (h - 2)) - 0.04) / 0.16);
 }
 
+/** writing that is part of the picture (big letters behind the people, a sign, a name): shapes that stand out from
+ *  what is around them and sit in a row like letters, at least three of a similar height on one line. Window bars,
+ *  chair legs and a room's clutter are not letters in a row and are not taken. `people` marks where the people are
+ *  (left out here). */
+function writingMask(d: Uint8ClampedArray, W: number, H: number, people: Float32Array): Float32Array {
+  const L0 = new Float32Array(W * H);
+  for (let i = 0; i < L0.length; i++) L0[i] = lum(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+  const Lb = boxBlur(L0, W, H, 1);
+  const around = boxBlur(L0, W, H, Math.max(6, Math.round(Math.min(W, H) / 8)));
+  // what stands apart from its surroundings (lighter or darker), on a working grid
+  const S = Math.max(1, Math.round(Math.max(W, H) / 400)), gw = Math.ceil(W / S), gh = Math.ceil(H / S);
+  const on = new Uint8Array(gw * gh);
+  for (let y = 0; y < gh; y++)
+    for (let x = 0; x < gw; x++) {
+      const i = Math.min(H - 1, y * S) * W + Math.min(W - 1, x * S);
+      if (people[i] < 0.3 && Math.abs(Lb[i] - around[i]) > 0.07) on[y * gw + x] = 1;
+    }
+  type Blob = { cells: number[]; x0: number; y0: number; x1: number; y1: number; sign: number };
+  const blobs: Blob[] = [];
+  const lab = new Int32Array(gw * gh).fill(-1);
+  for (let s0 = 0; s0 < on.length; s0++) {
+    if (!on[s0] || lab[s0] >= 0) continue;
+    const b: Blob = { cells: [], x0: gw, y0: gh, x1: 0, y1: 0, sign: 0 };
+    const st = [s0];
+    lab[s0] = blobs.length;
+    while (st.length) {
+      const j = st.pop()!;
+      b.cells.push(j);
+      const jx = j % gw, jy = (j / gw) | 0;
+      b.x0 = Math.min(b.x0, jx);
+      b.y0 = Math.min(b.y0, jy);
+      b.x1 = Math.max(b.x1, jx);
+      b.y1 = Math.max(b.y1, jy);
+      const ii = Math.min(H - 1, jy * S) * W + Math.min(W - 1, jx * S);
+      b.sign += Lb[ii] > around[ii] ? 1 : -1;
+      for (const [nx, ny] of [[jx - 1, jy], [jx + 1, jy], [jx, jy - 1], [jx, jy + 1]])
+        if (nx >= 0 && ny >= 0 && nx < gw && ny < gh && on[ny * gw + nx] && lab[ny * gw + nx] < 0) {
+          lab[ny * gw + nx] = blobs.length;
+          st.push(ny * gw + nx);
+        }
+    }
+    blobs.push(b);
+  }
+  // letter-like: not tiny, not a long bar, reasonably filled, not cut by the top or bottom of the picture (a window,
+  // a lamp), and not hugging the people (the wall showing between two people is not a letter)
+  const near = boxBlur(people, W, H, Math.max(4, Math.round(Math.min(W, H) / 30)));
+  const ok = blobs.map((b) => {
+    const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1;
+    if (b.y0 <= 0 || b.y1 >= gh - 1) return false;
+    let touch = 0;
+    for (const j of b.cells) if (near[Math.min(H - 1, ((j / gw) | 0) * S) * W + Math.min(W - 1, (j % gw) * S)] > 0.2) touch++;
+    return touch < b.cells.length * 0.25 && bh >= gh * 0.03 && bh <= gh * 0.45 && bw / bh > 0.15 && bw / bh < 2.5 && b.cells.length / (bw * bh) > 0.18;
+  });
+  // in a row: at least three letter-like shapes of a similar height on one line, close together
+  const keep = new Uint8Array(blobs.length);
+  for (let a = 0; a < blobs.length; a++) {
+    if (!ok[a]) continue;
+    const A = blobs[a], ah = A.y1 - A.y0 + 1, ac = (A.y0 + A.y1) / 2;
+    const row = [a];
+    for (let b2 = 0; b2 < blobs.length; b2++) {
+      if (b2 === a || !ok[b2]) continue;
+      const B = blobs[b2], bh = B.y1 - B.y0 + 1;
+      if (Math.abs((B.y0 + B.y1) / 2 - ac) < ah * 0.3 && bh / ah > 0.6 && bh / ah < 1.6 && Math.sign(B.sign) === Math.sign(A.sign)) row.push(b2);
+    }
+    if (row.length < 3) continue;
+    // (close together: each within two letter heights of the next)
+    row.sort((p, q) => blobs[p].x0 - blobs[q].x0);
+    let run = [row[0]];
+    for (let k = 1; k < row.length; k++) {
+      if (blobs[row[k]].x0 - blobs[row[k - 1]].x1 < ah * 2) run.push(row[k]);
+      else {
+        if (run.length >= 3) for (const r of run) keep[r] = 1;
+        run = [row[k]];
+      }
+    }
+    if (run.length >= 3) for (const r of run) keep[r] = 1;
+  }
+  const out = new Float32Array(W * H);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const l = lab[Math.min(gh - 1, (y / S) | 0) * gw + Math.min(gw - 1, (x / S) | 0)];
+      if (l >= 0 && keep[l]) out[y * W + x] = 1;
+    }
+  return boxBlur(out, W, H, 1);
+}
+
 /** the whole picture as typed cells */
 export async function buildArt(img: CanvasImageSource & { width: number; height: number }, boxW: number, boxH: number, o: ArtOpts): Promise<Art> {
   try {
@@ -229,7 +315,34 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
   } catch {}
   const words = o.letters === "words";
   const busy = busyness(img);
-  const { cols, rows, font, cw, lh } = grid(img.width, img.height, boxW, boxH, o.detail, words, o.extra || 0, busy);
+  // Who is in it, first. With "no background" (the default) and people filling the picture (one person, two, a
+  // group), only they are typed, with any writing that is part of the picture (big letters behind them, a sign), on
+  // clean black, and the art is framed on them so their faces get every letter. With people small in a big place (a
+  // beach, a street) or no one, or when she wants the background, the whole picture is typed.
+  const p = await findPeople(img);
+  const cut = !!(o.plain && p && p.count && p.share >= 0.1);
+  const single = !!(cut && p && isPortrait(p, img.width, img.height));
+  const many = p && p.count && p.share >= 0.1 ? Math.min(4, Math.max(p.count, p.heads)) : 1;
+  let box: Box = WHOLE;
+  if (cut && p) {
+    box = peopleBox(p, single);
+    // (writing beside or above them stays in the frame: found on a small copy first)
+    const A = 320, aw = Math.round(img.width >= img.height ? A : (A * img.width) / img.height), ah = Math.round(img.width >= img.height ? (A * img.height) / img.width : A);
+    const ac = document.createElement("canvas");
+    ac.width = aw;
+    ac.height = ah;
+    const ag = ac.getContext("2d", { willReadFrequently: true })!;
+    ag.drawImage(img, 0, 0, aw, ah);
+    const gm = writingMask(ag.getImageData(0, 0, aw, ah).data, aw, ah, personMaskAt(p, aw, ah, single));
+    for (let y = 0; y < ah; y += 2)
+      for (let x = 0; x < aw; x += 2)
+        if (gm[y * aw + x] > 0.5) {
+          box = { x0: Math.max(0, Math.min(box.x0, x / aw - 0.03)), y0: Math.max(0, Math.min(box.y0, y / ah - 0.03)), x1: Math.min(1, Math.max(box.x1, (x + 2) / aw + 0.03)), y1: Math.min(1, Math.max(box.y1, (y + 2) / ah + 0.03)) };
+        }
+  }
+  const sx = box.x0 * img.width, sy = box.y0 * img.height, sw = (box.x1 - box.x0) * img.width, sh = (box.y1 - box.y0) * img.height;
+  // (two people or a group: smaller letters, so each face has as many as one face alone would)
+  const { cols, rows, font, cw, lh } = grid(sw, sh, boxW, boxH, o.detail, words, o.extra || 0, busy, 1 + 0.3 * (many - 1));
   const real = o.detail === "realistic" || (o.extra || 0) > 0;
   const paper = o.board === "paper";
   const W = cols * SW, H = rows * SH;
@@ -237,18 +350,17 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
   c.width = W;
   c.height = H;
   const g = c.getContext("2d", { willReadFrequently: true })!;
-  g.drawImage(img, 0, 0, W, H);
+  g.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
   const d = g.getImageData(0, 0, W, H).data;
   await new Promise((r) => setTimeout(r)); // let the page breathe between the heavy steps
 
-  // People or a place. When people fill the picture (one person, two, a group) only they are typed, on clean black,
-  // nothing around them, like the typed portraits people share. When people are small in a big place (a beach, a
-  // street, a sky) or there is no one, the place is the picture and it is typed whole, its people a little brighter.
   let mask: Float32Array | null = null;
   let focus: Float32Array | null = null; // the people in a place
-  const darkPlace = false;
+  // (with the background on and people filling the picture, the flat parts around them are left dark and the place's
+  // outlines stay; a beach or a sky with someone small in it is typed fully)
+  const darkPlace = !o.plain && !!(p && p.count && p.share >= 0.1);
+  if (!o.plain && p && p.count) focus = personMaskAt(p, W, H);
   if (o.plain) {
-    const p = await findPeople(img);
     const edge = backgroundMask(d, W, H);
     let kept = 0;
     for (let i = 0; i < edge.length; i += 7) kept += edge[i];
@@ -262,14 +374,12 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
         bgN++;
       }
     const plainEdge = kept / Math.ceil(edge.length / 7) < 0.97 && bgN > 0 && bgL / bgN < 0.16;
-    if (p && isPortrait(p, img.width, img.height)) {
-      mask = personMaskAt(p, W, H, true);
+    if (cut && p) {
+      mask = personMaskAt(p, W, H, single, box);
       // (on a plain background its own outline is sharper; the person mask only keeps a prop at the edge out)
       if (plainEdge) for (let i = 0; i < mask.length; i++) mask[i] = edge[i] * Math.min(1, mask[i] * 3);
-    } else if (p && p.count && p.share >= 0.1) {
-      // (two people, a group: every one of them, and nothing else)
-      mask = personMaskAt(p, W, H);
-      if (plainEdge) for (let i = 0; i < mask.length; i++) mask[i] = edge[i] * Math.min(1, mask[i] * 3);
+      const gm = writingMask(d, W, H, mask);
+      for (let i = 0; i < mask.length; i++) mask[i] = Math.max(mask[i], gm[i]);
     } else if (p && p.count) focus = personMaskAt(p, W, H); // (people small in a big place: the place is typed too)
     else if (!p && plainEdge) mask = edge; // (the model could not run: the subject on a plain background, as before)
     else if (!p && img.width <= img.height * 1.15) {
@@ -379,7 +489,7 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
     const f = focus ? boxBlur(focus, W, H, SW) : null;
     for (let i = 0; i < ink.length; i++) {
       const edge = Math.min(1, Es[i] / top), skin = Math.min(1, sk[i] * 1.5);
-      const k = f && darkPlace ? Math.max(Math.min(1, f[i] * 1.4), Math.pow(edge, 1.4) * 0.95) : Math.max(0.6 + 0.4 * edge, skin, f ? Math.min(1, f[i] * 1.4) : 0);
+      const k = f && darkPlace ? Math.max(Math.min(1, f[i] * 1.4), 0.3 + 0.65 * Math.pow(edge, 1.2)) : Math.max(0.6 + 0.4 * edge, skin, f ? Math.min(1, f[i] * 1.4) : 0);
       ink[i] *= k;
       if (f) tone[i] *= darkPlace ? 0.5 + 0.5 * k : 0.7 + 0.3 * Math.min(1, f[i] * 1.4);
     }

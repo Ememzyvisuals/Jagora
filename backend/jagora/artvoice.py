@@ -31,6 +31,15 @@ class Command:
 
 # (command, phrases). Checked in this order: the more specific first.
 RULES: list[tuple[tuple[str, dict, str], list[str]]] = [
+    (("typeart", {"restyle": True, "plain": True}, "no background"),
+     ["no background", "remove background", "remove the background", "background less", "backgroundless",
+      "without background", "without the background", "take away the background", "take off the background",
+      "only the person", "only the people", "comot background", "comot the background", "remove am background",
+      "yo eyin kuro", "laisi eyin", "cire bango", "babu bango", "wepu azu", "enweghi azu"]),
+    (("typeart", {"restyle": True, "plain": False}, "with the background"),
+     ["keep background", "keep the background", "with background", "with the background", "show background",
+      "show the background", "add background", "add the background", "bring back the background", "put background",
+      "put the background", "full picture", "fi eyin si", "pelu eyin", "sa bango", "da bango", "tinye azu", "na azu"]),
     (("typeart", {"restyle": True, "more": True}, "more detail"),
      ["more realistic", "more detail", "keep detailing", "add detail", "sharper", "more real", "add more detail",
       "kunna si", "fi kun un", "fi alaye kun", "se e kunna", "kara bayani", "kara cikakken bayani", "kara gaske",

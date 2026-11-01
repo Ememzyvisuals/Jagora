@@ -21,7 +21,7 @@ import { useApp } from "@/lib/store";
 import type { Lang } from "@/lib/i18n";
 import type { Art, ArtOpts, Board, Colour, Detail, Letters, SaveSize } from "@/lib/typeart";
 
-export type TypeArtEvent = { more?: boolean; url?: string; subject?: string; letters?: Letters; colour?: Colour; detail?: Detail; board?: Board; mode?: "type" | "paint"; style?: Style; title?: string; restyle?: boolean; open?: boolean; own?: boolean; drawn_by?: string; preparing?: boolean };
+export type TypeArtEvent = { more?: boolean; url?: string; subject?: string; letters?: Letters; colour?: Colour; detail?: Detail; board?: Board; mode?: "type" | "paint"; style?: Style; title?: string; restyle?: boolean; open?: boolean; own?: boolean; drawn_by?: string; preparing?: boolean; plain?: boolean };
 export const openTypeArt = (d: TypeArtEvent = {}) => dispatchEvent(new CustomEvent("jagora:typeart", { detail: { open: true, ...d } }));
 export const closeTypeArt = () => dispatchEvent(new CustomEvent("jagora:typeart", { detail: { open: false } }));
 
@@ -42,7 +42,7 @@ const T: Record<string, Record<Lang, string>> = {
   talk: { en: "Talk to Jagora", pcm: "Talk to Jagora", yo: "Bá Jagora sọ̀rọ̀", ha: "Yi magana da Jagora", ig: "Gwa Jagora okwu" },
   medium: { en: "Medium", pcm: "Medium", yo: "Àárín", ha: "Matsakaici", ig: "Etiti" },
   fine: { en: "Fine", pcm: "Fine", yo: "Kékeré", ha: "Ƙanana", ig: "Obere" },
-  plain: { en: "Plain background", pcm: "Plain background", yo: "Ẹ̀yìn kan ṣoṣo", ha: "Bango mara komai", ig: "Azụ dị nkịtị" },
+  plain: { en: "No background", pcm: "No background", yo: "Láìsí ẹ̀yìn", ha: "Babu bango", ig: "Enweghị azụ" },
   sound: { en: "Sound", pcm: "Sound", yo: "Ohùn", ha: "Sauti", ig: "Ụda" },
   sign: { en: "Signature", pcm: "Signature", yo: "Ìbuwọ́lù", ha: "Sa hannu", ig: "Mbinye aka" },
   again: { en: "Draw again", pcm: "Draw am again", yo: "Tún un yà", ha: "Sake zana", ig: "See ọzọ" },
@@ -286,11 +286,12 @@ export function TypeArt() {
       if (d.colour) next.colour = d.colour;
       if (d.detail) next.detail = d.detail;
       if (d.board) next.board = d.board;
+      if (typeof d.plain === "boolean") next.plain = d.plain; // "no background" / "keep the background"
       if (Object.keys(next).length) setOpts((o) => ({ ...o, ...next }));
       if (d.mode) setMode(d.mode);
       if (d.style) setStyle(d.style);
       if (d.more) dispatchEvent(new CustomEvent("jagora:typeart-cmd", { detail: { action: "art_more" } }));
-      if (d.detail || d.letters || d.colour || d.board || d.mode || d.style || d.url) setExtra(0);
+      if (d.detail || d.letters || d.colour || d.board || d.mode || d.style || d.url || typeof d.plain === "boolean") setExtra(0);
       if (d.url) {
         performance.mark("art:url");
         setWaiting(true);
@@ -316,7 +317,7 @@ export function TypeArt() {
     reportScreen(
       "typeart",
       on
-        ? `open${prep && !pic ? `, getting the canvas ready while Muse Image draws "${prep.subject}"` : pic ? (mode === "paint" ? `, painting "${pic.subject || "her photo"}" in ${style} style, ${opts.detail} detail` : `, typing "${pic.subject || "her photo"}" in ${opts.letters}, ${opts.colour} colour, ${opts.board} board, ${opts.detail} detail`) + (extra ? `, detailed ${extra} more times` : "") + (zoomed ? ", zoomed in" : "") + (phase === "done" ? ", finished" : ", drawing now") : `, empty (${mode === "paint" ? "paint" : "type"} mode)`}`
+        ? `open${prep && !pic ? `, getting the canvas ready while Muse Image draws "${prep.subject}"` : pic ? (mode === "paint" ? `, painting "${pic.subject || "her photo"}" in ${style} style, ${opts.detail} detail` : `, typing "${pic.subject || "her photo"}" in ${opts.letters}, ${opts.colour} colour, ${opts.board} board, ${opts.detail} detail, ${opts.plain ? "no background" : "with the background"}`) + (extra ? `, detailed ${extra} more times` : "") + (zoomed ? ", zoomed in" : "") + (phase === "done" ? ", finished" : ", drawing now") : `, empty (${mode === "paint" ? "paint" : "type"} mode)`}`
         : "",
     );
   }, [on, pic, prep, opts, mode, style, extra, zoomed, phase]);

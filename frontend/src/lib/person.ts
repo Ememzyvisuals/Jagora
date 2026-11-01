@@ -187,18 +187,42 @@ const keepAt = (k: Float32Array, fx: number, fy: number) => {
   return (k[y0 * 64 + x0] * (1 - tx) + k[y0 * 64 + x0 + 1] * tx) * (1 - ty) + (k[(y0 + 1) * 64 + x0] * (1 - tx) + k[(y0 + 1) * 64 + x0 + 1] * tx) * ty;
 };
 
-/** the person mask at w x h (main: only the main person), with a firm edge (so no stray letters sit around the person) */
-export function personMaskAt(p: People, w: number, h: number, main = false): Float32Array {
+/** a part of the picture, as fractions of its width and height */
+export type Box = { x0: number; y0: number; x1: number; y1: number };
+export const WHOLE: Box = { x0: 0, y0: 0, x1: 1, y1: 1 };
+
+/** the person mask at w x h over the part `box` of the picture (main: only the main person), with a firm edge (so no
+ *  stray letters sit around the person) */
+export function personMaskAt(p: People, w: number, h: number, main = false, box: Box = WHOLE): Float32Array {
   const out = new Float32Array(w * h);
+  const bw = box.x1 - box.x0, bh = box.y1 - box.y0;
   for (let y = 0; y < h; y++) {
-    const fy = Math.min(SIZE - 1.001, ((y + 0.5) * SIZE) / h - 0.5), y0 = Math.max(0, Math.floor(fy)), ty = Math.max(0, fy - y0);
+    const v0 = box.y0 + ((y + 0.5) / h) * bh;
+    const fy = Math.min(SIZE - 1.001, v0 * SIZE - 0.5), y0 = Math.max(0, Math.floor(fy)), ty = Math.max(0, fy - y0);
     for (let x = 0; x < w; x++) {
-      const fx = Math.min(SIZE - 1.001, ((x + 0.5) * SIZE) / w - 0.5), x0 = Math.max(0, Math.floor(fx)), tx = Math.max(0, fx - x0);
+      const u0 = box.x0 + ((x + 0.5) / w) * bw;
+      const fx = Math.min(SIZE - 1.001, u0 * SIZE - 0.5), x0 = Math.max(0, Math.floor(fx)), tx = Math.max(0, fx - x0);
       const a = p.m[y0 * SIZE + x0], b = p.m[y0 * SIZE + x0 + 1], c = p.m[(y0 + 1) * SIZE + x0], d = p.m[(y0 + 1) * SIZE + x0 + 1];
       const v = (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
-      const kp = keepAt(main ? p.keep : p.all, ((x + 0.5) * 64) / w - 0.5, ((y + 0.5) * 64) / h - 0.5);
+      const kp = keepAt(main ? p.keep : p.all, u0 * 64 - 0.5, v0 * 64 - 0.5);
       out[y * w + x] = Math.max(0, Math.min(1, (v - 0.3) / 0.35)) * kp;
     }
   }
   return out;
+}
+
+/** where the people are (main: only the main person), as a box with a little room around them */
+export function peopleBox(p: People, main = false): Box {
+  const k = main ? p.keep : p.all;
+  let x0 = 64, y0 = 64, x1 = -1, y1 = -1;
+  for (let i = 0; i < k.length; i++)
+    if (k[i] > 0.5) {
+      const x = i % 64, y = (i / 64) | 0;
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x);
+      y1 = Math.max(y1, y);
+    }
+  if (x1 < 0) return WHOLE;
+  return { x0: Math.max(0, x0 / 64 - 0.02), y0: Math.max(0, y0 / 64 - 0.02), x1: Math.min(1, (x1 + 1) / 64 + 0.02), y1: Math.min(1, (y1 + 1) / 64 + 0.02) };
 }
