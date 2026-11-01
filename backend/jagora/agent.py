@@ -357,7 +357,11 @@ COMMON = [
          "detailing' on the art already on her board is more=true (one more, finer pass, no new subject). mode is paint "
          "when she says paint, painting or portrait painting; otherwise type. Never draw or paint a real or famous "
          "person by name: say kindly that you make art of people in general, and offer an ordinary person like them "
-         "(e.g. 'a Nigerian musician in sunglasses') or that she can upload her own photo.",
+         "(e.g. 'a Nigerian musician in sunglasses') or that she can upload her own photo. When she only asks to open the "
+         "board ('open the artboard', 'open Type Art', 'open paint', 'bring the canvas') with nothing to draw yet, use "
+         "open=true (mode paint if she said paint): it opens, and you ask her whether to use her own photo or tell you what "
+         "to draw. When she says what to draw in the same breath ('open the artboard and paint a Fulani woman'), just "
+         "give the subject: the board opens by itself.",
          {"subject": {"type": "string", "description": "what to draw, written in ENGLISH whatever language she asked in (she may "
                       "ask in Yoruba, Hausa, Igbo or Pidgin: translate it), one subject (a person, a face, a figure), keeping "
                       "every cultural detail she gave or that fits: the people (Yoruba, Hausa, Igbo, Fulani, Ijaw...), the "
@@ -371,6 +375,7 @@ COMMON = [
           "detail": {"type": "string", "enum": ["coarse", "medium", "fine", "realistic"], "description": "'bigger letters' is coarse, "
                      "'more detail' is fine; realistic keeps going with ever smaller letters or brushes until it looks real"},
           "more": {"type": "boolean", "description": "keep detailing the art on her board: one more, finer pass"},
+          "open": {"type": "boolean", "description": "only open her art board (nothing to draw yet): then ask her what to make"},
           "board": {"type": "string", "enum": ["dark", "paper"], "description": "the dark (black) board or light paper"},
           "mode": {"type": "string", "enum": ["type", "paint"], "description": "type art (letters) or a painting"},
           "style": {"type": "string", "enum": ["bold", "oil", "water"], "description": "painting style: bold colour, oil, watercolour"}},
@@ -614,8 +619,8 @@ APP_TOOL = tool(
     "faster or slower (media_speed 1.5, 0.75, +0.25; 1 is normal), make it fill the screen or back to normal "
     "(media_big on / off), pause it and keep her place in this chat to "
     "watch later (media_save: 'save it for later', 'I will continue later'), play the saved one on from where she stopped "
-    "(media_resume: 'continue my video'), show or hide Amina, open or close the art board (type_art on / off; "
-    "to draw on it or change it use draw_art), on the art board zoom in, out or back to the whole picture (art_zoom in / out / "
+    "(media_resume: 'continue my video'), show or hide Amina, close the art board (type_art off; to open it, draw "
+    "on it or change it use draw_art), on the art board zoom in, out or back to the whole picture (art_zoom in / out / "
     "reset), save the picture (art_save screen, hd, 4k, a4 or a3 for print), save the video (art_video), draw it again "
     "(art_again), open their "
     "saved details, go to the start screen. Use it whenever they ask for something on the screen ('close this', 'show me "
@@ -880,7 +885,9 @@ class Agent:
         if not start_url and self.screen is not None:
             # the art board is open: a short spoken command ("make am blue", "ajiye a 4K") is done at once, no model call
             try:
-                board_open = "Type Art artboard: open" in (self.screen() or "")
+                scr = self.screen() or ""
+                # (an empty board has nothing to change yet: "open paint" there is the model's, which asks what to make)
+                board_open = "Type Art artboard: open" in scr and "artboard: open, empty" not in scr
             except Exception:  # noqa: BLE001
                 board_open = False
             cmd = artvoice.parse(goal, self.lang) if board_open else None
@@ -1125,7 +1132,7 @@ class Agent:
          r"moment|saved|when .*(out|open|announc|releas)|daily|weekly"),
         (("write_document",), r"doc|document|pdf|word|letter|cv|resume|write|summar|report|markdown|note|guide|practi|exercise|learn|course|study|plan"),
         (("picture_guide",), r"picture|draw|diagram|image|show me how|illustrat"),
-        (("draw_art",), r"draw|art|portrait|sketch|ascii|type art|typed|letters|words|blue|colou?r|bigger|smaller|detail|photo|picture"),
+        (("draw_art",), r"draw|art|paint|board|canvas|portrait|sketch|ascii|type art|typed|letters|words|blue|colou?r|bigger|smaller|detail|photo|picture"),
         (("save_page", "page_theme"), r"save|pdf|print|download|dark|light|theme|night mode"),
         (("play_media", "find_media", "find_video", "preview_videos", "play_list", "recommend_videos"), r"learn|course|lesson|tutorial|study|teach|class|episode|season|series|album|playlist|part \d|play|song|music|video|movie|film|watch|listen|audio|sermon|podcast|clip"),
         (("give_verdict", "check_link", "review_terms"), r"real|fake|scam|legit|genuine|official|safe|trust|link|terms|verify|check (this|if)"),
@@ -2864,7 +2871,24 @@ class Agent:
         opts = {k: str(a[k]) for k in ("letters", "colour", "detail", "board", "mode", "style") if a.get(k) in {
             "letters": ("symbols", "numbers", "words"), "colour": ("full", "one", "bw"), "detail": ("coarse", "medium", "fine", "realistic"),
             "board": ("dark", "paper"), "mode": ("type", "paint"), "style": ("bold", "oil", "water")}[k]}
+        screen = ""
+        try:
+            screen = (self.screen() if self.screen is not None else "") or ""
+        except Exception:  # noqa: BLE001
+            screen = ""
+        empty_board = "Type Art artboard: open, empty" in screen
+        if "mode" not in opts and empty_board and "paint mode" in screen:
+            opts["mode"] = "paint"  # she opened it for painting: what she asks for next is painted
         paint = opts.get("mode") == "paint"
+        if a.get("open") and not str(a.get("subject") or "").strip() and not a.get("use_photo") and not a.get("more"):
+            # only open the board: she then says what to make, or picks her own photo on it
+            await self.io.event("typeart", {k: v for k, v in opts.items() if k in ("mode", "style", "letters", "colour", "board")})
+            if "Type Art artboard: open" in screen and not empty_board:
+                return "her art board is open with her art on it. Finish with one short line.", False, None
+            what = "paint" if paint else "draw"
+            return (f"her art board is open and empty{' (paint mode)' if paint else ''}. Finish with one short question in "
+                    f"her language: does she want to use her own photo (she taps Pick a photo on the board) or tell you "
+                    f"what to {what}? Do not draw anything until she answers."), False, None
         if a.get("more") and not str(a.get("subject") or "").strip():
             # keep detailing: one more, finer pass on the art already on her board (paint: finer strokes on top;
             # type: typed again with smaller letters)

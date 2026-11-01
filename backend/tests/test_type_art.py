@@ -168,3 +168,32 @@ def test_the_tool_offers_realistic_and_more_detail():
     props = t["function"]["parameters"]["properties"]
     assert "realistic" in props["detail"]["enum"] and props["more"]["type"] == "boolean"
     assert "keep detailing" in t["function"]["description"]
+
+
+async def test_open_board_by_voice_asks_photo_or_describe():
+    io_ = IOm()
+    a = ag.Agent(None, None, io_)
+    a.screen = lambda: ""
+    out, _, _ = await a._act("draw_art", {"open": True, "mode": "paint"}, None)
+    ev = [d for k, d in io_.sent if k == "typeart"]
+    assert ev == [{"mode": "paint"}]  # the board opens, in paint mode, nothing is drawn
+    assert "own photo" in out and "what to paint" in out
+
+
+async def test_open_board_with_art_on_it_does_not_ask():
+    io_ = IOm()
+    a = ag.Agent(None, None, io_)
+    a.screen = lambda: 'Type Art artboard: open, typing "her photo" in symbols, finished.'
+    out, _, _ = await a._act("draw_art", {"open": True}, None)
+    assert "with her art on it" in out
+
+
+async def test_board_opened_for_painting_paints_what_she_says_next(tmp_path, monkeypatch):
+    monkeypatch.setattr(ag, "FILES_DIR", tmp_path)
+    io_, imgs = IOm(), FakeImages()
+    a = ag.Agent(None, None, io_)
+    a.images = imgs
+    a.screen = lambda: "Type Art artboard: open, empty (paint mode)."
+    await a._act("draw_art", {"subject": "a Fulani woman at sunset"}, None)
+    ev = [d for k, d in io_.sent if k == "typeart"]
+    assert ev[-1]["mode"] == "paint"

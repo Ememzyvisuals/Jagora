@@ -11,7 +11,7 @@ function load() {
   if (!session)
     session = (async () => {
       try {
-        const ort = await import("onnxruntime-web/wasm");
+        const ort = await import("onnxruntime-web"); // (the same runtime the voice detector loads, so it is shared)
         ort.env.logLevel = "error";
         ort.env.wasm.numThreads = 1; // no cross-origin isolation on the site: one thread
         ort.env.wasm.wasmPaths = "/vad/";

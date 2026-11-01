@@ -316,7 +316,7 @@ export function TypeArt() {
     reportScreen(
       "typeart",
       on
-        ? `open${prep && !pic ? `, getting the canvas ready while Muse Image draws "${prep.subject}"` : pic ? (mode === "paint" ? `, painting "${pic.subject || "her photo"}" in ${style} style, ${opts.detail} detail` : `, typing "${pic.subject || "her photo"}" in ${opts.letters}, ${opts.colour} colour, ${opts.board} board, ${opts.detail} detail`) + (extra ? `, detailed ${extra} more times` : "") + (zoomed ? ", zoomed in" : "") + (phase === "done" ? ", finished" : ", drawing now") : ", empty"}`
+        ? `open${prep && !pic ? `, getting the canvas ready while Muse Image draws "${prep.subject}"` : pic ? (mode === "paint" ? `, painting "${pic.subject || "her photo"}" in ${style} style, ${opts.detail} detail` : `, typing "${pic.subject || "her photo"}" in ${opts.letters}, ${opts.colour} colour, ${opts.board} board, ${opts.detail} detail`) + (extra ? `, detailed ${extra} more times` : "") + (zoomed ? ", zoomed in" : "") + (phase === "done" ? ", finished" : ", drawing now") : `, empty (${mode === "paint" ? "paint" : "type"} mode)`}`
         : "",
     );
   }, [on, pic, prep, opts, mode, style, extra, zoomed, phase]);

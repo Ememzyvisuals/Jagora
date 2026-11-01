@@ -56,7 +56,7 @@ export function describeScreen(): string {
   }
   if (facts.typeart)
     lines.push(
-      `Type Art artboard: ${facts.typeart}. draw_art with no subject changes the art on it (colour, letters, board, mode, style, detail including realistic, or more=true for Keep detailing); with a subject it draws something new. app_control art_zoom, art_save, art_video, art_again and type_art off work the board. While the board is open, answer in a few words only (e.g. "Done, blue now.").`,
+      `Type Art artboard: ${facts.typeart}. draw_art with no subject changes the art on it (colour, letters, board, mode, style, detail including realistic, or more=true for Keep detailing); with a subject it draws something new; when it is empty, ask her whether to use her own photo or what to draw. app_control art_zoom, art_save, art_video, art_again and type_art off work the board. While the board is open, answer in a few words only (e.g. "Done, blue now.").`,
     );
   if (s.live) lines.push(`Live voice: ${s.liveSmall || s.playing ? "folded to the small bar at the top" : "full screen"}.`);
   const chats = listed();
