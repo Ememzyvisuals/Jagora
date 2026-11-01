@@ -24,7 +24,7 @@
   <img alt="Muse Image" src="https://img.shields.io/badge/Meta-Muse%20Image-0467DF?style=flat-square">
   <img alt="SAM 3.1" src="https://img.shields.io/badge/Meta-SAM%203.1-0467DF?style=flat-square">
   <img alt="Languages" src="https://img.shields.io/badge/languages-yo%20%C2%B7%20ha%20%C2%B7%20ig%20%C2%B7%20pcm%20%C2%B7%20en-111318?style=flat-square">
-  <img alt="Tests" src="https://img.shields.io/badge/backend%20tests-110%20passing-3f8f5c?style=flat-square">
+  <img alt="Tests" src="https://img.shields.io/badge/backend%20tests-207%20passing-3f8f5c?style=flat-square">
   <a href="#live-result-against-the-real-model"><img alt="Attacks resisted" src="https://img.shields.io/badge/live%20attack%20range-20%2F20%20resisted-3f8f5c?style=flat-square"></a>
 </p>
 
@@ -40,9 +40,30 @@ https://github.com/user-attachments/assets/9f5cbefd-8e04-4956-a2d5-eab9db60eb7a
 
 [Download the demo video](docs/demos/jagora-demo.mp4)
 
+## What is hard here, in one minute
+
+- **Real websites, not a sandbox.** Every demo runs on the live site (NRC, NIMC, UNILAG, YouTube). Jagora reads each
+  page as a numbered list of controls plus a marked screenshot, acts with fallbacks, and checks the page reacted.
+  ([Inside the browser](#inside-the-browser))
+- **Money never moves without her.** A code gate (not a prompt) stops every payment, submission and account change for
+  her yes. At checkout Jagora hands the payment to her with the steps in her language and never touches the human
+  check. A hijacked model that obeys every trap still cannot get past it: 20 of 20 attacks resisted on the real model.
+  ([Safety model](#safety-model), [attack range](#tests-and-the-attack-range))
+- **Voice in four Nigerian languages plus English,** with turn-taking, barge-in and "continue where you stopped", over
+  LiveKit. ([Voice and languages](#voice-and-languages))
+- **Built for Nigerian networks.** The live page reaches her phone as H.264 video decoded in the browser (WebCodecs),
+  about a third of the data of photos at twice the sharpness. A dropped connection is picked up again: the task keeps
+  running, and her app gets what it missed when it reconnects, on whichever device she is using.
+  ([Light on data](#light-on-data-for-real-nigerian-networks))
+- **Four Meta models, each with a real job:** Muse Spark drives the agent and checks it finished, Muse Wonder reads her
+  photos and screenshots, SAM 3.1 outlines what matters in them, Muse Image draws picture guides and her art.
+  ([How Meta AI powers Jagora](#how-meta-ai-powers-jagora))
+- **207 backend tests,** including the attack range, reconnects, payments, two devices and the art board.
+
 ## Contents
 
 1. [Watch the 3 minute demo](#watch-the-3-minute-demo)
+1. [What is hard here, in one minute](#what-is-hard-here-in-one-minute)
 1. [Demos](#demos)
 1. [Why Jagora](#why-jagora)
 2. [From demo to browser](#from-demo-to-browser)
@@ -96,6 +117,24 @@ https://github.com/user-attachments/assets/c5a9a1a5-5a97-4cd4-9e1a-9c11125f7dd4
 The same videos are in [docs/demos](docs/demos) to download.
 
 ---
+
+### Type Art and Paint (any language)
+
+Ask Jagora by voice, in any of the five languages, to draw or paint something, or give it your own photo. "Paint a
+Hausa man in babban riga" keeps the culture in the picture (agbada, gele, babban riga, isiagu). Type Art types the
+picture out live in letters: from a distance it reads like a photo, zoomed in it is all letters. Paint paints it with a
+moving brush, big shapes first and finer brushes after, in bold colour, oil or watercolour. "Keep detailing" adds
+finer passes, and the board is controlled by voice ("make am blue", "more realistic", "save am for A3 print").
+
+<p align="center"><img src="docs/media/type-art-paint.jpg" alt="Type Art and Paint: a painted portrait, a typed gele portrait, zoomed letters" width="100%"></p>
+
+- **Muse Image** draws what she asks for, with her language turned into a prompt that keeps the attire.
+- **SAM 3.1** cuts the person out of her photo, so the face gets the finest brushes and the background stays loose.
+- **Muse Wonder** titles the finished work in her language.
+- Her own photo is used only after she says it is her or she has their permission; it is painted on her phone and
+  never kept. Real, famous people are declined, with an offer to paint her own photo instead.
+- Saved at screen, 4K or print size (A4 and A3 at 300 dpi), typed or painted again at that size so it stays sharp.
+  Her name is the signature; no logo is added.
 
 ## Why Jagora
 
@@ -253,6 +292,7 @@ which is far lighter, so sign-ups can open to everyone. To run your own copy wit
 | **Reads the terms for you** | Before you sign up or pay, the site's terms and privacy policy are reviewed in the background and red flags are said aloud. |
 | **Gets better at each site** | Steps that worked on a site are remembered (page words only, never personal values) and guide the next run. |
 | **Your chats, your tabs** | Every chat is kept in a menu, like ChatGPT, on every device you sign in on; tabs are only the websites Jagora opened. |
+| **Type Art and Paint** | "Paint a Fulani woman at sunset" or her own photo, typed out live in letters or painted with a moving brush, then saved at print size. Muse Image, SAM 3.1 and Muse Wonder each have a part. |
 | **Drive the app by voice** | "Close this", "show me the page", "go back to my last chat", "make it dark": Jagora can see and change its own screen. |
 
 ## How Meta AI powers Jagora
@@ -264,8 +304,8 @@ we choose to host one.
 |---|---|---|
 | **Muse Spark 1.3**<br>`muse-spark-1.3` | The agent's brain. One tool-calling loop over 50+ tools (search, open, click, type, upload, drag, read PDFs, show evidence, schedule, remember). Sees the page as a numbered element list plus a screenshot. Also runs the **completion checker** (a second call that must agree the task is done before the user hears "done"). | `backend/jagora/agent.py`, `llm.py` |
 | **Muse Wonder**<br>`muse-wonder-1.0` | Reads what she shares in one call: photos, screenshots, PDFs (as page images) and short videos (as stills). Returns sender, amounts, reference numbers, deadlines, what it asks her to do, and scam risk, in her language. Jagora then acts on it. | `backend/jagora/muse.py` (`read_attachment`) |
-| **SAM 3.1**<br>`sam-3.1` | Marks her own photo. Muse Wonder gives the rough place of each key fact (amount, due date, account number); SAM turns all of them into precise outlines in one call (box prompts), and the photo comes back with numbers that match the facts on the card, so she can check each one with her own eyes. In parallel, SAM looks for safety signs with concept prompts: a **QR code** becomes a warning not to scan or pay through it, and an official stamp or signature is noted. Output parsed with Meta's `meta-sam-parser`. | `backend/jagora/sam.py`, `agent.py` (`_mark_photo`) |
-| **Muse Image**<br>`muse-image-1.0` | Picture guides. A result becomes 3 or 4 illustrations: the first is generated from a fixed character and style, the rest are drawn from it with `images/edits`, so the same woman appears in every frame. Captions are read aloud. | `backend/jagora/muse.py` (`Images`, `draw_guide`) |
+| **SAM 3.1**<br>`sam-3.1` | Marks her own photo. Muse Wonder gives the rough place of each key fact (amount, due date, account number); SAM turns all of them into precise outlines in one call (box prompts), and the photo comes back with numbers that match the facts on the card, so she can check each one with her own eyes. In parallel, SAM looks for safety signs with concept prompts: a **QR code** becomes a warning not to scan or pay through it, and an official stamp or signature is noted. On the art board, SAM cuts the person out of her photo so Paint spends its finest brushes on the face. Output parsed with Meta's `meta-sam-parser`. | `backend/jagora/sam.py`, `agent.py` (`_mark_photo`), `server.py` (`/art/cutout`) |
+| **Muse Image**<br>`muse-image-1.0` | Picture guides. A result becomes 3 or 4 illustrations: the first is generated from a fixed character and style, the rest are drawn from it with `images/edits`, so the same woman appears in every frame. Captions are read aloud. It also draws what she asks for on the art board, from a prompt in any of her languages that keeps the culture. | `backend/jagora/muse.py` (`Images`, `draw_guide`, `draw_art_picture`) |
 | **Muse Glimmer / Muse Spark Open**<br>open weights, *optional, off in this demo* | Not used in this demo: Muse Spark does all of the work above, including every safety check. The code is ready for later: when `OPEN_BASE_URL` points at an OpenAI-compatible server (vLLM, SGLang, llama.cpp or a hosted provider), the **safety judgement** and the **terms review** move to the open model, on hardware we control. | `backend/jagora/muse.py` (`open_model`) |
 
 Why not Muse Voice Transcribe for speech? Its 25 evaluated languages do not include Yorùbá, Hausa, Igbo or
@@ -456,6 +496,10 @@ cd backend && pytest -q
 | `test_research.py` | Search, official-site checks, evidence |
 | `test_server.py` | Sign-up with proof-of-work, a full research run over WebSocket, admin monitoring, phone notifications |
 | `test_speech.py` | Streaming voice in order, early next sentence, barge-in |
+| `test_money_hold.py`, `test_one_answer.py` | The payment hand-over: her steps in her language, one line, the checkout and its human check left alone |
+| `test_reconnect.py`, `test_two_devices.py` | A dropped connection resumes the same task; the device she is using gets the chat and the live page |
+| `test_type_art.py`, `test_art_voice.py` | The art board: culture-keeping prompts, famous people declined, painting, and voice control in five languages |
+| `test_live_video.py`, `test_lite.py` | The live page as H.264 video, and the data saver |
 
 **The attack range** (`backend/jagora/redteam.py`) is a set of booby-trapped websites served locally:
 - instructions hidden in white, off-screen and tiny text
