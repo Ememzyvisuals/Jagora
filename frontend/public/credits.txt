@@ -19,3 +19,4 @@ Earth imagery: NASA Blue Marble (public domain), via the three-globe package (MI
 
 Font: JetBrains Mono (Type Art), Copyright 2020 The JetBrains Mono Project Authors, SIL Open Font License 1.1, https://github.com/JetBrains/JetBrainsMono
 Type Art samples (typeart/portrait-03.webp, typeart/people-06.webp, typeart/portrait-06.webp): crops of the photos of the same names above, same licences.
+Type Art person finder (typeart/person.onnx): MediaPipe Selfie Segmentation model, Copyright Google LLC, Apache License 2.0, https://github.com/google-ai-edge/mediapipe (converted to ONNX, runs on the phone).

@@ -8,12 +8,14 @@
    - Contrast is pushed twice: against the cells around it (a circle next to a brighter neighbour is pushed down, which
      sharpens outlines), then inside the cell (the brightest circle stays, the others are pushed down).
    - Before that the picture is levelled (its darkest and brightest 2% set to black and white) and sharpened a little,
-     and with "plain background" the background around the subject is found from the edges of the picture and blacked
-     out, so only the person is typed.
+     and with "plain background" a portrait (one person filling the picture, found by a small model on her phone, see
+     person.ts) is typed alone on clean black; a scene (a group, a person in a place, a landscape) is typed whole,
+     its people bright and the place a little quieter.
    Words mode cannot match shapes: her language's words run on, letter by letter, through the cells that have ink, and
    each letter takes the colour and strength of the picture there, so the face appears out of the words.
    Everything runs on her phone; her photo never leaves it. */
 import type { Lang } from "./i18n";
+import { findPeople, isPortrait, personMaskAt } from "./person";
 
 export type Letters = "symbols" | "numbers" | "words";
 export type Colour = "full" | "one" | "bw";
@@ -239,30 +241,38 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
   const d = g.getImageData(0, 0, W, H).data;
   await new Promise((r) => setTimeout(r)); // let the page breathe between the heavy steps
 
-  let mask = o.plain ? backgroundMask(d, W, H) : null;
-  if (mask) {
-    // when most of the picture would go (a sky, a sea, a field), it is a landscape, not a person on a plain
-    // background: nothing is removed
+  // Portrait or scene. A portrait (one person filling the picture) is typed alone on clean black, nothing around
+  // them, like the typed portraits people share. A scene (a group, a person small in a place, a landscape) is typed
+  // whole, because there the place is part of the picture; its people stay bright and the rest is a little quieter.
+  let mask: Float32Array | null = null;
+  let focus: Float32Array | null = null; // a scene's people
+  let darkPlace = false; // a scene where people fill much of it: the flat parts around them are left dark
+  if (o.plain) {
+    const p = await findPeople(img);
+    const edge = backgroundMask(d, W, H);
     let kept = 0;
-    for (let i = 0; i < mask.length; i += 7) kept += mask[i];
-    // a wide picture is a scene (a landscape, a group, a street): it is typed whole, never cut to a portrait oval
-    if (kept / Math.ceil(mask.length / 7) < 0.5 || img.width > img.height * 1.15) mask = null;
-  }
-  if (mask) {
-    // the subject is also framed with a soft oval, so the corners fade like a typed portrait; when the background
-    // is busy (a room, a street) and could not be grown in from the edges, the oval is tighter and does the work
-    let sum = 0;
-    for (let i = 0; i < mask.length; i += 13) sum += mask[i];
-    // (a busy background, a group or a street, is not framed: the people at the sides are as important as the middle;
-    // its flat parts get light letters instead, below)
-    const plainBg = sum / Math.ceil(mask.length / 13) <= 0.8;
-    const [rx, ry, fade] = [0.62, 0.62, 0.15];
-    if (plainBg) for (let y = 0; y < H; y++)
-      for (let x = 0; x < W; x++) {
-        const dx = (x - W / 2) / (W * rx), dy = (y - H * 0.48) / (H * ry);
-        const dd = Math.sqrt(dx * dx + dy * dy);
-        mask[y * W + x] *= Math.max(0, Math.min(1, (1 - dd) / fade));
-      }
+    for (let i = 0; i < edge.length; i += 7) kept += edge[i];
+    // a plain background found from the edges (a drawing on black, a studio photo) gives the cleanest outline
+    const plainEdge = kept / Math.ceil(edge.length / 7) < 0.97;
+    if (p && isPortrait(p, img.width, img.height)) {
+      mask = personMaskAt(p, W, H, true);
+      // (on a plain background its own outline is sharper; the person mask only keeps a prop at the edge out)
+      if (plainEdge) for (let i = 0; i < mask.length; i++) mask[i] = edge[i] * Math.min(1, mask[i] * 3);
+    } else if (p && p.count) {
+      focus = personMaskAt(p, W, H);
+      // (people small in a big place, a sky or a beach: the place is the picture, so it is typed fully)
+      darkPlace = p.share >= 0.15;
+    }
+    else if (!p && plainEdge) mask = edge; // (the model could not run: the subject on a plain background, as before)
+    else if (!p && img.width <= img.height * 1.15) {
+      // (the model could not run on a busy portrait: the soft oval frame, as before)
+      mask = edge;
+      for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++) {
+          const dx = (x - W / 2) / (W * 0.46), dy = (y - H * 0.48) / (H * 0.5);
+          mask[y * W + x] *= Math.max(0, Math.min(1, (1 - Math.sqrt(dx * dx + dy * dy)) / 0.2));
+        }
+    }
   }
   // lightness, spread over the whole range by the subject's own tones (histogram equalisation, blended with a plain
   // 2%..98% stretch so it does not look harsh), then sharpened a little. Equalising is what keeps a dark-skinned face
@@ -331,12 +341,18 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
   // big flat parts (a wall, the sky, the inside of a big letter) get light letters (. : ' |), so they never turn into
   // dense blocks that fight the people; where the picture has detail (faces, people, edges of letters) and on skin
   // the letters stay full
-  if (!words) {
-    const E = new Float32Array(W * H), wsk = new Float32Array(W * H);
-    for (let y = 1; y < H - 1; y++)
-      for (let x = 1; x < W - 1; x++) {
+  // (a portrait typed alone keeps its full letters: inside the person nothing is a flat background)
+  if (!words && !mask) {
+    // (edges of the picture itself, a little smoothed: photo grain on a wall, which the contrast above makes louder,
+    // is not detail)
+    const E = new Float32Array(W * H), wsk = new Float32Array(W * H), L0 = new Float32Array(W * H);
+    for (let i = 0; i < L0.length; i++) L0[i] = lum(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+    const Lb = boxBlur(L0, W, H, 1);
+    for (let y = 2; y < H - 2; y++)
+      for (let x = 2; x < W - 2; x++) {
         const i = y * W + x;
-        E[i] = Math.abs(L[i + 1] - L[i - 1]) + Math.abs(L[i + W] - L[i - W]);
+        const e = Math.abs(Lb[i + 2] - Lb[i - 2]) + Math.abs(Lb[i + 2 * W] - Lb[i - 2 * W]);
+        E[i] = e > 0.05 ? e : 0;
       }
     for (let i = 0; i < wsk.length; i++) {
       const R = d[i * 4], G = d[i * 4 + 1], B = d[i * 4 + 2];
@@ -347,7 +363,15 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
     for (let i = 0; i < Es.length; i += 61) sample.push(Es[i]);
     sample.sort((p, q) => p - q);
     const top = Math.max(0.02, sample[Math.floor(sample.length * 0.85)]);
-    for (let i = 0; i < ink.length; i++) ink[i] *= Math.max(Math.min(1, 0.3 + (0.7 * Es[i]) / top), Math.min(1, sk[i] * 1.5));
+    // (a scene's people stay full; around them a flat wall is left dark and the outlines of the place, a sign's letters,
+    // stay, so the people stand out and the place is still there. With no one in the picture it is only gentler.)
+    const f = focus ? boxBlur(focus, W, H, SW) : null;
+    for (let i = 0; i < ink.length; i++) {
+      const edge = Math.min(1, Es[i] / top), skin = Math.min(1, sk[i] * 1.5);
+      const k = f && darkPlace ? Math.max(Math.min(1, f[i] * 1.4), Math.pow(edge, 1.4) * 0.95) : Math.max(0.6 + 0.4 * edge, skin, f ? Math.min(1, f[i] * 1.4) : 0);
+      ink[i] *= k;
+      if (f) tone[i] *= darkPlace ? 0.5 + 0.5 * k : 0.7 + 0.3 * Math.min(1, f[i] * 1.4);
+    }
   }
   await new Promise((r) => setTimeout(r));
 
