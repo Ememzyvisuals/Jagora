@@ -60,6 +60,10 @@ https://github.com/user-attachments/assets/6b62c6b9-d38e-471c-9990-d2a2f9942390
   ([How Meta AI powers Jagora](#how-meta-ai-powers-jagora))
 - **207 backend tests,** including the attack range, reconnects, payments, two devices and the art board.
 
+**Built during the hackathon.** Jagora was started on 26 October 2026. The first two commits (3:52 PM and 4:59 PM
+Lagos time, before the 5:00 PM kickoff) are the initial skeleton. Everything shown in the demo videos was built
+during the event.
+
 ## Contents
 
 1. [Watch the 3 minute demo](#watch-the-3-minute-demo)
