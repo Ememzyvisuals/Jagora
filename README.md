@@ -36,7 +36,7 @@
 
 ## Watch the 3 minute demo
 
-https://github.com/user-attachments/assets/92be78a4-81f7-41b0-87dd-8fd9b3f045c0
+https://github.com/user-attachments/assets/9f5cbefd-8e04-4956-a2d5-eab9db60eb7a
 
 [Download the demo video](docs/demos/jagora-demo.mp4)
 
@@ -78,7 +78,7 @@ total and asks before pressing Make Payment. Then she hands the checkout to the 
 user's own browser. (Paystack's human check blocks browsers that run on a server, which is where Jagora runs for this
 demo. In the Jagora desktop browser she runs on the user's own device, so the check passes normally.)
 
-https://github.com/user-attachments/assets/89f0b179-9ebc-4c5e-8224-3a08fd9bf30b
+https://github.com/user-attachments/assets/3f01ad3c-956f-4109-acac-ed1d18ff7c79
 
 ### Is this SMS a scam? (Pidgin)
 
