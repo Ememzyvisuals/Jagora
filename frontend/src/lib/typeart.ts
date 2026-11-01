@@ -241,28 +241,36 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
   const d = g.getImageData(0, 0, W, H).data;
   await new Promise((r) => setTimeout(r)); // let the page breathe between the heavy steps
 
-  // Portrait or scene. A portrait (one person filling the picture) is typed alone on clean black, nothing around
-  // them, like the typed portraits people share. A scene (a group, a person small in a place, a landscape) is typed
-  // whole, because there the place is part of the picture; its people stay bright and the rest is a little quieter.
+  // People or a place. When people fill the picture (one person, two, a group) only they are typed, on clean black,
+  // nothing around them, like the typed portraits people share. When people are small in a big place (a beach, a
+  // street, a sky) or there is no one, the place is the picture and it is typed whole, its people a little brighter.
   let mask: Float32Array | null = null;
-  let focus: Float32Array | null = null; // a scene's people
-  let darkPlace = false; // a scene where people fill much of it: the flat parts around them are left dark
+  let focus: Float32Array | null = null; // the people in a place
+  const darkPlace = false;
   if (o.plain) {
     const p = await findPeople(img);
     const edge = backgroundMask(d, W, H);
     let kept = 0;
     for (let i = 0; i < edge.length; i += 7) kept += edge[i];
     // a plain background found from the edges (a drawing on black, a studio photo) gives the cleanest outline
-    const plainEdge = kept / Math.ceil(edge.length / 7) < 0.97;
+    // (only a dark one, a drawing on black: a light wall is the colour of a white cap or a white dress, and its outline
+    // would cut them off)
+    let bgL = 0, bgN = 0;
+    for (let i = 0; i < edge.length; i += 7)
+      if (edge[i] < 0.5) {
+        bgL += lum(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+        bgN++;
+      }
+    const plainEdge = kept / Math.ceil(edge.length / 7) < 0.97 && bgN > 0 && bgL / bgN < 0.16;
     if (p && isPortrait(p, img.width, img.height)) {
       mask = personMaskAt(p, W, H, true);
       // (on a plain background its own outline is sharper; the person mask only keeps a prop at the edge out)
       if (plainEdge) for (let i = 0; i < mask.length; i++) mask[i] = edge[i] * Math.min(1, mask[i] * 3);
-    } else if (p && p.count) {
-      focus = personMaskAt(p, W, H);
-      // (people small in a big place, a sky or a beach: the place is the picture, so it is typed fully)
-      darkPlace = p.share >= 0.15;
-    }
+    } else if (p && p.count && p.share >= 0.1) {
+      // (two people, a group: every one of them, and nothing else)
+      mask = personMaskAt(p, W, H);
+      if (plainEdge) for (let i = 0; i < mask.length; i++) mask[i] = edge[i] * Math.min(1, mask[i] * 3);
+    } else if (p && p.count) focus = personMaskAt(p, W, H); // (people small in a big place: the place is typed too)
     else if (!p && plainEdge) mask = edge; // (the model could not run: the subject on a plain background, as before)
     else if (!p && img.width <= img.height * 1.15) {
       // (the model could not run on a busy portrait: the soft oval frame, as before)
@@ -336,7 +344,10 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
     tone[i] = (Lg ? 0.5 * Lg[i] + 0.5 * v : v) * (mask ? mask[i] : 1);
     // dark board: light parts are dense; paper: dark parts are dense
     // (the mid tones are lifted: thin letters like : and ' vanish at small sizes, so a face needs the fuller ones)
-    ink[i] = Math.pow(paper ? 1 - v : v, paper ? 0.8 : 0.6) * (mask ? mask[i] : 1);
+    // (on the person, fuller letters throughout, so a face is lit, never thin strokes in the dark; the light and
+    // shade are in the letters' colour)
+    const full = Math.pow(paper ? 1 - v : v, paper ? 0.8 : 0.6);
+    ink[i] = (mask && !paper ? 0.34 + 0.66 * full : full) * (mask ? mask[i] : 1);
   }
   // big flat parts (a wall, the sky, the inside of a big letter) get light letters (. : ' |), so they never turn into
   // dense blocks that fight the people; where the picture has detail (faces, people, edges of letters) and on skin
@@ -467,7 +478,7 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
       const base = curve(paper ? 1 - tn / Math.max(0.05, inside) : tn);
       const lit = words ? Math.pow(base, 1.25) : base;
       let col: number[];
-      const floor = words ? 0.06 : 0.32; // how visible the faintest letter is
+      const floor = words ? 0.06 : 0.42; // how visible the faintest letter is
       const k = floor + (1 - floor) * lit;
       if (o.colour === "full") {
         // the picture's own colour, a little richer
@@ -479,7 +490,11 @@ export async function buildArt(img: CanvasImageSource & { width: number; height:
           // on paper the colour is deepened so it reads as ink
           const deep = hue.map((v) => v * 0.62);
           col = mix(PAPER, deep, k);
-        } else col = words ? mix(BG, hue, k) : hue.map((v) => v * (0.5 + 0.5 * lit));
+        } else {
+          // lit up: the colour a little toward white and bright even in the shadows, like light through the letters
+          const lifted = mix(hue, [255, 255, 255], 0.1 + 0.22 * lit);
+          col = words ? mix(BG, lifted, k) : lifted.map((v) => v * (0.62 + 0.38 * lit));
+        }
       } else if (o.colour === "one") {
         // one blue, from the app's accents
         col = paper

@@ -11,7 +11,7 @@ function load() {
   if (!session)
     session = (async () => {
       try {
-        const ort = await import("onnxruntime-web"); // (the same runtime the voice detector loads, so it is shared)
+        const ort = await import("onnxruntime-web/wasm"); // (the same runtime the live voice detector loads, wasm only)
         ort.env.logLevel = "error";
         ort.env.wasm.numThreads = 1; // no cross-origin isolation on the site: one thread
         ort.env.wasm.wasmPaths = "/vad/";
@@ -51,22 +51,43 @@ export type People = {
 export async function findPeople(img: CanvasImageSource & { width: number; height: number }): Promise<People | null> {
   const s = await load();
   if (!s) return null;
+  // The model sees a square. A wide or tall picture squashed into one loses people's heads and caps, so it is looked
+  // at in overlapping squares, and each spot keeps the surest answer.
+  const W0 = img.width, H0 = img.height, side = Math.min(W0, H0);
+  const n = Math.min(4, Math.ceil((Math.max(W0, H0) / side - 1) * 2) + 1);
   const c = document.createElement("canvas");
   c.width = c.height = SIZE;
   const g = c.getContext("2d", { willReadFrequently: true })!;
-  g.drawImage(img, 0, 0, SIZE, SIZE);
-  const d = g.getImageData(0, 0, SIZE, SIZE).data;
+  const m = new Float32Array(SIZE * SIZE);
   const x = new Float32Array(SIZE * SIZE * 3);
-  for (let i = 0; i < SIZE * SIZE; i++) {
-    x[i * 3] = d[i * 4] / 255;
-    x[i * 3 + 1] = d[i * 4 + 1] / 255;
-    x[i * 3 + 2] = d[i * 4 + 2] / 255;
-  }
-  let m: Float32Array;
-  try {
-    m = Float32Array.from(await s.run(x));
-  } catch {
-    return null;
+  for (let t = 0; t < n; t++) {
+    const off = n === 1 ? 0 : ((Math.max(W0, H0) - side) * t) / (n - 1);
+    const sx = W0 >= H0 ? off : 0, sy = W0 >= H0 ? 0 : off;
+    g.drawImage(img, sx, sy, side, side, 0, 0, SIZE, SIZE);
+    const d = g.getImageData(0, 0, SIZE, SIZE).data;
+    for (let i = 0; i < SIZE * SIZE; i++) {
+      x[i * 3] = d[i * 4] / 255;
+      x[i * 3 + 1] = d[i * 4 + 1] / 255;
+      x[i * 3 + 2] = d[i * 4 + 2] / 255;
+    }
+    let r: Float32Array;
+    try {
+      r = await s.run(x);
+    } catch {
+      return null;
+    }
+    // into the whole picture's grid
+    for (let y = 0; y < SIZE; y++) {
+      const py = ((y + 0.5) * H0) / SIZE - sy;
+      if (py < 0 || py >= side) continue;
+      const ty = Math.min(SIZE - 1, Math.floor((py * SIZE) / side));
+      for (let xx = 0; xx < SIZE; xx++) {
+        const px = ((xx + 0.5) * W0) / SIZE - sx;
+        if (px < 0 || px >= side) continue;
+        const v = r[ty * SIZE + Math.min(SIZE - 1, Math.floor((px * SIZE) / side))];
+        if (v > m[y * SIZE + xx]) m[y * SIZE + xx] = v;
+      }
+    }
   }
   // the separate people: connected parts on a 64 x 64 grid
   const N = 64, k = SIZE / N;
