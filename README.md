@@ -36,7 +36,7 @@
 
 ## Watch the 3 minute demo
 
-https://github.com/user-attachments/assets/9f5cbefd-8e04-4956-a2d5-eab9db60eb7a
+https://github.com/user-attachments/assets/6b62c6b9-d38e-471c-9990-d2a2f9942390
 
 [Download the demo video](docs/demos/jagora-demo.mp4)
 
