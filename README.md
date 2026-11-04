@@ -38,7 +38,7 @@
 
 https://github.com/user-attachments/assets/6b62c6b9-d38e-471c-9990-d2a2f9942390
 
-[Download the demo video](docs/demos/jagora-demo.mp4)
+[Watch on YouTube](https://youtu.be/ljaTviAUPkM) · [Download the demo video](docs/demos/jagora-demo.mp4)
 
 ## What is hard here, in one minute
 
@@ -213,7 +213,7 @@ one, whether this action is what she asked for, whether the task is really done.
 tool calling, reads screenshots and page structure together, and is cheap enough to run on every step for millions
 of people.
 
-- **Tool calling at depth.** Jagora gives Muse Spark 57 tools, from clicking and typing to reading PDFs, comparing
+- **Tool calling at depth.** Jagora gives Muse Spark more than 50 tools, from clicking and typing to reading PDFs, comparing
   sources, scheduling tasks and showing evidence. Muse Spark plans across them in one loop.
 - **It sees the page.** Every step it gets a screenshot with numbered controls and the page structure, and it acts
   on the right element.
@@ -255,13 +255,18 @@ All of this runs in Docker on one AWS server alongside other services, within a 
 desktop browser moves this work onto the user's own computer, which is how it reaches millions of people without
 millions of cloud browsers.
 
-**New sign-ups are paused during judging.** Because every person gets a whole browser of their own, streamed live,
-plus speech both ways, one small server can only serve a handful of people at once. While the judges test Jagora, new
-accounts need an access code, so people who find the link here do not take the judges' places. Existing accounts
-still sign in. Streaming a cloud browser to every user is the expensive part; once the Jagora desktop browser is out,
-the browser runs natively on the user's own computer, and the server only carries the agent's model calls and speech,
-which is far lighter, so sign-ups can open to everyone. To run your own copy without the lock, set `SIGNUPS_OPEN=true`
-(see [Run it yourself](#run-it-yourself)).
+**Sign-ups are open, with fair limits.** Anyone can create an account at [jagora-ai.vercel.app](https://jagora-ai.vercel.app)
+and try Jagora. Because every person gets a whole browser of their own, streamed live, plus speech both ways, each
+account has a daily allowance of requests that comes back every day, and the whole server has a daily spending cap:
+when it is reached, Jagora says it is busy and asks you to try again tomorrow. Streaming a cloud browser to every user
+is the expensive part; once the Jagora desktop browser is out, the browser runs natively on the user's own computer,
+and the server only carries the agent's model calls and speech, which is far lighter. On your own copy, sign-ups
+are closed unless you set `SIGNUPS_OPEN=true` (see [Run it yourself](#run-it-yourself)).
+
+**Some sites block cloud browsers.** A few Nigerian sites, Airtel's for example, block every visit that comes from a
+data centre, so in this demo Jagora can fill in the form and is then turned away by the site's own security. Jagora
+says so honestly instead of pretending. It does not try to get around a site's security. In the desktop browser the
+visit comes from the user's own connection, so these sites work as they do for anyone.
 
 ### The problems it solves
 
@@ -474,7 +479,9 @@ Without the two `NEXT_PUBLIC_BACKEND_*` variables the app runs a scripted demo, 
 | `OPEN_BASE_URL` · `OPEN_MODEL` · `OPEN_KEY` | Optional, not needed: an open-weights server for the safety checks. Leave unset to use Muse Spark (as the demo does). |
 | `PLOTWEAVER_API_KEY` | STORM speech and translation |
 | `TURSO_DATABASE_URL` · `TURSO_AUTH_TOKEN` | Accounts and memory (SQLite is used when unset) |
-| `ACCESS_CODES` · `ADMIN_CODE` | Judge codes (labelled Code 1 to 5) and the owner's admin code, generated on first start |
+| `SIGNUPS_OPEN` | `true` lets anyone sign up (as the live demo does); unset or `false` asks new accounts for an access code |
+| `CREDITS_FREE` · `DAILY_BUDGET_USD` | Daily requests per account (default 30) and the server's daily spending cap in US dollars (default 25) |
+| `ACCESS_CODES` · `ADMIN_CODE` | Optional access codes (labelled Code 1 to 5, with a bigger allowance) and the owner's admin code, generated on first start |
 | `ALERT_WEBHOOK` | Optional Discord or Slack ping when someone signs up or starts a task |
 
 **Deploy.** `backend/docker-compose.yml` runs the agent as its own Compose project with no published ports,
